@@ -28,3 +28,7 @@
 ## 2024-05-18 - Unnecessary API calls due to missing input debouncing
 **Learning:** Raw input search values used directly inside React Query `queryKey` without debouncing can trigger excessive network and database calls (one per keystroke) leading to significant overhead.
 **Action:** Always wrap user text input state with `useDebounce` and use the debounced value in the query dependencies instead of the raw input.
+
+## 2024-05-18 - Convert Multi-pass array includes filter to O(1) Set lookup
+**Learning:** Chaining array methods like `.filter().filter()` and utilizing `.includes()` within the filter loop is an `O(N*M)` operation that triggers on every render for dynamic inputs like searches. This causes significant UI lag when typing.
+**Action:** Always combine multi-pass filters into a single loop, cache search strings (`.toLowerCase()`) outside the loop, convert the lookup array into a `Set` for `O(1)` checking, and wrap the calculation in `useMemo` so it only recalculates when dependencies change.
