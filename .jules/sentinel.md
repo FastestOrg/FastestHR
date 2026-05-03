@@ -27,3 +27,7 @@
 **Vulnerability:** In `OfferLetterRenderer.tsx`, `DocumentRenderer.tsx`, and `pdf-generator.ts`, `String.prototype.replace(regex, value)` was used to substitute variables into HTML templates. If the user input contained special regex tokens like `$&` (which inserts the matched substring), it caused unintended injections and manipulation of the final output.
 **Learning:** `String.prototype.replace()` interprets special replacement patterns (like `$&`, `$`, `$\``, `$'`) when passing a string as the second argument, bypassing simple HTML escaping if the token is valid in regex contexts.
 **Prevention:** Always use a replacer function `String.prototype.replace(regex, () => value)` when replacing with dynamic or untrusted strings, as functions do not evaluate these special regex tokens.
+## 2025-02-14 - Fix Hardcoded Supabase Credentials
+**Vulnerability:** Supabase URL and Publishable Key were hardcoded in `src/integrations/supabase/client.ts`.
+**Learning:** Hardcoding credentials, even publishable ones or those meant for client-side use, is a bad practice. It couples the code to a specific environment, preventing the same code from being deployed to multiple environments without modification.
+**Prevention:** Always use environment variables (`import.meta.env.*` in Vite) for configuration, ensuring `client.ts` works across dev/staging/prod without changes and secrets aren't checked into version control.
