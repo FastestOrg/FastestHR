@@ -28,3 +28,6 @@
 ## 2024-05-18 - Unnecessary API calls due to missing input debouncing
 **Learning:** Raw input search values used directly inside React Query `queryKey` without debouncing can trigger excessive network and database calls (one per keystroke) leading to significant overhead.
 **Action:** Always wrap user text input state with `useDebounce` and use the debounced value in the query dependencies instead of the raw input.
+## 2026-05-04 - Batched Tasks Operations
+**Learning:** In Supabase/PostgreSQL, doing a query inside a .map() mapped to Promise.all leads to the classic N+1 performance bottleneck.
+**Action:** When a loop involves `.select()` and `.insert()` database queries with Supabase, re-factor to bulk query existing data before the loop and do bulk `.insert()` after the loop to prevent N+1.

@@ -67,39 +67,53 @@ export function MorningSetup() {
       if (reportError) throw reportError;
 
       // 2. Create/Sync tasks
-      // For simplicity, we'll create new tasks for slots that don't have matching tasks yet
-      // In a production app, we might want to reconcile them more intelligently.
-      const taskPromises = updatedSlots.map(async (slot) => {
+      // ⚡ Bolt: Use batched operations to prevent N+1 queries during task creation
+      const startOfDayTs = `${today}T00:00:00Z`;
+      const endOfDayTs = `${today}T23:59:59Z`;
+
+      const { data: existingTasks } = await supabase
+        .from('tasks')
+        .select('title, scheduled_start')
+        .eq('assigned_to', profile!.id)
+        .gte('scheduled_start', startOfDayTs)
+        .lte('scheduled_start', endOfDayTs);
+
+      const existingTaskSet = new Set(
+        (existingTasks || []).map((t) => {
+          // Convert the timestamp string to a numeric time value for safe comparison
+          const numericTime = new Date(t.scheduled_start).getTime();
+          return `${t.title}-${numericTime}`;
+        })
+      );
+
+      const tasksToInsert: any[] = [];
+
+      updatedSlots.forEach((slot) => {
         if (!slot.focus) return;
 
-        // Check if task already exists for this slot today
         const startTs = `${today}T${slot.startTime}:00Z`;
         const endTs = `${today}T${slot.endTime}:00Z`;
 
-        const { data: existingTasks } = await supabase
-          .from('tasks')
-          .select('id')
-          .eq('assigned_to', profile!.id)
-          .eq('title', slot.focus)
-          .eq('scheduled_start', startTs)
-          .limit(1);
+        // Convert the local startTs to a numeric time value for safe comparison
+        const numericTime = new Date(startTs).getTime();
 
-        if (!existingTasks || existingTasks.length === 0) {
-          return supabase
-            .from('tasks')
-            .insert({
-              title: slot.focus,
-              company_id: profile!.company_id!,
-              assigned_to: profile!.id,
-              assigned_by: profile!.id,
-              type: 'self_managed',
-              scheduled_start: startTs,
-              scheduled_end: endTs,
-            });
+        if (!existingTaskSet.has(`${slot.focus}-${numericTime}`)) {
+          tasksToInsert.push({
+            title: slot.focus,
+            company_id: profile!.company_id!,
+            assigned_to: profile!.id,
+            assigned_by: profile!.id,
+            type: 'self_managed',
+            scheduled_start: startTs,
+            scheduled_end: endTs,
+          });
         }
       });
 
-      await Promise.all(taskPromises);
+      if (tasksToInsert.length > 0) {
+        const { error: insertError } = await supabase.from('tasks').insert(tasksToInsert);
+        if (insertError) throw insertError;
+      }
       return true;
     },
     onSuccess: () => {
