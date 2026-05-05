@@ -250,10 +250,6 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "Invalid action" }, corsHeaders, 400);
   } catch (err: any) {
     console.error("Edge function error:", err);
-    return jsonResponse({ error: err.message || "Internal server error" }, {
-      "Access-Control-Allow-Origin": "https://fastesthre.com",
-      "Access-Control-Allow-Headers":
-        "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-    }, 500);
+    return jsonResponse({ error: err.message || "Internal server error" }, getCorsHeaders(req), 500);
   }
 });
