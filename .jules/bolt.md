@@ -28,3 +28,6 @@
 ## 2024-05-18 - Unnecessary API calls due to missing input debouncing
 **Learning:** Raw input search values used directly inside React Query `queryKey` without debouncing can trigger excessive network and database calls (one per keystroke) leading to significant overhead.
 **Action:** Always wrap user text input state with `useDebounce` and use the debounced value in the query dependencies instead of the raw input.
+## 2024-05-18 - Avoid repeated array filtering in render loops
+**Learning:** In React components like dashboards or kanban boards, repeatedly calling `Array.filter()` inside JSX `.map` loops or inside `useQuery` to derive multiple metrics causes unnecessary O(N*M) lookups on every render, leading to performance bottlenecks as datasets grow.
+**Action:** Always pre-calculate and group derived data or list segments in a single pass over the array. For list segmentations, use `useMemo` to build a map grouping the data. For `useQuery` data derived from one large fetch, calculate derived metrics using a single `for` loop and return the aggregated results instead of chaining `.filter().map().reduce()` calls.

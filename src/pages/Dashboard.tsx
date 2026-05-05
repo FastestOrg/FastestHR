@@ -39,7 +39,7 @@ function CompanyAdminDashboard() {
 
   const thisYear = new Date().getFullYear();
 
-  // Combine multiple employee-related queries into one
+  // ⚡ Bolt: Use a single-pass iteration to calculate multiple derived statistics instead of multiple filter/forEach passes over allEmployees
   const { data: employeeData, isLoading: loadingEmployees } = useQuery({
     queryKey: ['employee-metrics', profile?.company_id, thisYear],
     queryFn: async () => {
@@ -49,56 +49,78 @@ function CompanyAdminDashboard() {
         .eq('company_id', profile!.company_id!);
 
       const allEmployees = data || [];
-      const activeEmployees = allEmployees.filter(e => e.deleted_at === null);
 
-      const employeeCount = activeEmployees.length;
-
+      let employeeCount = 0;
+      let attritionCount = 0;
+      let thisYearHiresCount = 0;
       const deptMap: Record<string, number> = {};
-      activeEmployees.forEach((e: any) => {
+      const monthlyHires: Record<number, number> = {};
+      const upcomingBdays: any[] = [];
+      const upcomingAnnis: any[] = [];
+
+      const now = new Date();
+      const currentYear = now.getFullYear();
+
+      for (let i = 0; i < allEmployees.length; i++) {
+        const e = allEmployees[i];
+
+        if (e.deleted_at !== null) {
+          if (new Date(e.deleted_at).getFullYear() === thisYear) {
+            attritionCount++;
+          }
+          continue;
+        }
+
+        employeeCount++;
+
+        // Department Stats
         const n = e.departments?.name || 'Unassigned';
         deptMap[n] = (deptMap[n] || 0) + 1;
-      });
+
+        // Hiring Stats
+        if (e.date_of_joining) {
+          const doj = new Date(e.date_of_joining);
+          if (doj.getFullYear() === thisYear) {
+            thisYearHiresCount++;
+            const m = doj.getMonth();
+            monthlyHires[m] = (monthlyHires[m] || 0) + 1;
+          }
+
+          // Anniversaries
+          const anni = new Date(currentYear, doj.getMonth(), doj.getDate());
+          const diffAnni = (anni.getTime() - now.getTime()) / (1000*60*60*24);
+          if (diffAnni >= 0 && diffAnni <= 30 && currentYear > doj.getFullYear()) {
+            upcomingAnnis.push(e);
+          }
+        }
+
+        // Birthdays
+        if (e.date_of_birth) {
+          const dob = new Date(e.date_of_birth);
+          const bday = new Date(currentYear, dob.getMonth(), dob.getDate());
+          const diffBday = (bday.getTime() - now.getTime()) / (1000*60*60*24);
+          if (diffBday >= 0 && diffBday <= 30) {
+            upcomingBdays.push(e);
+          }
+        }
+      }
+
       const departmentStats = Object.entries(deptMap)
         .map(([name, count]) => ({ name, count }))
         .sort((a, b) => b.count - a.count)
         .slice(0, 5);
 
-      const monthlyHires: Record<number, number> = {};
-      const thisYearHires = activeEmployees.filter(e => {
-        if (!e.date_of_joining) return false;
-        const year = new Date(e.date_of_joining).getFullYear();
-        return year === thisYear;
-      });
-      thisYearHires.forEach(e => {
-        const m = new Date(e.date_of_joining!).getMonth();
-        monthlyHires[m] = (monthlyHires[m] || 0) + 1;
-      });
-      const hiringStats = { total: thisYearHires.length, monthly: monthlyHires };
+      const hiringStats = { total: thisYearHiresCount, monthly: monthlyHires };
 
-      const attritionCount = allEmployees.filter(e => e.deleted_at && new Date(e.deleted_at).getFullYear() === thisYear).length;
-
-      const now = new Date();
-      const upcomingBdays = activeEmployees.filter((e: any) => {
-        if (!e.date_of_birth) return false;
-        const dob = new Date(e.date_of_birth);
-        const bday = new Date(now.getFullYear(), dob.getMonth(), dob.getDate());
-        const diff = (bday.getTime() - now.getTime()) / (1000*60*60*24);
-        return diff >= 0 && diff <= 30;
-      }).sort((a: any, b: any) => {
+      upcomingBdays.sort((a: any, b: any) => {
         const da = new Date(a.date_of_birth), db = new Date(b.date_of_birth);
-        return new Date(now.getFullYear(), da.getMonth(), da.getDate()).getTime() - new Date(now.getFullYear(), db.getMonth(), db.getDate()).getTime();
-      }).slice(0, 5);
+        return new Date(currentYear, da.getMonth(), da.getDate()).getTime() - new Date(currentYear, db.getMonth(), db.getDate()).getTime();
+      }).splice(5);
 
-      const upcomingAnnis = activeEmployees.filter((e: any) => {
-        if (!e.date_of_joining) return false;
-        const doj = new Date(e.date_of_joining);
-        const anni = new Date(now.getFullYear(), doj.getMonth(), doj.getDate());
-        const diff = (anni.getTime() - now.getTime()) / (1000*60*60*24);
-        return diff >= 0 && diff <= 30 && now.getFullYear() > doj.getFullYear();
-      }).sort((a: any, b: any) => {
+      upcomingAnnis.sort((a: any, b: any) => {
         const da = new Date(a.date_of_joining), db = new Date(b.date_of_joining);
-        return new Date(now.getFullYear(), da.getMonth(), da.getDate()).getTime() - new Date(now.getFullYear(), db.getMonth(), db.getDate()).getTime();
-      }).slice(0, 5);
+        return new Date(currentYear, da.getMonth(), da.getDate()).getTime() - new Date(currentYear, db.getMonth(), db.getDate()).getTime();
+      }).splice(5);
 
       const celebrations = { birthdays: upcomingBdays, anniversaries: upcomingAnnis };
 
@@ -659,6 +681,7 @@ function HRManagerDashboard() {
   const navigate = useNavigate();
   const { profile } = useAuthStore();
 
+  // ⚡ Bolt: Single pass iteration for HR metrics
   const { data: employeeData, isLoading: loadingEmployees } = useQuery({
     queryKey: ['hr-employee-metrics', profile?.company_id],
     queryFn: async () => {
@@ -669,19 +692,29 @@ function HRManagerDashboard() {
         .is('deleted_at', null);
 
       const activeEmployees = data || [];
-      const employeeCount = activeEmployees.length;
-
+      let employeeCount = 0;
+      const birthdays: any[] = [];
       const now = new Date();
-      const birthdays = activeEmployees.filter((e: any) => {
-        if (!e.date_of_birth) return false;
-        const dob = new Date(e.date_of_birth);
-        const bday = new Date(now.getFullYear(), dob.getMonth(), dob.getDate());
-        const diff = (bday.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
-        return diff >= 0 && diff <= 30;
-      }).sort((a: any, b: any) => {
+      const currentYear = now.getFullYear();
+
+      for (let i = 0; i < activeEmployees.length; i++) {
+        const e = activeEmployees[i];
+        employeeCount++;
+
+        if (e.date_of_birth) {
+          const dob = new Date(e.date_of_birth);
+          const bday = new Date(currentYear, dob.getMonth(), dob.getDate());
+          const diff = (bday.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+          if (diff >= 0 && diff <= 30) {
+            birthdays.push(e);
+          }
+        }
+      }
+
+      birthdays.sort((a: any, b: any) => {
         const da = new Date(a.date_of_birth), db = new Date(b.date_of_birth);
-        return new Date(now.getFullYear(), da.getMonth(), da.getDate()).getTime() - new Date(now.getFullYear(), db.getMonth(), db.getDate()).getTime();
-      }).slice(0, 5);
+        return new Date(currentYear, da.getMonth(), da.getDate()).getTime() - new Date(currentYear, db.getMonth(), db.getDate()).getTime();
+      }).splice(5);
 
       return { employeeCount, birthdays };
     },
