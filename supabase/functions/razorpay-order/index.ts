@@ -1,17 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const allowedOrigins = [
-  'https://fastesthre.com',
-  'http://localhost:8080'
-];
-
 const getCorsHeaders = (req: Request) => {
-  const origin = req.headers.get('Origin');
-  const isAllowed = origin && allowedOrigins.includes(origin);
+  const origin = req.headers.get('Origin') || '*';
   return {
-    "Access-Control-Allow-Origin": isAllowed ? origin : allowedOrigins[0],
+    "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Headers":
       "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "Vary": "Origin",
   };
 };
 
