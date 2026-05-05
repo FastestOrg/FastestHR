@@ -110,7 +110,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           amount: Math.round(finalAmount * 100), // paise
           currency,
-          receipt: `wallet_${company_id}_${Date.now()}`,
+          receipt: `w_${company_id.replace(/-/g, '').substring(0, 12)}_${Date.now()}`.substring(0, 40),
           notes: {
             company_id,
             user_id: userId,
