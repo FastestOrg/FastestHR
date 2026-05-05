@@ -3732,6 +3732,17 @@ export type Database = {
         Args: { p_company_id: string; p_months: number; p_user_id: string }
         Returns: Json
       }
+      get_company_smtp_settings: {
+        Args: never
+        Returns: {
+          smtp_from_email: string
+          smtp_from_name: string
+          smtp_host: string
+          smtp_pass: string
+          smtp_port: number
+          smtp_user: string
+        }[]
+      }
       get_employee_by_public_id: {
         Args: { p_public_id: string }
         Returns: Json
