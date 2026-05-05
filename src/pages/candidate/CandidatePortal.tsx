@@ -5,7 +5,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { Briefcase, Clock, MapPin, Calendar, Video, Users, LogOut, Loader2, ArrowRight, CheckCircle2, Circle, ExternalLink } from 'lucide-react';
 import { isSafeUrl } from '@/lib/utils';
 import { toast } from 'sonner';
-import { isSafeUrl } from '@/lib/utils';
 
 const STAGE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   applied: { bg: 'bg-blue-500/10', text: 'text-blue-400', border: 'border-blue-500/30' },

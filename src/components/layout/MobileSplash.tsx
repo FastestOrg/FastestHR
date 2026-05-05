@@ -50,12 +50,12 @@ export const MobileSplash: React.FC<MobileSplashProps> = ({ onTimeout, isError }
   // If there's an error or it timed out, we might want to show a small retry hint or just fade out
   // For now, we'll keep showing the UI but add an error state if needed
 
-  const containerVariants = {
+  const containerVariants: any = {
     initial: { opacity: 1 },
     exit: { opacity: 0, transition: { duration: shouldReduceMotion ? 0.3 : 0.8, ease: "easeInOut" } }
   };
 
-  const logoVariants = {
+  const logoVariants: any = {
     initial: { scale: 0.8, opacity: 0 },
     animate: { 
       scale: 1, 

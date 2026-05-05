@@ -3732,6 +3732,10 @@ export type Database = {
         Args: { p_company_id: string; p_months: number; p_user_id: string }
         Returns: Json
       }
+      get_employee_by_public_id: {
+        Args: { p_public_id: string }
+        Returns: Json
+      }
       get_offer_by_token: {
         Args: { p_token: string }
         Returns: {
