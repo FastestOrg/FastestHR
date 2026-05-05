@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { MoreHorizontal, ArrowRight, XCircle, Trash2, Loader2, Send, Star, Sparkles, Bot } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { MoreHorizontal, ArrowRight, XCircle, Trash2, Loader2, Send, Star, Sparkles, Bot, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { OfferDetailsDialog } from './OfferDetailsDialog';
 import { generateAndUploadOfferPDF, replaceHtmlVariables } from '@/lib/pdf-generator';
@@ -57,6 +57,22 @@ export function CandidateActions({
   const [existingOffer, setExistingOffer] = useState<{ joining_date: string, payout: number, custom_variable_values?: Record<string, string> } | null>(null);
   const [templateCustomVariables, setTemplateCustomVariables] = useState<any[]>([]);
   const [jobEmploymentType, setJobEmploymentType] = useState<string | undefined>();
+  
+  const { data: latestOffer } = useQuery({
+    queryKey: ['candidate-offer', candidateId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('candidate_offers')
+        .select('token, status')
+        .eq('candidate_id', candidateId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: currentStage === 'offer' || currentStage === 'hired',
+  });
 
   const executeAutomations = async (newStage: string, offerData?: { joiningDate: string; payout: number; customVariableValues?: Record<string, string>; totalDuration?: number }) => {
     try {
@@ -382,6 +398,18 @@ export function CandidateActions({
 
   return (
     <>
+    <div className="flex items-center gap-1">
+      {latestOffer?.token && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 px-2 text-[10px] gap-1 text-primary hover:bg-primary/10 hover:text-primary transition-all font-bold uppercase tracking-tighter"
+          onClick={() => window.open(`${window.location.origin}/offer/${latestOffer.token}`, '_blank')}
+        >
+          <ExternalLink className="h-3 w-3" />
+          View Offer
+        </Button>
+      )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="h-6 w-6 -mr-2 -mt-2 text-muted-foreground">
@@ -437,6 +465,7 @@ export function CandidateActions({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+    </div>
 
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
