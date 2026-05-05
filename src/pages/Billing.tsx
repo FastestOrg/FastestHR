@@ -42,7 +42,7 @@ declare global {
   }
 }
 
-const SUPABASE_URL = 'https://swlknrfufxsvpkfulqcx.supabase.co';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
 // ─── Animated Counter ────────────────────────────────────────────────
 function AnimatedCounter({ value, prefix = '' }: { value: number; prefix?: string }) {

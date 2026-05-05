@@ -27,3 +27,7 @@
 **Vulnerability:** In `OfferLetterRenderer.tsx`, `DocumentRenderer.tsx`, and `pdf-generator.ts`, `String.prototype.replace(regex, value)` was used to substitute variables into HTML templates. If the user input contained special regex tokens like `$&` (which inserts the matched substring), it caused unintended injections and manipulation of the final output.
 **Learning:** `String.prototype.replace()` interprets special replacement patterns (like `$&`, `$`, `$\``, `$'`) when passing a string as the second argument, bypassing simple HTML escaping if the token is valid in regex contexts.
 **Prevention:** Always use a replacer function `String.prototype.replace(regex, () => value)` when replacing with dynamic or untrusted strings, as functions do not evaluate these special regex tokens.
+## 2026-05-05 - [Fix Hardcoded Secrets in Configuration and Pages]
+**Vulnerability:** Supabase URL and Publishable Key were hardcoded in `src/integrations/supabase/client.ts` and `src/pages/Billing.tsx`, exposing potentially sensitive infrastructure details to version control.
+**Learning:** Found instances where configuration files and components contained hardcoded API URLs and keys instead of referencing environment variables, which goes against security best practices.
+**Prevention:** Always use environment variables (e.g., `import.meta.env.VITE_SUPABASE_URL`) for external service configurations to avoid committing secrets to version control.
