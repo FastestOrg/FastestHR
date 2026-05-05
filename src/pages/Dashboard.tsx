@@ -186,11 +186,11 @@ function CompanyAdminDashboard() {
 
       const interviewedCount = candidates?.length || 0;
       const avgScore = interviewedCount > 0 
-        ? (candidates!.reduce((acc, curr) => acc + (curr.ai_interview_result?.ai_score || 0), 0) / interviewedCount).toFixed(1)
+        ? (candidates!.reduce((acc, curr) => acc + ((curr.ai_interview_result as any)?.ai_score || 0), 0) / interviewedCount).toFixed(1)
         : '0.0';
       
       const topCandidates = [...(candidates || [])]
-        .sort((a, b) => (b.ai_interview_result?.ai_score || 0) - (a.ai_interview_result?.ai_score || 0))
+        .sort((a, b) => ((b.ai_interview_result as any)?.ai_score || 0) - ((a.ai_interview_result as any)?.ai_score || 0))
         .slice(0, 3);
 
       return { interviewedCount, avgScore, topCandidates };

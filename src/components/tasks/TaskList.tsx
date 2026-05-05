@@ -8,7 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ListTodo, Plus, Timer, Play, Square, CheckCircle, Clock, Calendar, AlertCircle } from 'lucide-react';
-import { format, isToday, parseISO, startOfToday } from 'date-fns';
+import { format, isToday, parseISO, startOfToday, addHours } from 'date-fns';
 
 export function TaskList() {
   const { profile } = useAuthStore();

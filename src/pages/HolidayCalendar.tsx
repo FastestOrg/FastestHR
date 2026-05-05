@@ -219,7 +219,7 @@ export default function HolidayCalendar() {
                   <div className="space-y-2">
                     {items.map((h: any) => {
                       const d = new Date(h.date);
-                      const upcoming = isUpcoming(h.date);
+                      const upcoming = new Date(h.date) >= new Date(new Date().setHours(0, 0, 0, 0));
                       return (
                         <div key={h.id} className={`flex items-center gap-2 p-2 rounded text-xs ${upcoming ? 'bg-background border border-border/50' : 'bg-muted/20 opacity-70'}`}>
                           <span className="font-bold text-primary w-6 text-center">{d.getDate()}</span>

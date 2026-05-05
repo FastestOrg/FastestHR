@@ -60,7 +60,7 @@ export const MobileSplash: React.FC<MobileSplashProps> = ({ onTimeout, isError }
     animate: { 
       scale: 1, 
       opacity: 1,
-      transition: { duration: shouldReduceMotion ? 0.5 : 1, ease: "easeOut" }
+      transition: { duration: shouldReduceMotion ? 0.5 : 1, ease: "easeOut" as const }
     }
   };
 
