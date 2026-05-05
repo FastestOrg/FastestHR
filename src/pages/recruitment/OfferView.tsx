@@ -42,17 +42,14 @@ export default function OfferView() {
       
       try {
         const { data, error: fetchError } = await supabase
-          .from('candidate_offers')
-          .select('*, companies(name, logo_url, currency), candidates(full_name), jobs(title)')
-          .eq('token', token)
-          .single();
+          .rpc('get_offer_details_by_token', { p_token: token });
 
         if (fetchError || !data) {
           setError('Offer not found or link has expired.');
         } else {
           setOffer(data);
-          if ((data as any).signature_placement) {
-            setPlacedSignatures((data as any).signature_placement);
+          if (data.signature_placement) {
+            setPlacedSignatures(data.signature_placement);
           }
         }
       } catch (err: unknown) {
