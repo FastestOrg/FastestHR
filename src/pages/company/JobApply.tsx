@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { getCompanySlugFromHost } from '@/utils/tenantUtils';
 import { ArrowLeft, ArrowRight, Check, Loader2, Upload, Briefcase, MapPin, Users, DollarSign, Building2, Clock, Send, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
+import { SEO } from '@/components/seo/SEO';
 
 /* ═══════════════════════════════════════════════════════════
    HELPERS
@@ -543,6 +544,37 @@ export default function JobApply() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: '#09090b' }}>
+      <SEO 
+        title={`${job.title} at ${company?.name}`}
+        description={job.description ? job.description.slice(0, 160) : `Apply for the ${job.title} position at ${company?.name}. Join our growing team!`}
+        image={company?.logo_url || undefined}
+        type="job"
+        jobPosting={{
+          title: job.title,
+          description: job.description || '',
+          datePosted: job.created_at,
+          employmentType: job.employment_type || 'FULL_TIME',
+          hiringOrganization: {
+            name: company?.name || 'FastestHR Client',
+            logo: company?.logo_url || undefined
+          },
+          jobLocation: {
+            addressLocality: job.location || 'Remote',
+            addressCountry: company?.country || 'US'
+          },
+          baseSalary: (job.min_salary || job.max_salary) ? {
+            currency: 'USD',
+            value: job.min_salary && job.max_salary ? { min: job.min_salary, max: job.max_salary } : (job.min_salary || job.max_salary),
+            unitText: 'YEAR'
+          } : undefined
+        }}
+        breadcrumbs={[
+          { name: 'Home', path: '/' },
+          { name: company?.name || 'Company', path: `/company/${companySlug}` },
+          { name: job.title, path: `/company/${companySlug}/jobs/${jobSlug}` }
+        ]}
+      />
+
       {/* Top bar */}
       <nav className="sticky top-0 z-50 backdrop-blur-xl bg-black/70 border-b border-white/5">
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">

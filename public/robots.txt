@@ -1,3 +1,6 @@
+# FastestHR Robots Configuration
+# Optimized for Googlebot and AI Search Engines
+
 User-agent: *
 Allow: /
 Disallow: /dashboard
@@ -8,9 +11,28 @@ Disallow: /api/
 # Sitemap location
 Sitemap: https://fastesthr.com/sitemap.xml
 
-# AI Agent Specific
+# AI Context Files
+Sitemap: https://fastesthr.com/llms.txt
+Sitemap: https://fastesthr.com/llms-full.txt
+
+# AI Agent & Search Bot Access
 User-agent: GPTBot
-Allow: /blog/
-Allow: /company/
-Allow: /platform/
+Allow: /
+User-agent: OAI-SearchBot
+Allow: /
+User-agent: ChatGPT-User
+Allow: /
+User-agent: ClaudeBot
+Allow: /
+User-agent: PerplexityBot
+Allow: /
+User-agent: anthropic-ai
+Allow: /
+User-agent: Bytespider
+Allow: /
+User-agent: cohere-ai
+Allow: /
+
+# Block generic training crawlers if desired
+User-agent: CCBot
 Disallow: /

@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Briefcase, MapPin, Users, Globe, Linkedin, Building2, DollarSign, Clock, ArrowRight, Loader2 } from 'lucide-react';
 import { isSafeUrl } from '@/lib/utils';
 import { getCompanySlugFromHost } from '@/utils/tenantUtils';
-import { isSafeUrl } from '@/lib/utils';
+import { SEO } from '@/components/seo/SEO';
 
 const HERO_GRADIENT = 'linear-gradient(135deg, #0f172a 0%, #1e293b 40%, #334155 100%)';
 
@@ -90,6 +90,17 @@ export default function CompanyPage() {
 
   return (
     <div className="min-h-screen" style={{ background: '#09090b' }}>
+      <SEO 
+        title={`Careers at ${company.name}`}
+        description={company.about_company ? company.about_company.slice(0, 160) : `Join the team at ${company.name}. Explore open positions and career opportunities.`}
+        image={company.logo_url || undefined}
+        type="website"
+        breadcrumbs={[
+          { name: 'Home', path: '/' },
+          { name: company.name, path: `/company/${company.slug}` }
+        ]}
+      />
+
       {/* ════════ Navigation ════════ */}
       <nav className="sticky top-0 z-50 backdrop-blur-xl bg-black/70 border-b border-white/5">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">

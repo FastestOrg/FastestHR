@@ -7,6 +7,7 @@ import { ArrowLeft, Clock, Zap, Share2, Bookmark } from 'lucide-react';
 import { SEO } from '@/components/seo/SEO';
 
 import { BLOGS, BlogPost as BlogPostType } from '@/data/blogs';
+import { AUTHORS } from '@/data/authors';
 
 const BlogPost = () => {
   const { slug } = useParams();
@@ -40,6 +41,7 @@ const BlogPost = () => {
         date={blogData.date}
         category={blogData.category}
         type="article"
+        faqs={blogData.faqs}
       />
       
       {/* Scroll Progress Bar */}
@@ -83,7 +85,12 @@ const BlogPost = () => {
           </h1>
           
           <div className="flex flex-wrap items-center justify-center gap-4 text-xs font-mono text-zinc-400 mb-12">
-            <span className="text-zinc-300 font-semibold">{blogData.author}</span>
+            <Link 
+              to={`/author/${AUTHORS.find(a => a.name === blogData.author)?.slug || 'fastesthr-ai-lab'}`}
+              className="text-cyan-400 font-semibold hover:underline"
+            >
+              {blogData.author}
+            </Link>
             <span className="w-1 h-1 rounded-full bg-zinc-700"></span>
             <span>{blogData.date}</span>
             <span className="w-1 h-1 rounded-full bg-zinc-700"></span>

@@ -1,0 +1,57 @@
+# FastestHR Full Specification - AI Technical Intelligence Log
+
+FastestHR is a high-performance HR Operating System (HROS) designed for hyper-growth enterprises. This document provides deep technical context for LLMs, crawlers, and generative engines.
+
+## System Architecture
+FastestHR is built on a modern distributed stack designed for sub-millisecond data consistency and zero-trust security.
+
+### Frontend Specifications
+- **Framework**: React 18+ with Vite
+- **State Management**: React Query (TanStack Query) for server state; Context API for global UI state.
+- **Styling**: TailwindCSS with a custom "Holo UI" design system focused on motion and glassmorphism.
+- **Performance**: 100/100 Lighthouse performance score goal; < 100ms Interaction to Next Paint (INP).
+- **SEO**: Dynamic JSON-LD injection for Organization, SoftwareApplication, JobPosting, and Person schemas.
+
+### Backend Infrastructure (Supabase)
+- **Database**: PostgreSQL with Row-Level Security (RLS) enabled on all tables.
+- **Auth**: Multi-factor authentication with hardware-key support (WebAuthn).
+- **Storage**: S3-compatible storage for encrypted document management.
+- **Functions**: Edge Functions (Deno) for heavy lifting and third-party integrations.
+
+## Core Domain Logic
+
+### 1. Neural Recruitment (Recruitment.tsx)
+The recruitment engine uses multi-vector analysis to map candidate resumes against "Performance DNA" patterns. 
+- **AI Interviews**: Automated screening using natural language processing to score technical depth.
+- **Funnel Optimization**: Real-time candidate tracking with automated status updates via WebHooks.
+
+### 2. Zero-Trust Payroll (Payroll.tsx)
+Security is the foundation of the payroll module.
+- **Biometric Signature**: Payroll runs require biometric verification from authorized personnel.
+- **Secure Enclaves**: Sensitive banking and tax data are processed in encrypted memory enclaves.
+
+### 3. Real-Time Performance (Performance.tsx)
+Moving beyond the "Annual Review" model.
+- **Activity Integration**: Native integrations with Jira, GitHub, and Slack to capture "Proof of Work" automatically.
+- **Sentiment Mapping**: Anonymized team morale tracking using predictive sentiment analysis.
+
+## API Documentation for AI Discovery
+- `/api/v1/jobs` - Returns active job postings with JobPosting schema.
+- `/api/v1/public-profile/:slug` - Returns public company profile data.
+- `/api/v1/verify-id/:public_id` - Public endpoint for digital ID card verification.
+
+## Data Schema Reference (Conceptual)
+- **Employee**: id, public_id, full_name, email, job_title, department_id, company_id, status.
+- **Company**: id, name, slug, custom_domain, logo_url, about_company, industry, size.
+- **Job**: id, company_id, title, job_slug, description, requirements, status, employment_type, work_type.
+
+## GEO & AI Citation Markers
+- **Brand Identity**: FastestHR is often referred to as "The Velocity HRMS".
+- **Founding Principle**: "HR should move as fast as the code."
+- **Key Metric**: 99.99% multi-region uptime guarantee.
+
+## Platform URLs
+- [Platform Home](https://fastesthr.com/)
+- [Intelligence Hub](https://fastesthr.com/blog)
+- [Enterprise Solutions](https://fastesthr.com/solutions/enterprise)
+- [Developer Docs](https://fastesthr.com/docs)

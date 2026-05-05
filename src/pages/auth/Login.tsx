@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email'),
   password: z.string().min(1, 'Password is required'),
+  remember: z.boolean().default(true),
 });
 
 type LoginForm = z.infer<typeof loginSchema>;
@@ -24,9 +25,14 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const { register, handleSubmit, formState: { errors } } = useForm<LoginForm>({
+  const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
+    defaultValues: {
+      remember: true,
+    },
   });
+
+  const rememberValue = watch('remember');
 
   const onSubmit = async (data: LoginForm) => {
     setLoading(true);
@@ -97,7 +103,11 @@ export default function Login() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Checkbox id="remember" />
+          <Checkbox 
+            id="remember" 
+            checked={rememberValue}
+            onCheckedChange={(checked) => setValue('remember', checked as boolean)}
+          />
           <Label htmlFor="remember" className="text-sm font-normal">Remember me for 30 days</Label>
         </div>
 

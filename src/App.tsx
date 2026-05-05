@@ -1,4 +1,5 @@
 import { useEffect, lazy, Suspense } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Route, Routes, Navigate } from 'react-router-dom';
 import { Toaster as Sonner } from '@/components/ui/sonner';
@@ -12,6 +13,7 @@ import { getCompanySlugFromHost } from '@/utils/tenantUtils';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 import { PublicRoute } from '@/components/layout/PublicRoute';
+import { MobileSplash } from '@/components/layout/MobileSplash';
 import Landing from '@/pages/Landing';
 import BlogList from '@/pages/BlogList';
 import BlogPost from '@/pages/BlogPost';
@@ -43,6 +45,7 @@ import VirtualIDCard from '@/pages/employees/VirtualIDCard';
 import PublicIDCard from '@/pages/public/PublicIDCard';
 import LegacyCompare from '@/pages/public/LegacyCompare';
 import StartupSolutions from '@/pages/solutions/StartupSolutions';
+import AuthorDetail from '@/pages/AuthorDetail';
 
 
 import Companies from '@/pages/admin/Companies';
@@ -95,8 +98,14 @@ function AppRoutes() {
 
   // Loading fallback for lazy routes
   const LazyFallback = () => (
-    <div className="flex h-64 items-center justify-center">
-      <div className="font-mono text-muted-foreground text-sm animate-pulse">LOADING MODULE...</div>
+    <div className="flex h-64 flex-col items-center justify-center space-y-4">
+      <div className="relative w-12 h-12">
+        <div className="absolute inset-0 border-2 border-primary/20 rounded-full" />
+        <div className="absolute inset-0 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+      <div className="font-mono text-primary/40 text-[10px] tracking-[0.2em] uppercase animate-pulse">
+        Module Loading
+      </div>
     </div>
   );
 
@@ -125,7 +134,11 @@ function AppRoutes() {
   }
 
   return (
-    <Routes>
+    <>
+      <AnimatePresence>
+        {!initialized && <MobileSplash />}
+      </AnimatePresence>
+      <Routes>
       {/* Public routes */}
       <Route path="/" element={<Landing />} />
       <Route path="/blog" element={<BlogList />} />
@@ -137,12 +150,13 @@ function AppRoutes() {
       <Route path="/offer/:token" element={<OfferView />} />
       <Route path="/ai-interview/:hash" element={<Suspense fallback={<LazyFallback />}><AIInterview /></Suspense>} />
       <Route path="/id/:publicId" element={<PublicIDCard />} />
+      <Route path="/author/:slug" element={<AuthorDetail />} />
 
 
       {/* Company Career Pages */}
-      <Route path="/company/:companySlug" element={<Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-[#09090b]"><div className="font-mono text-white/30 text-sm animate-pulse">LOADING...</div></div>}><CompanyPage /></Suspense>} />
-      <Route path="/company/:companySlug/jobs/:jobSlug" element={<Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-[#09090b]"><div className="font-mono text-white/30 text-sm animate-pulse">LOADING...</div></div>}><JobApply /></Suspense>} />
-      <Route path="/company/:companySlug/jobs/:jobSlug/interview/:candidateId" element={<Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-[#09090b]"><div className="font-mono text-white/30 text-sm animate-pulse">LOADING...</div></div>}><AIInterview /></Suspense>} />
+      <Route path="/company/:companySlug" element={<Suspense fallback={<div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] text-white/20 font-mono text-[10px] tracking-[0.2em] uppercase"><div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin mb-4" />LOADING EXPERIENCE</div>}><CompanyPage /></Suspense>} />
+      <Route path="/company/:companySlug/jobs/:jobSlug" element={<Suspense fallback={<div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] text-white/20 font-mono text-[10px] tracking-[0.2em] uppercase"><div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin mb-4" />LOADING OPPORTUNITIES</div>}><JobApply /></Suspense>} />
+      <Route path="/company/:companySlug/jobs/:jobSlug/interview/:candidateId" element={<Suspense fallback={<div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] text-white/20 font-mono text-[10px] tracking-[0.2em] uppercase"><div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin mb-4" />PREPARING AI INTERVIEW</div>}><AIInterview /></Suspense>} />
 
       {/* SEO Comparison Pages */}
       <Route path="/vs/legacy-hrms" element={<LegacyCompare />} />
@@ -151,8 +165,8 @@ function AppRoutes() {
       <Route path="/solutions/startups" element={<StartupSolutions />} />
 
       {/* Candidate Portal */}
-      <Route path="/candidate/login" element={<Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-[#09090b]"><div className="font-mono text-white/30 text-sm animate-pulse">LOADING...</div></div>}><CandidateLogin /></Suspense>} />
-      <Route path="/candidate/portal" element={<Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-[#09090b]"><div className="font-mono text-white/30 text-sm animate-pulse">LOADING...</div></div>}><CandidatePortal /></Suspense>} />
+      <Route path="/candidate/login" element={<Suspense fallback={<div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] text-white/20 font-mono text-[10px] tracking-[0.2em] uppercase"><div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin mb-4" />SECURE LOGIN</div>}><CandidateLogin /></Suspense>} />
+      <Route path="/candidate/portal" element={<Suspense fallback={<div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] text-white/20 font-mono text-[10px] tracking-[0.2em] uppercase"><div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin mb-4" />OPENING PORTAL</div>}><CandidatePortal /></Suspense>} />
 
 
       {/* Core HR modules */}
@@ -204,6 +218,7 @@ function AppRoutes() {
 
       <Route path="*" element={<NotFound />} />
     </Routes>
+    </>
   );
 }
 

@@ -11,9 +11,39 @@ interface SEOProps {
   date?: string;
   category?: string;
   canonical?: string;
-  type?: 'website' | 'article' | 'software';
+  type?: 'website' | 'article' | 'software' | 'person' | 'job';
   breadcrumbs?: Array<{ name: string; path: string }>;
   faqs?: Array<{ question: string; answer: string }>;
+  jobPosting?: {
+    title: string;
+    description: string;
+    datePosted: string;
+    validThrough?: string;
+    employmentType: string;
+    hiringOrganization: {
+      name: string;
+      sameAs?: string;
+      logo?: string;
+    };
+    jobLocation: {
+      addressLocality: string;
+      addressRegion?: string;
+      addressCountry: string;
+    };
+    baseSalary?: {
+      currency: string;
+      value: number | { min: number; max: number };
+      unitText: string;
+    };
+  };
+  person?: {
+    name: string;
+    description?: string;
+    jobTitle?: string;
+    image?: string;
+    sameAs?: string[];
+  };
+  robots?: string;
 }
 
 /**
@@ -31,12 +61,15 @@ export const SEO: React.FC<SEOProps> = ({
   canonical,
   type = 'website',
   breadcrumbs,
-  faqs
+  faqs,
+  jobPosting,
+  person,
+  robots = 'index, follow'
 }) => {
   const siteName = 'FastestHR';
   const siteUrl = 'https://fastesthr.com';
-  const defaultTitle = 'FastestHR | Next-Gen Workforce OS';
-  const defaultDescription = 'The fastest, most intelligent workforce management platform for modern enterprises. Streamline HR, payroll, and recruitment with precision.';
+  const defaultTitle = 'FastestHR | AI-Powered Workforce OS for Scaling Enterprises';
+  const defaultDescription = 'FastestHR is the modern HR platform engineered for scaling enterprises. Featuring Neural Talent acquisition, Zero-Trust Payroll, and Real-Time Performance feedback.';
   const defaultImage = 'https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/59918d24-608b-4e3b-afcb-a133efbc4225/id-preview-ee149eb3--1f9ce50f-8d24-479b-acd8-e535221e7f10.lovable.app-1773472312491.png';
   const currentUrl = canonical || (typeof window !== 'undefined' ? window.location.href : siteUrl);
 
@@ -53,8 +86,14 @@ export const SEO: React.FC<SEOProps> = ({
       "@context": "http://schema.org",
       "@type": "Organization",
       "name": siteName,
+      "description": "Next-gen AI-powered HR operating system for scaling enterprises.",
       "url": siteUrl,
       "logo": defaultImage,
+      "brand": {
+        "@type": "Brand",
+        "name": siteName,
+        "logo": defaultImage
+      },
       "sameAs": [
         "https://twitter.com/FastestHR",
         "https://linkedin.com/company/fastesthr"
@@ -99,6 +138,7 @@ export const SEO: React.FC<SEOProps> = ({
     });
   }
 
+  // BlogPosting Schema
   if (type === 'article' || article) {
     schemaOrgJSONLD.push({
       "@context": "http://schema.org",
@@ -129,7 +169,62 @@ export const SEO: React.FC<SEOProps> = ({
         "@id": siteUrl
       }
     });
-  } else if (type === 'software') {
+  } 
+  
+  // JobPosting Schema
+  if (jobPosting) {
+    schemaOrgJSONLD.push({
+      "@context": "http://schema.org",
+      "@type": "JobPosting",
+      "title": jobPosting.title,
+      "description": jobPosting.description,
+      "datePosted": jobPosting.datePosted,
+      "validThrough": jobPosting.validThrough,
+      "employmentType": jobPosting.employmentType,
+      "hiringOrganization": {
+        "@type": "Organization",
+        "name": jobPosting.hiringOrganization.name,
+        "sameAs": jobPosting.hiringOrganization.sameAs,
+        "logo": jobPosting.hiringOrganization.logo
+      },
+      "jobLocation": {
+        "@type": "Place",
+        "address": {
+          "@type": "PostalAddress",
+          "addressLocality": jobPosting.jobLocation.addressLocality,
+          "addressRegion": jobPosting.jobLocation.addressRegion,
+          "addressCountry": jobPosting.jobLocation.addressCountry
+        }
+      },
+      "baseSalary": jobPosting.baseSalary ? {
+        "@type": "MonetaryAmount",
+        "currency": jobPosting.baseSalary.currency,
+        "value": typeof jobPosting.baseSalary.value === 'number' 
+          ? jobPosting.baseSalary.value 
+          : {
+            "@type": "QuantitativeValue",
+            "minValue": jobPosting.baseSalary.value.min,
+            "maxValue": jobPosting.baseSalary.value.max,
+            "unitText": jobPosting.baseSalary.unitText
+          }
+      } : undefined
+    });
+  }
+
+  // Person Schema
+  if (person) {
+    schemaOrgJSONLD.push({
+      "@context": "http://schema.org",
+      "@type": "Person",
+      "name": person.name,
+      "description": person.description,
+      "jobTitle": person.jobTitle,
+      "image": person.image,
+      "sameAs": person.sameAs
+    });
+  }
+
+  if (type === 'software') {
     schemaOrgJSONLD.push({
       "@context": "http://schema.org",
       "@type": "SoftwareApplication",
@@ -156,6 +251,7 @@ export const SEO: React.FC<SEOProps> = ({
       <meta name="description" content={seo.description} />
       {keywords && <meta name="keywords" content={keywords} />}
       <meta name="image" content={seo.image} />
+      <meta name="robots" content={robots} />
       <link rel="canonical" href={seo.url} />
 
       {/* Open Graph / Facebook */}
@@ -171,8 +267,8 @@ export const SEO: React.FC<SEOProps> = ({
       <meta name="twitter:title" content={seo.title} />
       <meta name="twitter:description" content={seo.description} />
       <meta name="twitter:image" content={seo.image} />
-      <meta name="twitter:site" content="@Lovable" />
-      <meta name="twitter:creator" content="@Lovable" />
+      <meta name="twitter:site" content="@FastestHR" />
+      <meta name="twitter:creator" content="@FastestHR" />
 
       {/* Structured Data */}
       <script type="application/ld+json">
