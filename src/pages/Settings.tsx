@@ -26,7 +26,10 @@ export default function Settings() {
     queryFn: async () => {
       if (!profile?.company_id) return null;
       const { data } = await supabase.from('companies').select('*').eq('id', profile.company_id).maybeSingle();
-      return data;
+      // SMTP columns are restricted; fetch them via secure RPC for admins
+      const { data: smtp } = await supabase.rpc('get_company_smtp_settings');
+      const smtpRow = Array.isArray(smtp) ? smtp[0] : null;
+      return { ...(data || {}), ...(smtpRow || {}) } as any;
     },
     enabled: !!profile?.company_id,
   });
