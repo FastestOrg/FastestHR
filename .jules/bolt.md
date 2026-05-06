@@ -28,3 +28,6 @@
 ## 2024-05-18 - Unnecessary API calls due to missing input debouncing
 **Learning:** Raw input search values used directly inside React Query `queryKey` without debouncing can trigger excessive network and database calls (one per keystroke) leading to significant overhead.
 **Action:** Always wrap user text input state with `useDebounce` and use the debounced value in the query dependencies instead of the raw input.
+## 2024-05-24 - Fix N+1 Query in MorningSetup
+**Learning:** Promise.all containing loops with database select and insert calls can cause significant performance degradation and hit connection limits (N+1 queries).
+**Action:** Always batch database read (e.g. `gte` and `lte`) and write (e.g. `insert(array)`) operations, doing processing in memory when possible.

@@ -69,25 +69,31 @@ export function MorningSetup() {
       // 2. Create/Sync tasks
       // For simplicity, we'll create new tasks for slots that don't have matching tasks yet
       // In a production app, we might want to reconcile them more intelligently.
-      const taskPromises = updatedSlots.map(async (slot) => {
-        if (!slot.focus) return;
 
-        // Check if task already exists for this slot today
-        const startTs = `${today}T${slot.startTime}:00Z`;
-        const endTs = `${today}T${slot.endTime}:00Z`;
+      const validSlots = updatedSlots.filter((slot) => slot.focus);
+
+      if (validSlots.length > 0) {
+        // ⚡ Bolt: Fetch all existing tasks for today to avoid N+1 queries in a loop
+        const startOfDay = `${today}T00:00:00Z`;
+        const endOfDay = `${today}T23:59:59Z`;
 
         const { data: existingTasks } = await supabase
           .from('tasks')
-          .select('id')
+          .select('id, title, scheduled_start')
           .eq('assigned_to', profile!.id)
-          .eq('title', slot.focus)
-          .eq('scheduled_start', startTs)
-          .limit(1);
+          .gte('scheduled_start', startOfDay)
+          .lte('scheduled_start', endOfDay);
 
-        if (!existingTasks || existingTasks.length === 0) {
-          return supabase
-            .from('tasks')
-            .insert({
+        const existingTasksSet = new Set(
+          (existingTasks || []).map((t) => `${t.title}-${new Date(t.scheduled_start).getTime()}`)
+        );
+
+        const tasksToInsert = validSlots.map((slot) => {
+          const startTs = `${today}T${slot.startTime}:00Z`;
+          const endTs = `${today}T${slot.endTime}:00Z`;
+
+          if (!existingTasksSet.has(`${slot.focus}-${new Date(startTs).getTime()}`)) {
+            return {
               title: slot.focus,
               company_id: profile!.company_id!,
               assigned_to: profile!.id,
@@ -95,11 +101,18 @@ export function MorningSetup() {
               type: 'self_managed',
               scheduled_start: startTs,
               scheduled_end: endTs,
-            });
-        }
-      });
+            };
+          }
+          return null;
+        }).filter(Boolean);
 
-      await Promise.all(taskPromises);
+        if (tasksToInsert.length > 0) {
+          // ⚡ Bolt: Batch insert all new tasks at once
+          const { error: insertError } = await supabase.from('tasks').insert(tasksToInsert as any[]);
+          if (insertError) throw insertError;
+        }
+      }
+
       return true;
     },
     onSuccess: () => {
