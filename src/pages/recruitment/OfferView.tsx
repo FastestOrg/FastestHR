@@ -89,12 +89,37 @@ export default function OfferView() {
       });
 
       if (funcError) throw funcError;
+      if (data?.error) throw new Error(data.error);
 
-      toast.success("Authentication link sent! Please check your email to securely sign the document.");
+      toast.success("Acceptance confirmation link sent! Please check your email.");
       setOffer({ ...offer, status: 'accepted' });
     } catch (err: any) {
       console.error(err);
-      toast.error(err.message || "Failed to send magic link");
+      toast.error(err.message || "Failed to send acceptance link");
+    } finally {
+      setAccepting(false);
+    }
+  };
+
+  const handleResendAcceptanceLink = async () => {
+    if (!offer) return;
+    setAccepting(true);
+    try {
+      const { data, error: funcError } = await supabase.functions.invoke('send-candidate-magic-link', {
+        body: { 
+          offer_id: offer.id,
+          candidate_email: offer.candidates?.email,
+          token: token
+        }
+      });
+
+      if (funcError) throw funcError;
+      if (data?.error) throw new Error(data.error);
+
+      toast.success("Link resent! Please check your email.");
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Failed to resend link");
     } finally {
       setAccepting(false);
     }
@@ -209,81 +234,98 @@ export default function OfferView() {
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1">{offer.companies?.name}</p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center flex-wrap">
+            {/* STEP 1: status=sent → Show "Sign the Offer Letter" */}
             {offer.status === 'sent' && (
+              <>
+                {!isPlacementMode && placedSignatures.length === 0 && (
+                  <Button variant="default" size="sm" onClick={() => setShowSignPortal(true)} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+                    <FileSignature className="h-4 w-4" />
+                    Sign the Offer Letter
+                  </Button>
+                )}
+                {isPlacementMode && (
+                  <div className="flex items-center gap-2 text-xs font-bold text-primary animate-pulse bg-primary/10 px-4 py-2 rounded-lg border border-primary/20">
+                    <MousePointer2 className="h-4 w-4" />
+                    Click on the document to place signature
+                  </div>
+                )}
+                {placedSignatures.length > 0 && !isPlacementMode && (
+                  <Button variant="default" size="sm" onClick={handleSubmitSignature} disabled={submitting} className="gap-2 bg-indigo-600 hover:bg-indigo-700">
+                    {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                    Submit Signature
+                  </Button>
+                )}
+              </>
+            )}
+
+            {/* STEP 2: status=signed → Show "Accept Offer Letter" */}
+            {offer.status === 'signed' && (
               <Button variant="default" size="sm" onClick={handleAcceptOffer} disabled={accepting} className="gap-2 bg-primary hover:bg-primary/90">
-                {accepting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSignature className="h-4 w-4" />}
+                {accepting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
                 Accept Offer Letter
               </Button>
             )}
+
+            {/* STEP 3: status=accepted → Show email check message + resend option */}
             {offer.status === 'accepted' && !isCandidateAuthenticated && (
-              <div className="flex items-center gap-2 text-xs font-medium text-amber-600 bg-amber-50 px-3 py-1 rounded-full border border-amber-200">
-                <Mail className="h-3 w-3" />
-                Awaiting Login via Email Link
-              </div>
-            )}
-            {(offer.status === 'sent' || (offer.status === 'accepted' && isManagerAuthenticated)) && (
-              <div className="flex gap-2">
-                {!isPlacementMode && placedSignatures.filter(s => s.role === 'manager').length === 0 && (
-                  <Button variant="default" size="sm" onClick={() => setShowSignPortal(true)} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
-                    <FileSignature className="h-4 w-4" />
-                    Sign as Company Representative
-                  </Button>
-                )}
-                {isPlacementMode && (
-                  <div className="flex items-center gap-2 text-xs font-bold text-primary animate-pulse bg-primary/10 px-4 py-2 rounded-lg border border-primary/20">
-                    <MousePointer2 className="h-4 w-4" />
-                    Click on the document to place signature
-                  </div>
-                )}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 text-xs font-medium text-amber-600 bg-amber-50 dark:bg-amber-950/30 px-3 py-1.5 rounded-full border border-amber-200 dark:border-amber-800">
+                  <Mail className="h-3 w-3" />
+                  Check your email to confirm acceptance
+                </div>
+                <Button variant="ghost" size="sm" onClick={handleResendAcceptanceLink} disabled={accepting} className="gap-1 text-xs text-primary hover:text-primary/80">
+                  {accepting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Mail className="h-3 w-3" />}
+                  Resend Link
+                </Button>
               </div>
             )}
 
+            {/* STEP 4: status=accepted + candidate authenticated via magic link → Offer Accepted */}
             {offer.status === 'accepted' && isCandidateAuthenticated && (
-              <div className="flex gap-2">
-                {!isPlacementMode && placedSignatures.filter(s => s.role === 'candidate').length === 0 && (
-                  <Button variant="default" size="sm" onClick={() => setShowSignPortal(true)} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
-                    <FileSignature className="h-4 w-4" />
-                    Sign Now
-                  </Button>
-                )}
-                {isPlacementMode && (
-                  <div className="flex items-center gap-2 text-xs font-bold text-primary animate-pulse bg-primary/10 px-4 py-2 rounded-lg border border-primary/20">
-                    <MousePointer2 className="h-4 w-4" />
-                    Click on the document to place signature
-                  </div>
-                )}
+              <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-1.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                <CheckCircle className="h-3.5 w-3.5" />
+                Offer Letter Accepted
               </div>
             )}
-            
-            {(placedSignatures.length > 0 && !isPlacementMode && offer.status !== 'signed') && (
-              <Button variant="default" size="sm" onClick={handleSubmitSignature} disabled={submitting} className="gap-2 bg-indigo-600 hover:bg-indigo-700">
-                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-                {isManagerAuthenticated ? 'Save Signature' : 'Submit Signed Document'}
-              </Button>
-            )}
-            {offer.status === 'signed' && (
-              <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
-                <CheckCircle className="h-3 w-3" />
-                Successfully Signed
-              </div>
-            )}
+
+            {/* Print / Save PDF — Always visible */}
             <Button variant="outline" size="sm" onClick={handlePrint} className="gap-2">
               <Download className="h-4 w-4" /> Print / Save PDF
             </Button>
           </div>
         </div>
 
+        {/* Info Alerts based on status */}
         {offer.status === 'sent' && (
           <Alert className="bg-blue-50 border-blue-200 text-blue-800 animate-in fade-in slide-in-from-top-4 duration-500">
             <Info className="h-4 w-4 text-blue-600" />
-            <AlertTitle className="text-sm font-bold">Document Signing Requirement</AlertTitle>
+            <AlertTitle className="text-sm font-bold">Sign Your Offer Letter</AlertTitle>
             <AlertDescription className="text-xs">
-              Once you click "Accept Offer Letter", a secure magic link will be sent to <strong>{offer.candidates?.email}</strong>. 
-              You must log in using that link to verify your identity before signing the document legally.
+              Please review the offer letter below and click <strong>"Sign the Offer Letter"</strong> to place your signature on the document.
               <p className="mt-2 text-[10px] opacity-80 uppercase tracking-tighter font-semibold">
                 Signatures are never shared or saved to the company, and as per legal documentation, make sure you are using your legal Signatures here.
               </p>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {offer.status === 'signed' && (
+          <Alert className="bg-indigo-50 border-indigo-200 text-indigo-800 animate-in fade-in slide-in-from-top-4 duration-500">
+            <CheckCircle className="h-4 w-4 text-indigo-600" />
+            <AlertTitle className="text-sm font-bold">Document Signed Successfully</AlertTitle>
+            <AlertDescription className="text-xs">
+              Your signature has been placed. Click <strong>"Accept Offer Letter"</strong> to formally accept. A confirmation link will be sent to <strong>{offer.candidates?.email}</strong> for verification.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {offer.status === 'accepted' && !isCandidateAuthenticated && (
+          <Alert className="bg-amber-50 border-amber-200 text-amber-800 animate-in fade-in slide-in-from-top-4 duration-500">
+            <Mail className="h-4 w-4 text-amber-600" />
+            <AlertTitle className="text-sm font-bold">Confirm via Email</AlertTitle>
+            <AlertDescription className="text-xs">
+              A confirmation link has been sent to <strong>{offer.candidates?.email}</strong>. Please check your inbox and click the link to finalize your acceptance. If you didn't receive it, click <strong>"Resend Link"</strong> above.
             </AlertDescription>
           </Alert>
         )}
