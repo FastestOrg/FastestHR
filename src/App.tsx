@@ -128,6 +128,9 @@ function AppRoutes() {
         <Route path="/jobs/:jobSlug/interview/:candidateId" element={<Suspense fallback={<LazyFallback />}><AIInterview /></Suspense>} />
         <Route path="/candidate/login" element={<Suspense fallback={<LazyFallback />}><CandidateLogin /></Suspense>} />
         <Route path="/candidate/portal" element={<Suspense fallback={<LazyFallback />}><CandidatePortal /></Suspense>} />
+        <Route path="/offer/:token" element={<OfferView />} />
+        <Route path="/ai-interview/:hash" element={<Suspense fallback={<LazyFallback />}><AIInterview /></Suspense>} />
+        <Route path="/id/:publicId" element={<PublicIDCard />} />
         <Route path="*" element={<Suspense fallback={<LazyFallback />}><CompanyPage /></Suspense>} />
       </Routes>
     );

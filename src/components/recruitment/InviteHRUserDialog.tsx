@@ -22,6 +22,20 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth-store';
+import { Check, ChevronsUpDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 
 interface InviteHRUserDialogProps {
   open: boolean;
@@ -39,12 +53,29 @@ export function InviteHRUserDialog({
   const { profile } = useAuthStore();
   const queryClient = useQueryClient();
   const [formData, setFormData] = useState({
+    employeeId: '',
     email: '',
     role: 'recruiter' as 'recruiter' | 'hr_manager',
     managerId: '',
   });
+  const [openSelector, setOpenSelector] = useState(false);
 
   const licenceFull = usedLicences >= totalLicences;
+
+  // Fetch Employees for selection
+  const { data: employees = [], isLoading: loadingEmployees } = useQuery({
+    queryKey: ['employees-for-invite', profile?.company_id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('employees')
+        .select('id, first_name, last_name, work_email, user_id')
+        .eq('company_id', profile!.company_id!)
+        .is('deleted_at', null)
+        .order('first_name');
+      return data || [];
+    },
+    enabled: !!profile?.company_id && open,
+  });
 
   // Fetch HR Managers for the manager selector
   const { data: hrManagers = [] } = useQuery({
@@ -67,14 +98,33 @@ export function InviteHRUserDialog({
       if (!profile?.company_id) throw new Error('No company');
       if (licenceFull) throw new Error('Licence limit reached');
 
+      const selectedEmployee = employees.find(e => e.id === formData.employeeId);
+      if (!selectedEmployee) throw new Error('Please select an employee');
+
+      const email = selectedEmployee.work_email;
+      if (!email) throw new Error('Selected employee has no work email');
+
+      // If employee already has a user_id, just update their profile
+      if (selectedEmployee.user_id) {
+        const { error: updateErr } = await supabase
+          .from('profiles')
+          .update({ 
+            platform_role: formData.role, 
+            manager_id: formData.managerId || null 
+          })
+          .eq('id', selectedEmployee.user_id);
+        
+        if (updateErr) throw updateErr;
+        return { existing: true, email };
+      }
+
       // 1. Create invitation in DB
       const { data: invitation, error: invErr } = await supabase
         .from('invitations')
         .insert({
           company_id: profile.company_id,
-          email: formData.email.trim().toLowerCase(),
+          email: email.trim().toLowerCase(),
           invited_by: profile.id,
-          // Store role info in invitation via meta — we'll handle on accept
         })
         .select()
         .single();
@@ -82,10 +132,8 @@ export function InviteHRUserDialog({
       if (invErr) throw invErr;
 
       // 2. Send magic link via Supabase Auth
-      // We pass the company_id, platform_role, and manager_id in the 'data' options
-      // so the database trigger 'handle_new_user' assigns them automatically upon signup.
       const { error: otpErr } = await supabase.auth.signInWithOtp({
-        email: formData.email.trim().toLowerCase(),
+        email: email.trim().toLowerCase(),
         options: {
           shouldCreateUser: true,
           emailRedirectTo: `${window.location.origin}/dashboard`,
@@ -93,18 +141,18 @@ export function InviteHRUserDialog({
             company_id: profile.company_id,
             platform_role: formData.role,
             manager_id: formData.managerId || null,
-            full_name: formData.email.trim().toLowerCase().split('@')[0] // Fallback name
+            full_name: `${selectedEmployee.first_name} ${selectedEmployee.last_name}`
           }
         },
       });
 
       if (otpErr) throw otpErr;
-      return invitation;
+      return { invitation, email };
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['recruitment-team', profile?.company_id] });
-      toast.success(`Invitation sent to ${formData.email}`);
-      setFormData({ email: '', role: 'recruiter', managerId: '' });
+      toast.success(data.existing ? `Role updated for ${data.email}` : `Invitation sent to ${data.email}`);
+      setFormData({ employeeId: '', email: '', role: 'recruiter', managerId: '' });
       onOpenChange(false);
     },
     onError: (error: any) => {
@@ -114,7 +162,10 @@ export function InviteHRUserDialog({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.email) return;
+    if (!formData.employeeId) {
+      toast.error('Please select an employee');
+      return;
+    }
     if (formData.role === 'recruiter' && !formData.managerId && hrManagers.length > 0) {
       toast.error('Please assign a manager for this recruiter');
       return;
@@ -145,17 +196,62 @@ export function InviteHRUserDialog({
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-          <div className="space-y-2">
-            <Label htmlFor="invite-email">Email Address *</Label>
-            <Input
-              id="invite-email"
-              type="email"
-              required
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              placeholder="recruiter@company.com"
-              disabled={mutation.isPending || licenceFull}
-            />
+          <div className="space-y-2 flex flex-col">
+            <Label htmlFor="employee-select">Select Employee *</Label>
+            <Popover open={openSelector} onOpenChange={setOpenSelector}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openSelector}
+                  className="w-full justify-between bg-background"
+                  disabled={mutation.isPending || licenceFull || loadingEmployees}
+                >
+                  {formData.employeeId
+                    ? `${employees.find((e) => e.id === formData.employeeId)?.first_name} ${employees.find((e) => e.id === formData.employeeId)?.last_name}`
+                    : "Select employee..."}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[400px] p-0">
+                <Command>
+                  <CommandInput placeholder="Search employee..." />
+                  <CommandEmpty>No employee found.</CommandEmpty>
+                  <CommandGroup className="max-h-60 overflow-y-auto">
+                    {employees.map((employee) => (
+                      <CommandItem
+                        key={employee.id}
+                        value={`${employee.first_name} ${employee.last_name}`}
+                        onSelect={() => {
+                          setFormData({ 
+                            ...formData, 
+                            employeeId: employee.id,
+                            email: employee.work_email || ''
+                          });
+                          setOpenSelector(false);
+                        }}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            formData.employeeId === employee.id ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        <div className="flex flex-col">
+                          <span>{employee.first_name} {employee.last_name}</span>
+                          <span className="text-xs text-muted-foreground">{employee.work_email}</span>
+                        </div>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </Command>
+              </PopoverContent>
+            </Popover>
+            {formData.email && (
+              <p className="text-xs text-muted-foreground mt-1 px-1">
+                Will be invited as: <span className="font-medium text-foreground">{formData.email}</span>
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">

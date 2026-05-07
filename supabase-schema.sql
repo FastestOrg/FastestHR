@@ -346,6 +346,12 @@ BEGIN
       COALESCE((NEW.raw_user_meta_data->>'platform_role')::platform_role, 'user'),
       NULLIF(NEW.raw_user_meta_data->>'company_id', '')::UUID
     );
+
+    -- Link existing employee record if work_email matches
+    UPDATE public.employees 
+    SET user_id = NEW.id 
+    WHERE work_email = NEW.email 
+    AND user_id IS NULL;
   END IF;
   
   RETURN NEW;
@@ -2257,6 +2263,7 @@ CREATE POLICY "Users can update own notifications" ON "public"."notifications" F
 
 
 CREATE POLICY "Users can update their own profile" ON "public"."profiles" FOR UPDATE TO "authenticated" USING (("id" = "auth"."uid"()));
+CREATE POLICY "Admins can update profiles in their company" ON "public"."profiles" FOR UPDATE TO "authenticated" USING (("company_id" = "public"."get_user_company_id"()) AND "public"."is_company_admin"());
 
 
 

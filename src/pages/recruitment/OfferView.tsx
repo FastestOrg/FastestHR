@@ -38,13 +38,22 @@ export default function OfferView() {
 
   useEffect(() => {
     async function fetchOffer() {
-      if (!token) return;
+      if (!token) {
+        setError('Invalid offer link.');
+        setLoading(false);
+        return;
+      }
+      
+      const cleanToken = token.trim();
       
       try {
         const { data, error: fetchError } = await supabase
-          .rpc('get_offer_details_by_token', { p_token: token });
+          .rpc('get_offer_details_by_token', { p_token: cleanToken });
 
-        if (fetchError || !data) {
+        if (fetchError) {
+          console.error('RPC Error fetching offer:', fetchError);
+          setError(`Offer Access Error: ${fetchError.message || 'The offer details could not be retrieved.'}`);
+        } else if (!data) {
           setError('Offer not found or link has expired.');
         } else {
           setOffer(data);
@@ -53,6 +62,7 @@ export default function OfferView() {
           }
         }
       } catch (err: unknown) {
+        console.error('Catch Error fetching offer:', err);
         setError((err instanceof Error ? err.message : String(err)));
       } finally {
         setLoading(false);

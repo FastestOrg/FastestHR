@@ -14,4 +14,3 @@ verify_jwt = false
 
 [functions.ai-interviewer]
 verify_jwt = false
-
