@@ -8,3 +8,6 @@
 ## 2026-04-18 - AI Assistant Accessibility and Auto-focus
 **Learning:** Found that the AI Assistant chat interface lacked basic accessibility (missing `aria-label` on icon-only Open, Close, and Send buttons) and forced the user to manually click into the input field after opening the chat overlay.
 **Action:** Adding `aria-label`s for screen reader support and the `autoFocus` prop to the main chat input so it's ready for typing immediately when the overlay opens.
+## 2026-05-07 - Reset Password form visibility toggle
+**Learning:** Discovered that the ResetPassword component lacked a 'show/hide' visibility toggle for the new password and confirm password fields, leading to increased user friction and potential blind typing errors during account recovery.
+**Action:** Adding state-managed visibility toggles to both password fields to match the behavior of the Login and Register forms, ensuring a consistent and accessible password entry experience.
