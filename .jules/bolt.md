@@ -28,3 +28,6 @@
 ## 2024-05-18 - Unnecessary API calls due to missing input debouncing
 **Learning:** Raw input search values used directly inside React Query `queryKey` without debouncing can trigger excessive network and database calls (one per keystroke) leading to significant overhead.
 **Action:** Always wrap user text input state with `useDebounce` and use the debounced value in the query dependencies instead of the raw input.
+## 2024-05-18 - Replacing map loop Promise.all for Supabase select/insert
+**Learning:** Resolving N+1 issues when creating tasks inside mapping loops by replacing `Promise.all` + `.map` (which runs a `select` and an `insert` per iteration) with a single batched `.select` fetching the entire day's domain, deduping locally with numeric normalized timestamps, and then executing a single `.insert` array.
+**Action:** Always batch reads and writes to Supabase when operating over arrays in frontend components rather than iterating single queries.
