@@ -28,3 +28,6 @@
 ## 2024-05-18 - Unnecessary API calls due to missing input debouncing
 **Learning:** Raw input search values used directly inside React Query `queryKey` without debouncing can trigger excessive network and database calls (one per keystroke) leading to significant overhead.
 **Action:** Always wrap user text input state with `useDebounce` and use the debounced value in the query dependencies instead of the raw input.
+## 2024-05-18 - Batch Task Synchronization to Avoid N+1 Insert Bottlenecks
+**Learning:** In the `MorningSetup.tsx` component, updating the schedule triggered parallel `.select()` queries combined with `.insert()` queries for each time slot (using `Promise.all`), leading to an N+1 performance issue and heavy database load.
+**Action:** When synchronizing arrays of data to a database (like tasks for a day), fetch all relevant records at once using range queries (`.gte()` and `.lte()`), build a local lookup `Set`, filter the payload in memory, and execute a single bulk `.insert()`.

@@ -67,39 +67,48 @@ export function MorningSetup() {
       if (reportError) throw reportError;
 
       // 2. Create/Sync tasks
-      // For simplicity, we'll create new tasks for slots that don't have matching tasks yet
-      // In a production app, we might want to reconcile them more intelligently.
-      const taskPromises = updatedSlots.map(async (slot) => {
-        if (!slot.focus) return;
+      // ⚡ Bolt: Fetch all existing tasks for today to avoid N+1 queries in the loop
+      const startOfDay = `${today}T00:00:00Z`;
+      const endOfDay = `${today}T23:59:59Z`;
 
-        // Check if task already exists for this slot today
-        const startTs = `${today}T${slot.startTime}:00Z`;
-        const endTs = `${today}T${slot.endTime}:00Z`;
+      const { data: allExistingTasks } = await supabase
+        .from('tasks')
+        .select('title, scheduled_start')
+        .eq('assigned_to', profile!.id)
+        .gte('scheduled_start', startOfDay)
+        .lte('scheduled_start', endOfDay);
 
-        const { data: existingTasks } = await supabase
-          .from('tasks')
-          .select('id')
-          .eq('assigned_to', profile!.id)
-          .eq('title', slot.focus)
-          .eq('scheduled_start', startTs)
-          .limit(1);
+      const existingTaskSet = new Set(
+        (allExistingTasks || []).map(t => {
+          const ts = new Date(t.scheduled_start).getTime();
+          return `${t.title}-${ts}`;
+        })
+      );
 
-        if (!existingTasks || existingTasks.length === 0) {
-          return supabase
-            .from('tasks')
-            .insert({
-              title: slot.focus,
-              company_id: profile!.company_id!,
-              assigned_to: profile!.id,
-              assigned_by: profile!.id,
-              type: 'self_managed',
-              scheduled_start: startTs,
-              scheduled_end: endTs,
-            });
-        }
-      });
+      const newTasksToInsert = updatedSlots
+        .filter(slot => slot.focus)
+        .map(slot => {
+          const startTs = `${today}T${slot.startTime}:00Z`;
+          const endTs = `${today}T${slot.endTime}:00Z`;
+          return {
+            title: slot.focus,
+            company_id: profile!.company_id!,
+            assigned_to: profile!.id,
+            assigned_by: profile!.id,
+            type: 'self_managed',
+            scheduled_start: startTs,
+            scheduled_end: endTs,
+          };
+        })
+        .filter(task => {
+          const ts = new Date(task.scheduled_start).getTime();
+          return !existingTaskSet.has(`${task.title}-${ts}`);
+        });
 
-      await Promise.all(taskPromises);
+      if (newTasksToInsert.length > 0) {
+        await supabase.from('tasks').insert(newTasksToInsert);
+      }
+
       return true;
     },
     onSuccess: () => {
