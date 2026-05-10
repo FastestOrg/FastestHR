@@ -8,3 +8,7 @@
 ## 2026-04-18 - AI Assistant Accessibility and Auto-focus
 **Learning:** Found that the AI Assistant chat interface lacked basic accessibility (missing `aria-label` on icon-only Open, Close, and Send buttons) and forced the user to manually click into the input field after opening the chat overlay.
 **Action:** Adding `aria-label`s for screen reader support and the `autoFocus` prop to the main chat input so it's ready for typing immediately when the overlay opens.
+
+## 2026-05-10 - Password Visibility Toggles on Reset Forms
+**Learning:** When users are establishing new complex passwords (especially on reset forms with multiple rules), the lack of visual feedback causes friction and blind typing errors.
+**Action:** Always include 'show/hide' visibility toggles for password and confirm password inputs, ensuring they are accessible with appropriate `aria-label`s.
