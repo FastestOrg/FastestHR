@@ -8,3 +8,7 @@
 ## 2026-04-18 - AI Assistant Accessibility and Auto-focus
 **Learning:** Found that the AI Assistant chat interface lacked basic accessibility (missing `aria-label` on icon-only Open, Close, and Send buttons) and forced the user to manually click into the input field after opening the chat overlay.
 **Action:** Adding `aria-label`s for screen reader support and the `autoFocus` prop to the main chat input so it's ready for typing immediately when the overlay opens.
+
+## 2025-05-11 - Password Visibility Toggles on Confirm Fields
+**Learning:** It is crucial for user experience and reducing friction (especially preventing blind typing errors during registration/password resets) to ensure that *all* password input fields—including the "confirm password" fields—have a visibility toggle ("show/hide" button), not just the primary password field. In pages like `Register.tsx` and `ResetPassword.tsx`, this prevents users from making hard-to-detect errors when confirming their passwords.
+**Action:** When creating or modifying authentication forms, always implement an eye/visibility toggle button (with proper `aria-label`s) for both primary and confirmation password fields.
