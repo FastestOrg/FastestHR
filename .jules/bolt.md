@@ -28,3 +28,9 @@
 ## 2024-05-18 - Unnecessary API calls due to missing input debouncing
 **Learning:** Raw input search values used directly inside React Query `queryKey` without debouncing can trigger excessive network and database calls (one per keystroke) leading to significant overhead.
 **Action:** Always wrap user text input state with `useDebounce` and use the debounced value in the query dependencies instead of the raw input.
+## 2026-05-12 - O(N*M) Filtering in Render Functions
+**Learning:** In reporting components, using  on an array combined with inner  or  calls directly in the React render body creates extreme performance bottlenecks by executing an O(N*M) operation on every render pass.
+**Action:** Always wrap expensive aggregations in a `useMemo` and replace multi-pass filtering with a single-pass iteration that builds hash map lookups, reducing time complexity from O(N*M) to O(N).
+## 2024-12-05 - O(N*M) Filtering in Render Functions
+**Learning:** In reporting components, using `.map()` on an array combined with inner `.filter()` or `.reduce()` calls directly in the React render body creates extreme performance bottlenecks by executing an O(N*M) operation on every render pass.
+**Action:** Always wrap expensive aggregations in a `useMemo` and replace multi-pass filtering with a single-pass iteration that builds hash map lookups, reducing time complexity from O(N*M) to O(N).

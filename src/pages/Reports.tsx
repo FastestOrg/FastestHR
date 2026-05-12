@@ -5,6 +5,7 @@ import { PieChart, BarChart3, Download, Filter, Users, Calendar, DollarSign } fr
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth-store';
+import { useMemo } from 'react';
 
 export default function Reports() {
   const { profile } = useAuthStore();
@@ -32,20 +33,31 @@ export default function Reports() {
     enabled: !!profile?.company_id,
   });
 
-  // Compute department headcount
-  const deptHeadcount = departments.map((dept: any) => ({
-    name: dept.name,
-    count: employees.filter((e: any) => e.department_id === dept.id).length,
-  })).sort((a, b) => b.count - a.count);
+  // ⚡ Bolt: Compute metrics in a single pass using useMemo to avoid O(N*M) repeated filtering
+  const { deptHeadcount, maxCount, empTypes } = useMemo(() => {
+    const deptCounts: Record<string, number> = {};
+    const empTypesAcc: Record<string, number> = {};
 
-  const maxCount = Math.max(...deptHeadcount.map(d => d.count), 1);
+    employees.forEach((e: any) => {
+      // Department count
+      if (e.department_id) {
+        deptCounts[e.department_id] = (deptCounts[e.department_id] || 0) + 1;
+      }
 
-  // Employment type breakdown
-  const empTypes = employees.reduce((acc: Record<string, number>, e: any) => {
-    const t = e.employment_type || 'unknown';
-    acc[t] = (acc[t] || 0) + 1;
-    return acc;
-  }, {});
+      // Employment type count
+      const t = e.employment_type || 'unknown';
+      empTypesAcc[t] = (empTypesAcc[t] || 0) + 1;
+    });
+
+    const headcount = departments.map((dept: any) => ({
+      name: dept.name,
+      count: deptCounts[dept.id] || 0,
+    })).sort((a, b) => b.count - a.count);
+
+    const max = Math.max(...headcount.map(d => d.count), 1);
+
+    return { deptHeadcount: headcount, maxCount: max, empTypes: empTypesAcc };
+  }, [employees, departments]);
 
   const handleExport = () => {
     try {
