@@ -28,3 +28,7 @@
 ## 2024-05-18 - Unnecessary API calls due to missing input debouncing
 **Learning:** Raw input search values used directly inside React Query `queryKey` without debouncing can trigger excessive network and database calls (one per keystroke) leading to significant overhead.
 **Action:** Always wrap user text input state with `useDebounce` and use the debounced value in the query dependencies instead of the raw input.
+
+## 2024-12-05 - Batching sequential Database Queries inside mapping loops
+**Learning:** Resolving N+1 issues when inserting/syncing tasks requires extracting keys, issuing a single `.in()` query, then running local filters to identify missing rows, and finally issuing a single bulk `.insert(array)`. When comparing timestamps retrieved from Supabase with locally constructed ISO strings, direct string comparison can fail due to time zone representation differences (`+00:00` vs `Z`).
+**Action:** When migrating from individual `.select` loops to batched lookups, always convert date strings to numeric values using `new Date(...).getTime()` for reliable matching and idempotency.
