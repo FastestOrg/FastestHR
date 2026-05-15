@@ -28,3 +28,6 @@
 ## 2024-05-18 - Unnecessary API calls due to missing input debouncing
 **Learning:** Raw input search values used directly inside React Query `queryKey` without debouncing can trigger excessive network and database calls (one per keystroke) leading to significant overhead.
 **Action:** Always wrap user text input state with `useDebounce` and use the debounced value in the query dependencies instead of the raw input.
+## 2024-05-18 - [Optimize Reports Analytics Aggregation and Exports]
+**Learning:** Found O(N*M) performance bottlenecks in `src/pages/Reports.tsx` where `.filter()` and `.find()` were nested inside `.map()` loops over arrays. Combining all local dataset processing into a single `useMemo` using `O(N)` hash map construction significantly reduces recalculation cost and computation time for components that display large sets of data.
+**Action:** When working with client-side aggregations for large datasets (e.g., employee lists), immediately check for `.filter()`, `.find()`, or `.reduce()` calls inside `.map()` iterations. Pre-compute hash maps for constant-time lookups inside a `useMemo` hook.

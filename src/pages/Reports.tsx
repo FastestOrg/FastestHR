@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PieChart, BarChart3, Download, Filter, Users, Calendar, DollarSign } from 'lucide-react';
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth-store';
@@ -32,20 +33,32 @@ export default function Reports() {
     enabled: !!profile?.company_id,
   });
 
-  // Compute department headcount
-  const deptHeadcount = departments.map((dept: any) => ({
-    name: dept.name,
-    count: employees.filter((e: any) => e.department_id === dept.id).length,
-  })).sort((a, b) => b.count - a.count);
+  const { deptHeadcount, maxCount, empTypes } = useMemo(() => {
+    const countsByDept: Record<string, number> = {};
+    const empTypesLocal: Record<string, number> = {};
 
-  const maxCount = Math.max(...deptHeadcount.map(d => d.count), 1);
+    employees.forEach((e: any) => {
+      // Aggregate department counts
+      const deptId = e.department_id;
+      if (deptId) {
+        countsByDept[deptId] = (countsByDept[deptId] || 0) + 1;
+      }
 
-  // Employment type breakdown
-  const empTypes = employees.reduce((acc: Record<string, number>, e: any) => {
-    const t = e.employment_type || 'unknown';
-    acc[t] = (acc[t] || 0) + 1;
-    return acc;
-  }, {});
+      // Aggregate employment types
+      const t = e.employment_type || 'unknown';
+      empTypesLocal[t] = (empTypesLocal[t] || 0) + 1;
+    });
+
+    // Compute department headcount mapping
+    const headcount = departments.map((dept: any) => ({
+      name: dept.name,
+      count: countsByDept[dept.id] || 0,
+    })).sort((a, b) => b.count - a.count);
+
+    const mCount = Math.max(...headcount.map(d => d.count), 1);
+
+    return { deptHeadcount: headcount, maxCount: mCount, empTypes: empTypesLocal };
+  }, [departments, employees]);
 
   const handleExport = () => {
     try {
@@ -64,10 +77,15 @@ export default function Reports() {
         'Date of Joining'
       ];
       
+      const deptMap = departments.reduce((acc: Record<string, string>, dept: any) => {
+        acc[dept.id] = dept.name;
+        return acc;
+      }, {});
+
       const csvContent = [
         headers.join(','),
         ...employees.map((emp: any) => {
-          const deptName = departments.find((d: any) => d.id === emp.department_id)?.name || 'N/A';
+          const deptName = deptMap[emp.department_id] || 'N/A';
           return [
             emp.id,
             `"${emp.first_name || ''}"`,
