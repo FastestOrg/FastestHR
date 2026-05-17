@@ -89,8 +89,9 @@ export default function Documents() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  const searchLower = search.toLowerCase();
   const filteredDocs = documents.filter(doc => {
-    const matchSearch = doc.name.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = doc.name.toLowerCase().includes(searchLower);
     const matchCategory = activeTab === 'all' || doc.category === activeTab;
     return matchSearch && matchCategory;
   });
