@@ -112,10 +112,13 @@ export function RoleUsers({ roleId, companyId }: RoleUsersProps) {
   });
 
   // Filter profiles that are not already assigned to this role, and match search
-  const assignedUserIds = assignedUsers.map((u: any) => u.user_id);
-  const assignableProfiles = allProfiles
-    .filter((p: any) => !assignedUserIds.includes(p.id))
-    .filter((p: any) => p.full_name?.toLowerCase().includes(search.toLowerCase()));
+  // Performance optimization: Converted array to Set for O(1) lookups, hoisted toLowerCase() out of loop, and combined filter passes.
+  const assignedUserIdSet = new Set(assignedUsers.map((u: any) => u.user_id));
+  const lowerSearch = search.toLowerCase();
+  const assignableProfiles = allProfiles.filter((p: any) =>
+    !assignedUserIdSet.has(p.id) &&
+    p.full_name?.toLowerCase().includes(lowerSearch)
+  );
 
   return (
     <div className="space-y-6">

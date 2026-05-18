@@ -89,8 +89,10 @@ export default function Documents() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  // Performance optimization: Hoisted toLowerCase() out of loop to prevent redundant computation
+  const lowerSearch = search.toLowerCase();
   const filteredDocs = documents.filter(doc => {
-    const matchSearch = doc.name.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = doc.name.toLowerCase().includes(lowerSearch);
     const matchCategory = activeTab === 'all' || doc.category === activeTab;
     return matchSearch && matchCategory;
   });

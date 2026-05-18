@@ -111,6 +111,7 @@ export function SendDeskSendShare() {
     let filtered = emails;
     if (statusFilter) filtered = filtered.filter(e => e.status === statusFilter);
     if (searchTerm) {
+      // Performance optimization: Hoisted toLowerCase() out of loop to prevent redundant computation
       const s = searchTerm.toLowerCase();
       filtered = filtered.filter(e =>
         e.recipient_email.toLowerCase().includes(s) ||

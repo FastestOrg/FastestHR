@@ -52,9 +52,11 @@ export function RecruiterCopilot({ candidates, activeJob, isOpen, onClose }: Rec
     const results = [];
 
     // 1. Stuck Candidates Insight
+    // Performance optimization: Extracted array into a Set outside of filter to achieve O(1) lookups inside the loop
+    const excludedStages = new Set(['hired', 'rejected']);
     const stuckCandidates = candidates.filter(c => {
       const updatedAt = new Date(c.updated_at);
-      return updatedAt < threeDaysAgo && !['hired', 'rejected'].includes(c.stage.toLowerCase());
+      return updatedAt < threeDaysAgo && !excludedStages.has(c.stage.toLowerCase());
     });
 
     if (stuckCandidates.length > 0) {
