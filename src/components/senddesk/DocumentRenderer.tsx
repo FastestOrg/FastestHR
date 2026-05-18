@@ -22,7 +22,8 @@ export function DocumentRenderer({
   const finalHtml = useMemo(() => {
     let content = htmlContent;
     Object.entries(variables).forEach(([key, value]) => {
-      const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'gi');
+      const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'gi');
       content = content.replace(regex, () => value);
     });
     // Sanitize the HTML to prevent XSS vulnerabilities while allowing custom styles
@@ -142,7 +143,8 @@ export function DocumentRenderer({
 export function replaceDocVariables(html: string, variables: Record<string, string>): string {
   let content = html;
   Object.entries(variables).forEach(([key, value]) => {
-    const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'gi');
+    const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'gi');
     content = content.replace(regex, () => value);
   });
   return content;
