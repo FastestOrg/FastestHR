@@ -148,7 +148,7 @@ export default function Billing() {
       if (!companyId) return null;
       const { data, error } = await supabase
         .from('companies')
-        .select('*')
+        .select('id, name, currency, wallet_balance, license_limit, price_per_license, plan_expires_at, plan')
         .eq('id', companyId)
         .single();
       if (error) throw error;

@@ -68,7 +68,7 @@ export default function Leave() {
     mutationFn: async ({ id, status, employeeId, totalDays, leaveTypeId }: { id: string; status: 'approved' | 'rejected'; employeeId: string; totalDays: number; leaveTypeId: string }) => {
       const { error } = await supabase.from('leave_requests').update({
         status: status as any,
-        approved_by: profile!.id,
+        approved_by: employee?.id,
       }).eq('id', id);
       if (error) throw error;
 
@@ -168,27 +168,27 @@ export default function Leave() {
               {leaveRequests.map((req: any) => {
                 const s = statusStyle[req.status] || statusStyle.pending;
                 return (
-                  <div key={req.id} className="flex items-center justify-between p-4 rounded-lg bg-background/40 border border-border/50">
-                    <div className="flex items-center gap-4">
-                      <div className={`p-3 rounded-full bg-background ${s.class.includes('success') ? 'text-success' : s.class.includes('destructive') ? 'text-destructive' : 'text-warning'} border border-current`}>
+                  <div key={req.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl bg-background/40 border border-border/50 gap-4">
+                    <div className="flex items-start sm:items-center gap-4">
+                      <div className={`p-3 rounded-full bg-background ${s.class.includes('success') ? 'text-success' : s.class.includes('destructive') ? 'text-destructive' : 'text-warning'} border border-current flex-shrink-0 mt-1 sm:mt-0`}>
                         <s.Icon className="w-5 h-5" />
                       </div>
                       <div>
-                        <h4 className="font-medium text-primary">
+                        <h4 className="font-semibold text-primary text-sm sm:text-base">
                           {req.leave_types?.name || 'Leave'}
-                          {req.employees && <span className="text-muted-foreground font-normal text-sm ml-2">— {req.employees.first_name} {req.employees.last_name}</span>}
+                          {req.employees && <span className="text-muted-foreground font-normal text-xs sm:text-sm ml-2">— {req.employees.first_name} {req.employees.last_name}</span>}
                         </h4>
-                        <p className="text-sm text-muted-foreground">{req.start_date} — {req.end_date} &bull; {req.total_days} Day{(req.total_days || 0) > 1 ? 's' : ''}</p>
+                        <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">{req.start_date} — {req.end_date} &bull; {req.total_days} Day{(req.total_days || 0) > 1 ? 's' : ''}</p>
                         {req.reason && <p className="text-xs text-muted-foreground/70 mt-1 italic">"{req.reason}"</p>}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 justify-end w-full sm:w-auto border-t border-border/10 pt-3 sm:pt-0 sm:border-none">
                       {isAdmin && req.status === 'pending' && (
-                        <>
+                        <div className="flex gap-2 w-full sm:w-auto justify-end">
                           <Button
                             size="sm"
                             variant="outline"
-                            className="border-success text-success hover:bg-success/10 h-8"
+                            className="border-success text-success hover:bg-success/10 h-8 text-xs px-2.5"
                             disabled={actionMutation.isPending}
                             onClick={() => actionMutation.mutate({
                               id: req.id,
@@ -203,7 +203,7 @@ export default function Leave() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="border-destructive text-destructive hover:bg-destructive/10 h-8"
+                            className="border-destructive text-destructive hover:bg-destructive/10 h-8 text-xs px-2.5"
                             disabled={actionMutation.isPending}
                             onClick={() => actionMutation.mutate({
                               id: req.id,
@@ -215,9 +215,9 @@ export default function Leave() {
                           >
                             <XCircle className="w-3.5 h-3.5 mr-1" /> Reject
                           </Button>
-                        </>
+                        </div>
                       )}
-                      <Badge variant="outline" className={`uppercase tracking-wider ${s.class}`}>
+                      <Badge variant="outline" className={`uppercase tracking-wider text-[10px] ${s.class}`}>
                         {req.status}
                       </Badge>
                     </div>

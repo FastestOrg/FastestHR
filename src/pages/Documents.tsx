@@ -293,18 +293,18 @@ export default function Documents() {
       </div>
 
       {/* Category Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
         {categories.map(cat => {
           const count = documents.filter(d => d.category === cat.value).length;
           return (
             <Card key={cat.value} className="cursor-pointer hover:border-primary/50 transition-colors" onClick={() => setActiveTab(cat.value)}>
-              <CardContent className="p-5 flex items-center gap-4">
-                <div className={`p-3 rounded-lg bg-background border border-border/50 ${cat.color}`}>
-                  <cat.icon className="w-5 h-5" />
+              <CardContent className="p-4 sm:p-5 flex items-center gap-3 sm:gap-4">
+                <div className={`p-2 sm:p-3 rounded-lg bg-background border border-border/50 ${cat.color} flex-shrink-0`}>
+                  <cat.icon className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium">{cat.label}</p>
-                  <p className="text-2xl font-bold">{count}</p>
+                  <p className="text-xs sm:text-sm font-semibold truncate max-w-[80px] sm:max-w-none">{cat.label}</p>
+                  <p className="text-xl sm:text-2xl font-black">{count}</p>
                 </div>
               </CardContent>
             </Card>
@@ -316,17 +316,19 @@ export default function Documents() {
       <div className="flex gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="Search documents..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input placeholder="Search documents..." className="pl-9 w-full bg-background/50 border-border/50 text-sm" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="all">All</TabsTrigger>
-          {categories.map(c => (
-            <TabsTrigger key={c.value} value={c.value}>{c.label}</TabsTrigger>
-          ))}
-        </TabsList>
+        <div className="w-full overflow-x-auto pb-1 scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
+          <TabsList className="flex w-max sm:w-auto">
+            <TabsTrigger value="all" className="text-xs sm:text-sm">All</TabsTrigger>
+            {categories.map(c => (
+              <TabsTrigger key={c.value} value={c.value} className="text-xs sm:text-sm">{c.label}</TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
         <TabsContent value={activeTab} className="mt-4">
           {loading ? (
             <Card>
@@ -345,15 +347,15 @@ export default function Documents() {
             <div className="space-y-3">
               {filteredDocs.map(doc => (
                 <Card key={doc.id} className="hover:border-primary/40 transition-colors">
-                  <CardContent className="p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="p-2 rounded bg-primary/10">
+                  <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-start sm:items-center gap-3 w-full">
+                      <div className="p-2.5 rounded-xl bg-primary/10 flex-shrink-0">
                         <FileText className="w-5 h-5 text-primary" />
                       </div>
-                      <div>
-                        <h4 className="font-medium text-sm">{doc.name}</h4>
-                        <p className="text-xs text-muted-foreground mt-0.5">{doc.description}</p>
-                        <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground uppercase">
+                      <div className="min-w-0 flex-1">
+                        <h4 className="font-semibold text-foreground text-sm truncate">{doc.name}</h4>
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{doc.description}</p>
+                        <div className="flex flex-wrap items-center gap-2 mt-1.5 text-[9px] sm:text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
                           <span>{doc.uploadedBy}</span>
                           <span>&bull;</span>
                           <span>{doc.uploadedAt}</span>
@@ -364,19 +366,19 @@ export default function Documents() {
                             return status ? (
                               <>
                                 <span>&bull;</span>
-                                <Badge variant="outline" className={`text-[10px] ${status.class}`}>{status.label}</Badge>
+                                <Badge variant="outline" className={`text-[8px] uppercase font-bold tracking-tight py-0 px-1.5 ${status.class}`}>{status.label}</Badge>
                               </>
                             ) : null;
                           })()}
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10" onClick={() => handleDownload(doc)} aria-label="Download document">
+                    <div className="flex items-center gap-2 justify-end w-full sm:w-auto border-t border-border/10 pt-2 sm:pt-0 sm:border-none">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10 rounded-lg" onClick={() => handleDownload(doc)} aria-label="Download document">
                         <Download className="w-4 h-4" />
                       </Button>
                       {isAdmin && (
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => handleDelete(doc)} aria-label="Delete document">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10 rounded-lg" onClick={() => handleDelete(doc)} aria-label="Delete document">
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       )}

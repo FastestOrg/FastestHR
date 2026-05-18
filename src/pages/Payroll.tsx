@@ -223,7 +223,7 @@ export default function Payroll() {
         {isAdmin && (
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline" className="gap-2 border-primary text-primary hover:bg-primary/10">
+              <Button variant="outline" className="w-full sm:w-auto gap-2 border-primary text-primary hover:bg-primary/10 h-9 px-3">
                 <Activity className="h-4 w-4" /> Run Payroll Cycle
               </Button>
             </DialogTrigger>
@@ -274,16 +274,18 @@ export default function Payroll() {
               ) : (
                 <div className="space-y-3">
                   {payrollRuns.map((run: any) => (
-                    <div key={run.id} className="flex items-center justify-between p-3 rounded bg-background/40 border border-border/50">
+                    <div key={run.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl bg-background/40 border border-border/50 gap-3">
                       <div>
-                        <p className="font-medium text-sm">{run.period_start} — {run.period_end}</p>
+                        <p className="font-semibold text-sm text-foreground">{run.period_start} — {run.period_end}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">
                           Gross: ${(run.total_gross || 0).toLocaleString()} · Net: ${(run.total_net || 0).toLocaleString()}
                         </p>
                       </div>
-                      <Badge variant="outline" className={`uppercase text-[10px] ${statusColor[run.status] || ''}`}>
-                        {run.status}
-                      </Badge>
+                      <div className="flex items-center gap-2 justify-end w-full sm:w-auto border-t border-border/10 pt-2 sm:pt-0 sm:border-none">
+                        <Badge variant="outline" className={`uppercase text-[9px] ${statusColor[run.status] || ''}`}>
+                          {run.status}
+                        </Badge>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -297,9 +299,9 @@ export default function Payroll() {
                   <p className="text-sm text-muted-foreground">Effective from {salaryStructure.effective_from || 'N/A'}</p>
                 </div>
                 {Array.isArray(salaryStructure.components) && (salaryStructure.components as any[]).map((comp: any, i: number) => (
-                  <div key={i} className="flex justify-between items-center p-2 bg-background/50 rounded border border-border/50 text-sm">
+                  <div key={i} className="flex justify-between items-center p-2.5 bg-background/50 rounded-xl border border-border/50 text-sm">
                     <span className="text-muted-foreground">{comp.name || comp.label}</span>
-                    <span>${(comp.amount || 0).toLocaleString()}</span>
+                    <span className="font-semibold">${(comp.amount || 0).toLocaleString()}</span>
                   </div>
                 ))}
               </div>
@@ -329,21 +331,23 @@ export default function Payroll() {
             ) : (
               <div className="space-y-4">
                 {payslips.map((slip: any) => (
-                  <div key={slip.id} className="flex items-center justify-between p-3 rounded bg-background/40 hover:bg-primary/5 border border-border/50 transition-colors">
-                    <div>
-                      <h4 className="font-medium text-primary text-sm">
+                  <div key={slip.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl bg-background/40 hover:bg-primary/5 border border-border/50 transition-colors gap-3">
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-primary text-sm">
                         {slip.payroll_runs?.period_start} — {slip.payroll_runs?.period_end}
                       </h4>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge variant="outline" className="border-success text-success bg-success/10 text-[10px] uppercase px-1 py-0">
+                      <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                        <Badge variant="outline" className="border-success text-success bg-success/10 text-[9px] uppercase px-1 py-0">
                           {slip.payroll_runs?.status || 'processed'}
                         </Badge>
                         <span className="text-xs text-muted-foreground">Net: ${(slip.net_salary || 0).toLocaleString()}</span>
                       </div>
                     </div>
-                    <Button variant="ghost" size="icon" className="text-primary hover:bg-primary/20" aria-label="Download payslip">
-                      <Download className="w-4 h-4" />
-                    </Button>
+                    <div className="flex justify-end w-full sm:w-auto border-t border-border/10 pt-2 sm:pt-0 sm:border-none">
+                      <Button variant="ghost" size="icon" className="text-primary hover:bg-primary/20 h-8 w-8 rounded-lg" aria-label="Download payslip">
+                        <Download className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -356,27 +360,27 @@ export default function Payroll() {
       {isAdmin && (
         <Card className="overflow-hidden">
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <CardTitle className="flex items-center gap-2">
                   <Percent className="w-5 h-5" /> Compensation Structure
                 </CardTitle>
-                <p className="text-sm text-muted-foreground mt-1">
+                <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
                   Define the percentage split of CTC across salary components. These are also available as variables in Offer Letter templates.
                 </p>
               </div>
-              <div className="flex items-center gap-3">
-                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold transition-colors ${isCompValid ? 'bg-success/10 text-success border border-success/30' : 'bg-destructive/10 text-destructive border border-destructive/30'}`}>
-                  {isCompValid ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+              <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto border-t border-border/10 pt-3 sm:pt-0 sm:border-none">
+                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-colors ${isCompValid ? 'bg-success/10 text-success border border-success/30' : 'bg-destructive/10 text-destructive border border-destructive/30'}`}>
+                  {isCompValid ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
                   {compTotal.toFixed(1)}%
                 </div>
                 <Button
                   onClick={() => saveCompMutation.mutate()}
                   disabled={!isCompValid || saveCompMutation.isPending}
-                  className="gap-2"
+                  className="gap-2 text-xs sm:text-sm h-9 px-3.5"
                   size="sm"
                 >
-                  <Save className="w-4 h-4" />
+                  <Save className="w-3.5 h-3.5" />
                   {saveCompMutation.isPending ? 'Saving...' : 'Save'}
                 </Button>
               </div>

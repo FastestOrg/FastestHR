@@ -9,6 +9,7 @@ import { useAuthStore } from '@/store/auth-store';
 import { useTheme } from '@/hooks/use-theme';
 import { HelmetProvider } from 'react-helmet-async';
 import { getCompanySlugFromHost } from '@/utils/tenantUtils';
+import { Capacitor } from '@capacitor/core';
 
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
@@ -64,6 +65,7 @@ const AIInterview = lazy(() => import('@/pages/company/AIInterview'));
 const CandidateLogin = lazy(() => import('@/pages/candidate/CandidateLogin'));
 const CandidatePortal = lazy(() => import('@/pages/candidate/CandidatePortal'));
 const ReferralPortal = lazy(() => import('@/pages/recruitment/ReferralPortal'));
+const EmployeeProfile = lazy(() => import('@/pages/profile/EmployeeProfile'));
 
 import PlaceholderPage from '@/pages/PlaceholderPage';
 import NotFound from '@/pages/NotFound';
@@ -143,7 +145,7 @@ function AppRoutes() {
       </AnimatePresence>
       <Routes>
       {/* Public routes */}
-      <Route path="/" element={<Landing />} />
+      <Route path="/" element={Capacitor.isNativePlatform() ? <Navigate to="/login" replace /> : <Landing />} />
       <Route path="/blog" element={<BlogList />} />
       <Route path="/blog/:slug" element={<BlogPost />} />
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
@@ -174,6 +176,7 @@ function AppRoutes() {
 
       {/* Core HR modules */}
       <Route path="/dashboard" element={withLayout(<Dashboard />)} />
+      <Route path="/profile" element={withLayout(<EmployeeProfile />)} />
       <Route path="/employees" element={withLayout(<Employees />)} />
       <Route path="/employees/new" element={withLayout(<NewEmployee />)} />
       <Route path="/employees/:id" element={withLayout(<EmployeeDetail />)} />
@@ -231,7 +234,7 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <BrowserRouter>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <AppRoutes />
         </BrowserRouter>
       </TooltipProvider>

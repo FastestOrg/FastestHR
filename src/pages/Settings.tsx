@@ -25,7 +25,10 @@ export default function Settings() {
     queryKey: ['my-company', profile?.company_id],
     queryFn: async () => {
       if (!profile?.company_id) return null;
-      const { data } = await supabase.from('companies').select('*').eq('id', profile.company_id).maybeSingle();
+      const { data } = await supabase.from('companies')
+        .select('id, name, timezone, currency, country, about_company, company_culture, website, linkedin_url, offer_sequence_prefix, offer_sequence_current')
+        .eq('id', profile.company_id)
+        .maybeSingle();
       // SMTP columns are restricted; fetch them via secure RPC for admins
       const { data: smtp } = await supabase.rpc('get_company_smtp_settings');
       const smtpRow = Array.isArray(smtp) ? smtp[0] : null;
@@ -121,16 +124,39 @@ export default function Settings() {
       </div>
 
       <div className="grid lg:grid-cols-4 gap-6 items-start">
-        <Card className="overflow-hidden col-span-1">
-          <CardHeader className="pb-4 border-b border-border/50"><CardTitle className="text-base">Menu</CardTitle></CardHeader>
-          <div className="flex flex-col py-2">
+        <div className="col-span-1">
+          {/* Mobile Settings Menu: Horizontally scrollable premium pills */}
+          <div className="lg:hidden flex gap-2 overflow-x-auto pb-3 scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
             {menuItems.map((item) => (
-              <div key={item.id} onClick={() => setActiveTab(item.id)} className={`flex items-center gap-3 px-6 py-3 cursor-pointer transition-colors ${activeTab === item.id ? 'bg-primary/10 border-l-2 border-l-primary text-primary' : 'hover:bg-primary/5 text-muted-foreground hover:text-foreground border-l-2 border-l-transparent'}`}>
-                <item.icon className="w-4 h-4" /><span className="text-sm">{item.label}</span>
-              </div>
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all border ${
+                  activeTab === item.id
+                    ? 'bg-primary text-primary-foreground border-primary shadow-sm shadow-primary/25 scale-[1.02]'
+                    : 'bg-card/40 hover:bg-card/85 text-muted-foreground border-border/50'
+                }`}
+              >
+                <item.icon className="w-3.5 h-3.5" />
+                <span>{item.label}</span>
+              </button>
             ))}
           </div>
-        </Card>
+
+          {/* Desktop Settings Menu: Classic sidebar card */}
+          <Card className="hidden lg:block overflow-hidden">
+            <CardHeader className="pb-4 border-b border-border/50">
+              <CardTitle className="text-base">Menu</CardTitle>
+            </CardHeader>
+            <div className="flex flex-col py-2">
+              {menuItems.map((item) => (
+                <div key={item.id} onClick={() => setActiveTab(item.id)} className={`flex items-center gap-3 px-6 py-3 cursor-pointer transition-colors ${activeTab === item.id ? 'bg-primary/10 border-l-2 border-l-primary text-primary' : 'hover:bg-primary/5 text-muted-foreground hover:text-foreground border-l-2 border-l-transparent'}`}>
+                  <item.icon className="w-4 h-4" /><span className="text-sm">{item.label}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
 
         <Card className="overflow-hidden lg:col-span-3">
           <CardHeader>

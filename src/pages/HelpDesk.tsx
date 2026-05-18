@@ -157,7 +157,7 @@ export default function HelpDesk() {
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2"><Plus className="h-4 w-4" /> Raise Ticket</Button>
+            <Button className="w-full sm:w-auto gap-2 h-9 text-xs sm:text-sm"><Plus className="h-4 w-4" /> Raise Ticket</Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
@@ -212,7 +212,7 @@ export default function HelpDesk() {
         </Dialog>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
         {[
           { label: 'Open Tickets', value: openCount, color: 'text-warning' },
           { label: 'In Progress', value: inProgressCount, color: 'text-info' },
@@ -220,23 +220,23 @@ export default function HelpDesk() {
           { label: 'Total', value: tickets.length, color: 'text-foreground' },
         ].map(stat => (
           <Card key={stat.label}>
-            <CardContent className="p-4 flex items-center justify-between">
-              <h3 className="text-xs font-medium text-muted-foreground uppercase">{stat.label}</h3>
-              <span className={`text-2xl font-bold ${stat.color}`}>{stat.value}</span>
+            <CardContent className="p-4 flex items-center justify-between gap-2">
+              <h3 className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider">{stat.label}</h3>
+              <span className={`text-xl sm:text-2xl font-black ${stat.color}`}>{stat.value}</span>
             </CardContent>
           </Card>
         ))}
       </div>
 
       <Card className="overflow-hidden">
-        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-border/50 pb-4">
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-border/50 pb-4 gap-4">
           <div>
             <CardTitle className="flex items-center gap-2"><LifeBuoy className="w-5 h-5" /> Tickets</CardTitle>
             <CardDescription className="mt-1">Manage support requests</CardDescription>
           </div>
-          <div className="w-full sm:w-64 mt-4 sm:mt-0 relative">
+          <div className="w-full sm:w-64 relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input type="search" placeholder="Search tickets..." className="pl-8 bg-background/50 border-border/50 text-sm" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Input type="search" placeholder="Search tickets..." className="pl-8 bg-background/50 border-border/50 text-sm w-full" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -250,27 +250,27 @@ export default function HelpDesk() {
           ) : (
             <div className="divide-y divide-border/50">
               {tickets.map((ticket: any) => (
-                <div key={ticket.id} onClick={() => setSelectedTicket(ticket)} className="p-4 hover:bg-muted/30 transition-colors cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="flex items-start gap-4">
-                    <div className={`mt-1 p-2 rounded-full ${priorityStyle[ticket.priority] || 'bg-muted/10 text-muted-foreground'}`}>
+                <div key={ticket.id} onClick={() => setSelectedTicket(ticket)} className="p-4 hover:bg-muted/30 transition-colors cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className={`mt-0.5 p-2 rounded-full flex-shrink-0 ${priorityStyle[ticket.priority] || 'bg-muted/10 text-muted-foreground'}`}>
                       <AlertCircle className="w-4 h-4" />
                     </div>
                     <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-medium text-muted-foreground">{ticket.ticket_number}</span>
-                        <h4 className="font-medium text-sm">{ticket.subject}</h4>
+                      <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                        <span className="text-[10px] font-mono font-semibold text-muted-foreground">{ticket.ticket_number}</span>
+                        <h4 className="font-semibold text-foreground text-sm line-clamp-1">{ticket.subject}</h4>
                       </div>
-                      <div className="flex items-center gap-3 text-[10px] text-muted-foreground uppercase">
-                        <span>{ticket.category}</span>
+                      <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground uppercase tracking-wider">
+                        <span className="font-medium">{ticket.category}</span>
                         <span>&bull;</span>
-                        <span className="flex items-center gap-1">
+                        <span className="flex items-center gap-1 font-medium">
                           <Clock className="w-3 h-3" /> {new Date(ticket.created_at).toLocaleDateString()}
                         </span>
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <Badge variant="outline" className={`text-[10px] uppercase ${statusStyle[ticket.status] || ''}`}>
+                  <div className="flex items-center gap-2 justify-end w-full sm:w-auto border-t border-border/10 pt-2 sm:pt-0 sm:border-none">
+                    <Badge variant="outline" className={`text-[9px] uppercase tracking-wider ${statusStyle[ticket.status] || ''}`}>
                       {ticket.status?.replace('_', ' ')}
                     </Badge>
                   </div>

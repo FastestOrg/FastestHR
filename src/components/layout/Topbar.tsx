@@ -72,7 +72,18 @@ export function Topbar() {
 
       <div className="flex-1" />
 
-      {/* Search */}
+      {/* Mobile Search Icon */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-9 w-9 md:hidden"
+        onClick={() => setOpen(true)}
+        aria-label="Search"
+      >
+        <Search className="h-4 w-4" />
+      </Button>
+
+      {/* Desktop Search */}
       <Button
         variant="outline"
         className="hidden h-9 w-64 justify-start gap-2 border-border bg-background/50 text-muted-foreground hover:border-primary/50 hover:text-foreground md:flex transition-all backdrop-blur-sm"

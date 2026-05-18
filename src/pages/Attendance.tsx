@@ -234,32 +234,32 @@ export default function Attendance() {
               </div>
             )}
 
-            <div className="flex justify-center gap-4">
+            <div className="grid grid-cols-3 gap-2 w-full max-w-md mx-auto sm:flex sm:justify-center sm:gap-4">
               <Button
                 size="lg"
-                className="w-32 bg-success text-success-foreground hover:bg-success/90"
+                className="w-full sm:w-32 bg-success text-success-foreground hover:bg-success/90 px-2 sm:px-4 text-xs sm:text-sm"
                 onClick={() => clockInMutation.mutate()}
                 disabled={isClockedIn || isClockedOut || clockInMutation.isPending}
               >
-                <Play className="w-5 h-5 mr-2" /> Clock In
+                <Play className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2" /> Clock In
               </Button>
               <Button
                 size="lg"
                 variant="outline"
-                className="w-32 border-warning text-warning hover:bg-warning/10"
+                className="w-full sm:w-32 border-warning text-warning hover:bg-warning/10 px-2 sm:px-4 text-xs sm:text-sm"
                 onClick={() => breakMutation.mutate()}
                 disabled={!isClockedIn || breakMutation.isPending}
               >
-                <Coffee className="w-5 h-5 mr-2" /> Break
+                <Coffee className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2" /> Break
               </Button>
               <Button
                 size="lg"
                 variant="outline"
-                className="w-32 border-destructive text-destructive hover:bg-destructive/10"
+                className="w-full sm:w-32 border-destructive text-destructive hover:bg-destructive/10 px-2 sm:px-4 text-xs sm:text-sm"
                 onClick={() => clockOutMutation.mutate()}
                 disabled={!isClockedIn || clockOutMutation.isPending}
               >
-                <Square className="w-5 h-5 mr-2" /> Clock Out
+                <Square className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2" /> Clock Out
               </Button>
             </div>
 
@@ -327,13 +327,13 @@ export default function Attendance() {
                   {attendanceData.map((record: any) => {
                     const wt = getWorkTypeFromRecord(record);
                     return (
-                    <div key={record.id} className="py-3 flex justify-between items-center text-sm hover:bg-muted/30 p-2 rounded-lg transition-colors">
+                    <div key={record.id} className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm hover:bg-muted/30 p-2.5 rounded-lg transition-colors">
                       <div className="flex items-center gap-3">
                         <div>
                           <div className="font-semibold text-foreground">
                             {(record.employees as any)?.first_name} {(record.employees as any)?.last_name}
                           </div>
-                          <div className="text-muted-foreground text-xs flex items-center gap-2">
+                          <div className="text-muted-foreground text-xs flex items-center gap-2 mt-0.5">
                             {record.date}
                             {wt && (
                               <Badge variant="outline" className="text-[9px] capitalize gap-1">
@@ -352,18 +352,18 @@ export default function Attendance() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex gap-4 text-right">
+                      <div className="flex gap-4 text-left sm:text-right justify-between sm:justify-end border-t border-border/10 pt-2 sm:pt-0 sm:border-none w-full sm:w-auto">
                         <div>
-                          <span className="text-muted-foreground text-xs uppercase block">In</span>
-                          {record.clock_in ? new Date(record.clock_in).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}
+                          <span className="text-muted-foreground text-[10px] uppercase block">In</span>
+                          <span className="font-medium text-foreground">{record.clock_in ? new Date(record.clock_in).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}</span>
                         </div>
                         <div>
-                          <span className="text-muted-foreground text-xs uppercase block">Out</span>
-                          {record.clock_out ? new Date(record.clock_out).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}
+                          <span className="text-muted-foreground text-[10px] uppercase block">Out</span>
+                          <span className="font-medium text-foreground">{record.clock_out ? new Date(record.clock_out).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}</span>
                         </div>
                         <div className="w-16">
-                          <span className="text-muted-foreground text-xs uppercase block">Total</span>
-                          {record.total_hours?.toFixed(2) || '0.00'}h
+                          <span className="text-muted-foreground text-[10px] uppercase block">Total</span>
+                          <span className="font-semibold text-primary">{record.total_hours?.toFixed(2) || '0.00'}h</span>
                         </div>
                       </div>
                     </div>

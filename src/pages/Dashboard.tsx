@@ -634,7 +634,7 @@ function SuperAdminDashboard() {
   const { data: companyCount = 0 } = useQuery({
     queryKey: ['company-count'],
     queryFn: async () => {
-      const { count } = await supabase.from('companies').select('*', { count: 'exact', head: true });
+      const { count } = await supabase.from('companies').select('id', { count: 'exact', head: true });
       return count || 0;
     },
   });

@@ -164,11 +164,11 @@ export default function Performance() {
           <h1 className="text-3xl font-bold tracking-tight">Performance & Goals</h1>
           <p className="text-muted-foreground mt-1">OKR tracking & appraisal cycles</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           {isAdmin && (
             <Dialog open={cycleDialogOpen} onOpenChange={setCycleDialogOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" className="gap-2"><Zap className="h-4 w-4" /> New Review Cycle</Button>
+                <Button variant="outline" className="flex-1 sm:flex-none gap-2 text-xs sm:text-sm h-9 px-3"><Zap className="h-4 w-4" /> New Cycle</Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
@@ -212,7 +212,7 @@ export default function Performance() {
           )}
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="gap-2"><Plus className="h-4 w-4" /> New Objective</Button>
+              <Button className="flex-1 sm:flex-none gap-2 text-xs sm:text-sm h-9 px-3"><Plus className="h-4 w-4" /> New Goal</Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-lg">
               <DialogHeader>
@@ -244,26 +244,26 @@ export default function Performance() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card><CardContent className="p-6">
-          <TrendingUp className="w-8 h-8 text-primary mb-4" />
-          <h3 className="text-sm text-muted-foreground mb-1 uppercase">Avg. Progress</h3>
-          <div className="text-4xl font-bold">{avgProgress}%</div>
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
+        <Card><CardContent className="p-4 sm:p-6">
+          <TrendingUp className="w-6 h-6 sm:w-8 sm:h-8 text-primary mb-3 sm:mb-4" />
+          <h3 className="text-[10px] sm:text-xs text-muted-foreground mb-1 uppercase tracking-wider">Avg Progress</h3>
+          <div className="text-2xl sm:text-4xl font-black">{avgProgress}%</div>
         </CardContent></Card>
-        <Card><CardContent className="p-6">
-          <Target className="w-8 h-8 text-warning mb-4" />
-          <h3 className="text-sm text-muted-foreground mb-1 uppercase">Active Goals</h3>
-          <div className="text-4xl font-bold text-warning">{activeGoals.length}</div>
+        <Card><CardContent className="p-4 sm:p-6">
+          <Target className="w-6 h-6 sm:w-8 sm:h-8 text-warning mb-3 sm:mb-4" />
+          <h3 className="text-[10px] sm:text-xs text-muted-foreground mb-1 uppercase tracking-wider">Active Goals</h3>
+          <div className="text-2xl sm:text-4xl font-black text-warning">{activeGoals.length}</div>
         </CardContent></Card>
-        <Card><CardContent className="p-6">
-          <Award className="w-8 h-8 text-success mb-4" />
-          <h3 className="text-sm text-muted-foreground mb-1 uppercase">Completed</h3>
-          <div className="text-4xl font-bold text-success">{completedGoals.length}</div>
+        <Card><CardContent className="p-4 sm:p-6">
+          <Award className="w-6 h-6 sm:w-8 sm:h-8 text-success mb-3 sm:mb-4" />
+          <h3 className="text-[10px] sm:text-xs text-muted-foreground mb-1 uppercase tracking-wider">Completed</h3>
+          <div className="text-2xl sm:text-4xl font-black text-success">{completedGoals.length}</div>
         </CardContent></Card>
-        <Card><CardContent className="p-6">
-          <Zap className="w-8 h-8 text-info mb-4" />
-          <h3 className="text-sm text-muted-foreground mb-1 uppercase">Review Cycles</h3>
-          <div className="text-4xl font-bold text-info">{reviewCycles.length}</div>
+        <Card><CardContent className="p-4 sm:p-6">
+          <Zap className="w-6 h-6 sm:w-8 sm:h-8 text-info mb-3 sm:mb-4" />
+          <h3 className="text-[10px] sm:text-xs text-muted-foreground mb-1 uppercase tracking-wider">Cycles</h3>
+          <div className="text-2xl sm:text-4xl font-black text-info">{reviewCycles.length}</div>
         </CardContent></Card>
       </div>
 
@@ -274,16 +274,16 @@ export default function Performance() {
             <CardTitle className="text-base flex items-center gap-2"><Zap className="w-4 h-4" /> Active Review Cycles</CardTitle>
           </CardHeader>
           <CardContent className="pt-4">
-            <div className="space-y-2">
+            <div className="space-y-3">
               {reviewCycles.map((cycle: any) => (
-                <div key={cycle.id} className="flex items-center justify-between p-3 rounded border border-border/50 bg-background/50">
+                <div key={cycle.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl border border-border/50 bg-background/50 gap-3">
                   <div>
-                    <p className="font-medium text-sm">{cycle.name}</p>
-                    <p className="text-xs text-muted-foreground">{cycle.start_date} → {cycle.end_date}</p>
+                    <p className="font-semibold text-sm text-foreground">{cycle.name}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{cycle.start_date} → {cycle.end_date}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="capitalize text-[10px]">{cycle.type?.replace('_', ' ')}</Badge>
-                    <Badge variant="outline" className={cycle.status === 'active' ? 'border-success text-success bg-success/10' : 'border-muted text-muted-foreground'}>
+                  <div className="flex items-center gap-2 justify-end w-full sm:w-auto border-t border-border/10 pt-2 sm:pt-0 sm:border-none">
+                    <Badge variant="outline" className="capitalize text-[9px] tracking-tight">{cycle.type?.replace('_', ' ')}</Badge>
+                    <Badge variant="outline" className={`text-[9px] ${cycle.status === 'active' ? 'border-success text-success bg-success/10' : 'border-muted text-muted-foreground'}`}>
                       {cycle.status}
                     </Badge>
                   </div>
@@ -299,7 +299,7 @@ export default function Performance() {
           <CardTitle>Current Objectives</CardTitle>
           <CardDescription>Track progress on your goals</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4">
           {loadingGoals ? (
             [1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full" />)
           ) : goals.length === 0 ? (
@@ -310,31 +310,31 @@ export default function Performance() {
             </div>
           ) : (
             goals.map((goal: any) => (
-              <div key={goal.id} className="space-y-2 p-3 rounded-lg border border-border/50 bg-background/30 hover:bg-background/60 transition-colors">
-                <div className="flex justify-between items-center">
+              <div key={goal.id} className="space-y-3 p-3.5 rounded-xl border border-border/50 bg-background/30 hover:bg-background/60 transition-colors">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
-                    <div className="font-medium">{goal.title}</div>
+                    <div className="font-semibold text-foreground text-sm sm:text-base">{goal.title}</div>
                     {goal.employees && (
-                      <span className="text-xs text-muted-foreground">{goal.employees.first_name} {goal.employees.last_name}</span>
+                      <span className="text-xs text-muted-foreground mt-0.5 block">{goal.employees.first_name} {goal.employees.last_name}</span>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className={statusColor[goal.status] || ''}>
+                  <div className="flex items-center gap-2 justify-end w-full sm:w-auto border-t border-border/10 pt-2 sm:pt-0 sm:border-none">
+                    <Badge variant="outline" className={`text-[10px] capitalize ${statusColor[goal.status] || ''}`}>
                       {goal.status?.replace('_', ' ')}
                     </Badge>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setUpdatingGoal(updatingGoal === goal.id ? null : goal.id)} aria-label="Update goal">
-                      <Pencil className="h-3.5 w-3.5" />
+                    <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10 hover:text-primary rounded-lg" onClick={() => setUpdatingGoal(updatingGoal === goal.id ? null : goal.id)} aria-label="Update goal">
+                      <Pencil className="h-4 w-4" />
                     </Button>
                     {isAdmin && (
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setFeedbackGoal(feedbackGoal === goal.id ? null : goal.id)} aria-label="Add feedback">
-                        <MessageSquare className="h-3.5 w-3.5" />
+                      <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10 hover:text-primary rounded-lg" onClick={() => setFeedbackGoal(feedbackGoal === goal.id ? null : goal.id)} aria-label="Add feedback">
+                        <MessageSquare className="h-4 w-4" />
                       </Button>
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
                   <Progress value={goal.progress || 0} className="h-2" />
-                  <span className="text-sm text-muted-foreground w-12 text-right">{goal.progress || 0}%</span>
+                  <span className="text-xs sm:text-sm font-bold text-muted-foreground w-12 text-right">{goal.progress || 0}%</span>
                 </div>
                 {updatingGoal === goal.id && (
                   <div className="flex items-center gap-4 pt-2 border-t border-border/30">

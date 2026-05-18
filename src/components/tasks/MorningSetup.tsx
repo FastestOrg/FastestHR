@@ -169,38 +169,48 @@ export function MorningSetup() {
         <CardContent className="pt-8 space-y-8">
           <div className="space-y-4">
             {slots.map((slot, index) => (
-              <div key={index} className="flex flex-col sm:flex-row gap-4 items-start sm:items-center bg-secondary/20 p-4 rounded-xl border border-border/50 hover:border-primary/30 transition-all group animate-in slide-in-from-left duration-300" style={{ animationDelay: `${index * 50}ms` }}>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <Input 
-                    type="time" 
-                    value={slot.startTime} 
-                    onChange={(e) => updateSlot(index, 'startTime', e.target.value)} 
-                    className="w-28 bg-background border-border/50 rounded-lg h-11"
-                  />
-                  <span className="text-muted-foreground">-</span>
-                  <Input 
-                    type="time" 
-                    value={slot.endTime} 
-                    onChange={(e) => updateSlot(index, 'endTime', e.target.value)} 
-                    className="w-28 bg-background border-border/50 rounded-lg h-11"
-                  />
+              <div key={index} className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-start sm:items-center bg-secondary/20 p-3 sm:p-4 rounded-xl border border-border/50 hover:border-primary/30 transition-all group animate-in slide-in-from-left duration-300" style={{ animationDelay: `${index * 50}ms` }}>
+                <div className="flex items-center justify-between sm:justify-start gap-2 w-full sm:w-auto flex-shrink-0">
+                  <div className="flex items-center gap-2">
+                    <Input 
+                      type="time" 
+                      value={slot.startTime} 
+                      onChange={(e) => updateSlot(index, 'startTime', e.target.value)} 
+                      className="w-24 sm:w-28 bg-background border-border/50 rounded-lg h-11"
+                    />
+                    <span className="text-muted-foreground">-</span>
+                    <Input 
+                      type="time" 
+                      value={slot.endTime} 
+                      onChange={(e) => updateSlot(index, 'endTime', e.target.value)} 
+                      className="w-24 sm:w-28 bg-background border-border/50 rounded-lg h-11"
+                    />
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => removeSlot(index)}
+                    className="h-11 w-11 text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-lg sm:hidden transition-all"
+                  >
+                    <Trash2 className="h-5 w-5 text-destructive" />
+                  </Button>
                 </div>
-                <div className="flex-1 w-full">
+                <div className="flex-1 w-full flex items-center gap-2">
                   <Input 
                     placeholder="Focus: e.g. Design meeting, Deep work..."
                     className="h-11 bg-background border-border/50 focus:border-primary/50 transition-all"
                     value={slot.focus}
                     onChange={(e) => updateSlot(index, 'focus', e.target.value)}
                   />
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => removeSlot(index)}
+                    className="hidden sm:flex h-11 w-11 text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-lg opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
+                  >
+                    <Trash2 className="h-5 w-5" />
+                  </Button>
                 </div>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  onClick={() => removeSlot(index)}
-                  className="h-11 w-11 text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <Trash2 className="h-5 w-5" />
-                </Button>
               </div>
             ))}
             

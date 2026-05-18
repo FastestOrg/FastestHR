@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Users, Clock, CalendarDays, DollarSign, BarChart3,
   Briefcase, GraduationCap, Headset, Megaphone, PieChart, Settings,
   Globe, Building2, CreditCard, Server, ChevronLeft, LogOut, Zap,
-  FileText, UserPlus, Network, UserMinus, CalendarCheck, ChevronRight, Send, Shield, Contact
+  FileText, UserPlus, Network, UserMinus, CalendarCheck, ChevronRight, Send, Shield, Contact, UserCircle2
 } from 'lucide-react';
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
@@ -36,6 +36,7 @@ const ADMIN_ONLY: Role[] = ['company_admin'];
 
 const fastBoardNav: NavItem[] = [
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard, roles: ALL_ROLES },
+  { title: 'My Profile', url: '/profile', icon: UserCircle2, roles: ALL_ROLES },
   { title: 'Announcements', url: '/announcements', icon: Megaphone, roles: ALL_ROLES },
   { title: 'Employee', url: '/employees', icon: Users, roles: ADMIN_HR },
   { title: 'Attendance', url: '/attendance', icon: Clock, roles: ALL_ROLES },

@@ -34,6 +34,7 @@ type Tab = 'profile' | 'attendance' | 'leaves' | 'payroll';
 interface EmployeeRecord {
   id: string;
   first_name: string;
+  middle_name?: string | null;
   last_name: string;
   work_email: string;
   personal_email: string | null;
@@ -48,6 +49,7 @@ interface EmployeeRecord {
   department_id: string | null;
   designation_id: string | null;
   reporting_manager_id: string | null;
+  custom_fields?: any;
   departments?: { name: string } | null;
   designations?: { title: string } | null;
 }
@@ -75,7 +77,11 @@ export default function EmployeeDetail() {
         .is('deleted_at', null)
         .single();
       if (error) throw error;
-      return data as unknown as EmployeeRecord;
+      const record = data as any;
+      return {
+        ...record,
+        middle_name: record.custom_fields?.middle_name || ''
+      } as EmployeeRecord;
     },
     enabled: !!id,
   });
@@ -192,6 +198,10 @@ export default function EmployeeDetail() {
         gender: payload.gender,
         employment_type: payload.employment_type,
         status: payload.status,
+        custom_fields: {
+          ...(employee?.custom_fields || {}),
+          middle_name: payload.middle_name
+        },
       } as any;
       const { data, error } = await supabase
         .from('employees')
@@ -314,7 +324,7 @@ export default function EmployeeDetail() {
         </Button>
         <div className="flex-1">
           <h1 className="text-3xl font-bold tracking-tight text-foreground">
-            {employee.first_name} {employee.last_name}
+            {employee.first_name} {employee.middle_name ? `${employee.middle_name} ` : ''}{employee.last_name}
           </h1>
           <p className="text-muted-foreground mt-1 text-sm">
             {employee.employee_code && <span className="mr-3">{employee.employee_code}</span>}
@@ -433,6 +443,7 @@ export default function EmployeeDetail() {
           <CardContent className="pt-6 grid sm:grid-cols-2 gap-x-12 gap-y-8">
             {([
               { label: 'First Name', name: 'first_name', required: true },
+              { label: 'Middle Name', name: 'middle_name' },
               { label: 'Last Name', name: 'last_name', required: true },
               { label: 'Work Email', name: 'work_email', type: 'email', required: true },
               { label: 'Personal Email', name: 'personal_email', type: 'email' },

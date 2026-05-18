@@ -57,8 +57,12 @@ export default function OfferView() {
           setError('Offer not found or link has expired.');
         } else {
           setOffer(data);
-          if (data.signature_placement) {
+          // Ensure we load existing signatures if they exist
+          if (data.signature_placement && Array.isArray(data.signature_placement)) {
             setPlacedSignatures(data.signature_placement);
+            console.log('Loaded existing signatures:', data.signature_placement.length);
+          } else {
+            setPlacedSignatures([]);
           }
         }
       } catch (err: unknown) {
@@ -151,16 +155,15 @@ export default function OfferView() {
     
     setSubmitting(true);
     try {
-      const { error: updateError } = await supabase
-        .from('candidate_offers')
-        .update({
-          status: 'signed',
-          signed_at: new Date().toISOString(),
-          signature_placement: placedSignatures
-        })
-        .eq('id', offer.id);
+      const cleanToken = token!.trim();
+      const { data: success, error: updateError } = await supabase
+        .rpc('sign_offer_by_token', { 
+          p_token: cleanToken,
+          p_signature_placement: placedSignatures
+        });
 
       if (updateError) throw updateError;
+      if (!success) throw new Error("Offer not found or token invalid");
 
       toast.success("Document signed and submitted successfully!");
       setOffer({ ...offer, status: 'signed' });
@@ -238,7 +241,7 @@ export default function OfferView() {
             {/* STEP 1: status=sent → Show "Sign the Offer Letter" */}
             {offer.status === 'sent' && (
               <>
-                {!isPlacementMode && placedSignatures.length === 0 && (
+                {!isPlacementMode && (placedSignatures.length === 0) && (
                   <Button variant="default" size="sm" onClick={() => setShowSignPortal(true)} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
                     <FileSignature className="h-4 w-4" />
                     Sign the Offer Letter

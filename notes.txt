@@ -1,1 +1,345 @@
-In Recrutment portal, we are sending offer letter. Our {{Offer Link}} Send to end candidates who are not loged in to portal are not able to access link, Please make it visiblke to users even if they are not  loged in. 
+For employee, Create a Page for them on path "/profile" Here the user will see and set their data like:
+
+1. Personal Profile
+Sections:
+
+Basic Information
+
+Full Name (First, Middle, Last)
+Profile Photo [Upload Photo]
+Date of Birth
+Age (auto-calculated)
+Gender
+Marital Status
+Blood Group
+Nationality
+Personal Email
+Personal Phone Number
+Alternate Phone Number
+Preferred Name/Nickname
+Identity Documents
+
+Aadhaar/National ID Number [Upload Aadhaar Card]
+PAN Card Number [Upload PAN Card]
+Passport Number
+Passport Issue Date
+Passport Expiry Date [Upload Passport Copy]
+Driver's License Number
+License Expiry Date [Upload Driver's License]
+Voter ID Number [Upload Voter ID]
+Address Information
+
+Current/Residential Address
+
+Address Line 1
+Address Line 2
+City
+State/Province
+Country
+ZIP/Postal Code
+[Upload Address Proof - Utility Bill/Rental Agreement/Bank Statement]
+Permanent Address
+
+Same as Current Address (checkbox)
+Address Line 1
+Address Line 2
+City
+State/Province
+Country
+ZIP/Postal Code
+[Upload Permanent Address Proof] (if different)
+2. Emergency Contact
+Primary Emergency Contact
+
+Name
+Relationship
+Phone Number (Primary)
+Alternate Phone Number
+Email Address
+Address
+Secondary Emergency Contact
+
+Name
+Relationship
+Phone Number (Primary)
+Alternate Phone Number
+Email Address
+Address
+Medical Emergency Information
+
+Blood Group
+Known Allergies
+Chronic Medical Conditions
+Current Medications
+Doctor's Name (Optional)
+Doctor's Contact (Optional)
+Preferred Hospital
+Health Insurance Policy Number
+[Upload Health Insurance Card]
+3. Family & Dependent Information
+Spouse Details
+
+Name
+Date of Birth
+Occupation
+Employer Name
+Phone Number
+Dependent for Benefits (Yes/No)
+[Upload Marriage Certificate] (if required)
+Children Details (Add Multiple)
+
+Child's Name
+Date of Birth
+Gender
+School/College Name
+Dependent for Benefits (Yes/No)
+[Upload Birth Certificate]
+Parents Details
+
+Father's Name
+Father's DOB
+Father's Occupation
+Dependent (Yes/No)
+Mother's Name
+Mother's DOB
+Mother's Occupation
+Dependent (Yes/No)
+Siblings (if relevant for benefits)
+
+Name
+Relationship
+Date of Birth
+Dependent (Yes/No)
+Nominee Information (for insurance/benefits)
+
+Nominee 1 Name
+Relationship
+Percentage Allocation
+Contact Number
+Address
+[Upload ID Proof of Nominee]
+Nominee 2 (Optional - same fields)
+4. Education & Qualifications
+Academic Education (Add Multiple)
+
+Education 1:
+
+Qualification Level (High School/Diploma/Bachelor's/Master's/PhD)
+Degree Name
+Institution/University Name
+Specialization/Major/Field of Study
+Year of Completion
+Percentage/CGPA/Grade
+[Upload Degree Certificate]
+[Upload Transcripts/Marksheets]
+Education 2, 3... (Same fields)
+
+Professional Certifications (Add Multiple)
+
+Certification 1:
+
+Certification Name
+Issuing Organization
+Certification Number
+Issue Date
+Expiry Date (if applicable)
+Validity Status
+[Upload Certificate]
+Certification 2, 3... (Same fields)
+
+Professional Licenses
+
+License 1:
+
+License Type
+License Number
+Issuing Authority
+Issue Date
+Expiry Date
+[Upload License Document]
+License 2, 3... (Same fields)
+
+5. Work Experience
+Previous Employment History (Add Multiple Companies)
+
+Company 1:
+
+Company Name
+Job Title/Designation
+Department
+Employment Type (Full-time/Part-time/Contract/Internship)
+Start Date
+End Date (or "Currently Working" checkbox)
+Duration (auto-calculated)
+Location/City
+Job Responsibilities/Description (text area)
+Reporting Manager Name
+Reporting Manager Contact
+Reason for Leaving
+[Upload Experience Certificate]
+[Upload Relieving Letter]
+[Upload Last 3 Months Salary Slips] (if required)
+[Upload Offer Letter] (optional)
+Company 2, 3... (Same fields)
+
+Total Years of Experience
+
+Auto-calculated from work history
+Or Manual Entry field
+Employment Gap Explanation (if any)
+
+Gap Period: From - To
+Reason
+Activities during gap
+6. Skills & Competencies
+Technical Skills (Add Multiple)
+
+Skill Name
+Proficiency Level (Beginner/Intermediate/Advanced/Expert)
+Years of Experience with this skill
+Last Used (Month/Year)
+[Upload Skill Certificate] (if available)
+Soft Skills
+
+Communication (Self-rating: 1-5)
+Leadership (Self-rating: 1-5)
+Team Management (Self-rating: 1-5)
+Problem Solving (Self-rating: 1-5)
+Time Management (Self-rating: 1-5)
+Adaptability (Self-rating: 1-5)
+Language Proficiency (Add Multiple)
+
+Language Name
+Read (None/Basic/Intermediate/Fluent/Native)
+Write (None/Basic/Intermediate/Fluent/Native)
+Speak (None/Basic/Intermediate/Fluent/Native)
+[Upload Language Proficiency Certificate] (if available)
+Tools & Software (Add Multiple)
+
+Software/Tool Name
+Category (Design/Development/Analytics/Office/Other)
+Proficiency Level
+Years of Experience
+[Upload Certification] (if available)
+Domain Expertise
+
+Industry/Domain (e.g., Healthcare, Finance, E-commerce)
+Years of Experience in this domain
+Key Projects/Achievements
+7. Bank & Financial Details
+Primary Bank Account
+
+Bank Name
+Account Holder Name
+Account Number
+Re-enter Account Number (for verification)
+Account Type (Savings/Current)
+IFSC Code/SWIFT Code/Routing Number
+Branch Name
+Branch Address
+[Upload Cancelled Cheque]
+[Upload Bank Statement] (latest 3 months)
+[Upload Passbook First Page]
+Secondary Bank Account (Optional)
+
+Same fields as Primary Bank Account
+Tax Information
+
+PAN Number (India) / Tax ID Number
+[Upload PAN Card]
+Tax Residency Status
+Form 11 (if applicable)
+Previous Employer Tax Details (for current Financial Year)
+
+Previous Employer Name
+Total Income from Previous Employer
+TDS Deducted
+[Upload Form 16 from Previous Employer]
+[Upload Last Salary Slip]
+8. Health & Medical Information
+General Health
+
+Blood Group
+Height (cm/feet-inches)
+Weight (kg/lbs)
+Any Physical Disabilities (if comfortable sharing)
+Special Accommodation Required (Yes/No)
+Details of Accommodation Needed
+Medical Conditions
+
+Chronic Illnesses/Health Conditions
+Known Allergies:
+Food Allergies
+Drug Allergies
+Environmental Allergies
+Current Medications (if any)
+Previous Major Surgeries
+Physical Limitations (for workplace safety)
+[Upload Medical Fitness Certificate]
+[Upload Doctor's Prescription] (if on regular medication)
+Vaccination Records
+
+COVID-19 Vaccination Status (Not Vaccinated/Partially/Fully/Booster)
+[Upload COVID-19 Vaccination Certificate]
+Other Vaccinations (if required by company)
+[Upload Other Vaccination Certificates]
+Personal Health Insurance (if applicable)
+
+Insurance Provider Name
+Policy Number
+Coverage Amount
+Validity Period
+[Upload Insurance Policy Document]
+[Upload Insurance Card]
+9. Social & Professional Links
+LinkedIn Profile URL [Verify/Connect]
+GitHub Profile (for tech roles)
+Portfolio Website URL
+Professional Blog URL
+Behance/Dribbble (for designers)
+Stack Overflow (for developers)
+Other Professional Social Media
+[Upload Portfolio PDF] (optional)
+[Upload Latest Resume/CV]
+10. Preferences & Settings
+Communication Preferences
+
+Preferred Contact Method (Email/Phone/SMS)
+Preferred Language
+Time Zone
+Work Preferences
+
+T-shirt/Uniform Size (XS/S/M/L/XL/XXL)
+Dietary Preferences (Vegetarian/Non-Vegetarian/Vegan/Other)
+Food Allergies/Restrictions
+Accessibility Requirements
+Workstation Preferences (Standing Desk/Ergonomic Chair/Other)
+Parking Required (Yes/No)
+Vehicle Details (if parking required)
+Privacy Settings
+
+Show profile in employee directory (Yes/No)
+Show contact number in directory (Yes/No)
+Show birthday in directory (Yes/No)
+Allow colleagues to view profile (Yes/No)
+
+
+
+
+also add a small dashboard overview as main component in /profile page: Dashboard Overview (Employee View)
+Profile Completion Status: 85% Complete
+Pending Actions:
+Upload PAN Card
+Complete Tax Declaration
+Submit Expense Claim
+Quick Stats:
+Leave Balance: CL: 5 | SL: 3 | EL: 12
+Pending Approvals: 2
+Upcoming:
+Performance Review Due: 15 Jan
+Training Session: 20 Jan
+Recent Announcements
+Quick Action Buttons:
+Apply Leave
+Submit Expense
+Raise Ticket

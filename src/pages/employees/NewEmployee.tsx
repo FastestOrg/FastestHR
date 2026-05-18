@@ -61,6 +61,7 @@ export default function NewEmployee() {
 
   const [form, setForm] = useState({
     first_name: '',
+    middle_name: '',
     last_name: '',
     work_email: '',
     personal_email: '',
@@ -137,11 +138,12 @@ export default function NewEmployee() {
 
   const createMutation = useMutation({
     mutationFn: async (payload: typeof form) => {
+      const { middle_name, ...basePayload } = payload;
       const { data, error } = await supabase
         .from('employees')
         .insert([
           {
-            ...payload,
+            ...basePayload,
             company_id: profile?.company_id,
             department_id: payload.department_id || null,
             designation_id: payload.designation_id || null,
@@ -151,6 +153,9 @@ export default function NewEmployee() {
             personal_email: payload.personal_email || null,
             phone: payload.phone || null,
             employee_code: payload.employee_code || null,
+            custom_fields: {
+              middle_name: middle_name
+            },
           },
         ])
         .select()
@@ -239,6 +244,7 @@ export default function NewEmployee() {
           </CardHeader>
           <CardContent className="pt-6 grid sm:grid-cols-2 gap-4">
             <Field label="First Name" name="first_name" value={form.first_name} onChange={handleChange} required placeholder="John" />
+            <Field label="Middle Name" name="middle_name" value={form.middle_name} onChange={handleChange} placeholder="Quincy" />
             <Field label="Last Name" name="last_name" value={form.last_name} onChange={handleChange} required placeholder="Doe" />
             <Field label="Date of Birth" name="date_of_birth" value={form.date_of_birth} onChange={handleChange} type="date" />
             <SelectField
