@@ -8,3 +8,6 @@
 ## 2026-04-18 - AI Assistant Accessibility and Auto-focus
 **Learning:** Found that the AI Assistant chat interface lacked basic accessibility (missing `aria-label` on icon-only Open, Close, and Send buttons) and forced the user to manually click into the input field after opening the chat overlay.
 **Action:** Adding `aria-label`s for screen reader support and the `autoFocus` prop to the main chat input so it's ready for typing immediately when the overlay opens.
+## 2025-05-18 - Password Visibility Toggles
+**Learning:** Found that the "Confirm Password" field in `Register.tsx` and both password fields in `ResetPassword.tsx` lacked a visibility toggle, potentially leading to blind typing errors and user frustration during critical authentication flows.
+**Action:** Implemented a standard UI pattern by wrapping the `Input` in a relative container and adding an absolute-positioned `Eye`/`EyeOff` icon `<Button>` toggle, ensuring each toggle manages its own localized state and includes appropriate `aria-label`s for screen readers.
