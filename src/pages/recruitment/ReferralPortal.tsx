@@ -109,9 +109,10 @@ export default function ReferralPortal() {
     toast.success('Sample CSV downloaded');
   };
 
+  const searchQueryLower = searchQuery.toLowerCase();
   const filteredJobs = jobs.filter(job => 
-    job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (job as any).departments?.name?.toLowerCase().includes(searchQuery.toLowerCase())
+    job.title.toLowerCase().includes(searchQueryLower) ||
+    (job as any).departments?.name?.toLowerCase().includes(searchQueryLower)
   );
 
   const selectedJobData = jobs.find(j => j.id === selectedJob);
