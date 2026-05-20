@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -190,6 +190,18 @@ export function RecruitmentLeadsBoard() {
   };
 
   const ALL_STAGES = ['applied', 'screening', 'interview', 'assessment', 'offer', 'hired', 'rejected'];
+
+  // ⚡ Bolt: Pre-group filtered leads by stage to eliminate O(N*M) filtering inside the Kanban render loop
+  const filteredLeadsByStage = useMemo(() => {
+    const grouped: Record<string, any[]> = {};
+    filtered.forEach((l: any) => {
+      if (l.stage) {
+        if (!grouped[l.stage]) grouped[l.stage] = [];
+        grouped[l.stage].push(l);
+      }
+    });
+    return grouped;
+  }, [filtered]);
 
   return (
     <div className="space-y-4">
@@ -489,7 +501,7 @@ export function RecruitmentLeadsBoard() {
         /* KANBAN VIEW */
         <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
           {ALL_STAGES.filter((s) => stageFilter === 'all' || stageFilter === s).map((stage) => {
-            const stageLeads = filtered.filter((l: any) => l.stage === stage);
+            const stageLeads = filteredLeadsByStage[stage] || [];
             return (
               <div key={stage} className="flex-shrink-0 w-72 space-y-3">
                 <div className="flex items-center gap-2 px-1">
