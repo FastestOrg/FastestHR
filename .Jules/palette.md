@@ -8,3 +8,6 @@
 ## 2026-04-18 - AI Assistant Accessibility and Auto-focus
 **Learning:** Found that the AI Assistant chat interface lacked basic accessibility (missing `aria-label` on icon-only Open, Close, and Send buttons) and forced the user to manually click into the input field after opening the chat overlay.
 **Action:** Adding `aria-label`s for screen reader support and the `autoFocus` prop to the main chat input so it's ready for typing immediately when the overlay opens.
+## 2024-05-20 - Missing aria-labels on Dropdown Triggers
+**Learning:** Found a recurring pattern where icon-only buttons triggering dropdown menus (like MoreHorizontal/MoreVertical) were missing aria-labels, making them inaccessible to screen readers.
+**Action:** Ensure all `DropdownMenuTrigger` elements wrapping icon-only buttons receive an explicit aria-label describing their context/action.
