@@ -1,8 +1,9 @@
+import { useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Calendar, Plus, CheckCircle, XCircle, Clock, BarChart3, PieChart } from 'lucide-react';
+import { Calendar, Plus, CheckCircle, XCircle, Clock, BarChart3, PieChart, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -35,13 +36,30 @@ export default function Leave() {
     queryFn: async () => {
       const { data } = await supabase
         .from('leave_balances')
-        .select('*, leave_types(name, color)')
+        .select('*, leave_types(name, color, code)')
         .eq('employee_id', employee!.id)
         .eq('year', new Date().getFullYear());
       return data || [];
     },
     enabled: !!employee?.id,
   });
+
+  // Auto-initialize mutation for missing leave balances
+  const initBalancesMutation = useMutation({
+    mutationFn: async (empId: string) => {
+      const { error } = await supabase.rpc('initialize_employee_leave_balances', { emp_id: empId });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leave-balances'] });
+    }
+  });
+
+  useEffect(() => {
+    if (!loadingBalances && leaveBalances.length === 0 && employee?.id) {
+      initBalancesMutation.mutate(employee.id);
+    }
+  }, [loadingBalances, leaveBalances.length, employee?.id]);
 
   const { data: leaveRequests = [], isLoading: loadingRequests } = useQuery({
     queryKey: ['leave-requests', profile?.platform_role, employee?.id, profile?.company_id],
@@ -65,29 +83,12 @@ export default function Leave() {
   });
 
   const actionMutation = useMutation({
-    mutationFn: async ({ id, status, employeeId, totalDays, leaveTypeId }: { id: string; status: 'approved' | 'rejected'; employeeId: string; totalDays: number; leaveTypeId: string }) => {
+    mutationFn: async ({ id, status }: { id: string; status: 'approved' | 'rejected' }) => {
       const { error } = await supabase.from('leave_requests').update({
         status: status as any,
         approved_by: employee?.id,
       }).eq('id', id);
       if (error) throw error;
-
-      // If approved, update leave balance
-      if (status === 'approved') {
-        const { data: balance } = await supabase
-          .from('leave_balances')
-          .select('id, used_days')
-          .eq('employee_id', employeeId)
-          .eq('leave_type_id', leaveTypeId)
-          .eq('year', new Date().getFullYear())
-          .maybeSingle();
-
-        if (balance) {
-          await supabase.from('leave_balances').update({
-            used_days: (balance.used_days || 0) + totalDays,
-          }).eq('id', balance.id);
-        }
-      }
     },
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ['leave-requests'] });
@@ -132,14 +133,34 @@ export default function Leave() {
           </Card>
         ) : (
           leaveBalances.map((lb: any) => {
-            const remaining = (lb.total_days || 0) - (lb.used_days || 0);
+            const remaining = (lb.total_days || 0) - (lb.used_days || 0) - (lb.pending_days || 0);
+            const color = lb.leave_types?.color || '#4F46E5';
             return (
-              <Card key={lb.id} className="overflow-hidden">
-                <CardContent className="p-6">
-                  <h3 className="text-sm text-muted-foreground mb-4 uppercase">{lb.leave_types?.name || 'Leave'}</h3>
-                  <div className="flex items-end justify-between">
-                    <div className="text-4xl font-bold text-primary">{remaining}</div>
-                    <div className="text-sm text-muted-foreground pb-1">/ {lb.total_days || 0} remaining</div>
+              <Card key={lb.id} className="overflow-hidden border-border/40 hover:border-primary/30 transition-all hover:shadow-md relative group">
+                {/* Visual Accent Bar */}
+                <div className="absolute top-0 left-0 right-0 h-1.5" style={{ backgroundColor: color }} />
+                <CardContent className="p-5 pt-7">
+                  <div className="flex justify-between items-start mb-3">
+                    <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider line-clamp-1">{lb.leave_types?.name || 'Leave'}</h3>
+                    <Badge variant="outline" className="text-[10px] font-semibold" style={{ color: color, borderColor: `${color}30`, backgroundColor: `${color}10` }}>
+                      {lb.leave_types?.code || 'LV'}
+                    </Badge>
+                  </div>
+                  
+                  <div className="flex items-baseline gap-1 mb-4">
+                    <span className="text-4xl font-extrabold text-foreground tabular-nums">{remaining}</span>
+                    <span className="text-xs text-muted-foreground">days left</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-3 border-t border-border/10 text-xs">
+                    <div>
+                      <p className="text-muted-foreground text-[10px] uppercase font-medium">Used</p>
+                      <p className="font-semibold text-foreground mt-0.5 tabular-nums">{lb.used_days || 0}d</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-[10px] uppercase font-medium text-amber-500">Pending</p>
+                      <p className="font-semibold text-amber-500 mt-0.5 tabular-nums">{lb.pending_days || 0}d</p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -180,6 +201,18 @@ export default function Leave() {
                         </h4>
                         <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">{req.start_date} — {req.end_date} &bull; {req.total_days} Day{(req.total_days || 0) > 1 ? 's' : ''}</p>
                         {req.reason && <p className="text-xs text-muted-foreground/70 mt-1 italic">"{req.reason}"</p>}
+                        {req.document_url && (
+                          <div className="mt-1.5">
+                            <a 
+                              href={req.document_url} 
+                              target="_blank" 
+                              rel="noreferrer" 
+                              className="text-[10px] text-primary hover:underline font-semibold flex items-center gap-1 w-fit bg-primary/5 px-2 py-0.5 rounded border border-primary/20"
+                            >
+                              <FileText className="w-3 h-3" /> View Supporting Document
+                            </a>
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 justify-end w-full sm:w-auto border-t border-border/10 pt-3 sm:pt-0 sm:border-none">
@@ -193,9 +226,6 @@ export default function Leave() {
                             onClick={() => actionMutation.mutate({
                               id: req.id,
                               status: 'approved',
-                              employeeId: req.employee_id,
-                              totalDays: req.total_days || 0,
-                              leaveTypeId: req.leave_type_id,
                             })}
                           >
                             <CheckCircle className="w-3.5 h-3.5 mr-1" /> Approve
@@ -208,9 +238,6 @@ export default function Leave() {
                             onClick={() => actionMutation.mutate({
                               id: req.id,
                               status: 'rejected',
-                              employeeId: req.employee_id,
-                              totalDays: req.total_days || 0,
-                              leaveTypeId: req.leave_type_id,
                             })}
                           >
                             <XCircle className="w-3.5 h-3.5 mr-1" /> Reject

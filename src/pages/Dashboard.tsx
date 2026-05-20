@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useAuthStore } from '@/store/auth-store';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,7 +8,7 @@ import {
   Users, Clock, CalendarDays, Briefcase, DollarSign, UserPlus,
   Megaphone, TrendingUp, ArrowRight, BarChart3, PieChart, Cake, PartyPopper, TrendingDown, MessageSquare, Bot, Sparkles, BrainCircuit
 } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 
@@ -543,7 +544,9 @@ function EmployeeDashboard() {
     enabled: !!profile?.id,
   });
 
-  const { data: leaveBalances = [] } = useQuery({
+  const queryClient = useQueryClient();
+
+  const { data: leaveBalances = [], isLoading: loadingBalances } = useQuery({
     queryKey: ['leave-balances', employee?.id],
     queryFn: async () => {
       const { data } = await supabase
@@ -555,6 +558,23 @@ function EmployeeDashboard() {
     },
     enabled: !!employee?.id,
   });
+
+  // Auto-initialize mutation for missing leave balances
+  const initBalancesMutation = useMutation({
+    mutationFn: async (empId: string) => {
+      const { error } = await supabase.rpc('initialize_employee_leave_balances', { emp_id: empId });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leave-balances'] });
+    }
+  });
+
+  useEffect(() => {
+    if (!loadingBalances && leaveBalances.length === 0 && employee?.id) {
+      initBalancesMutation.mutate(employee.id);
+    }
+  }, [loadingBalances, leaveBalances.length, employee?.id]);
 
   return (
     <div className="space-y-6">
@@ -581,7 +601,13 @@ function EmployeeDashboard() {
             <CardTitle className="text-lg">Leave Balances</CardTitle>
           </CardHeader>
           <CardContent>
-            {leaveBalances.length === 0 ? (
+            {loadingBalances ? (
+              <div className="space-y-3">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-full" />
+              </div>
+            ) : leaveBalances.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-4 text-center">
                 <CalendarDays className="h-8 w-8 text-muted-foreground/50" />
                 <p className="text-sm text-muted-foreground">No leave data yet</p>
@@ -589,7 +615,7 @@ function EmployeeDashboard() {
             ) : (
               <div className="space-y-3">
                 {leaveBalances.slice(0, 4).map((lb: any) => {
-                  const remaining = (lb.total_days || 0) - (lb.used_days || 0);
+                  const remaining = (lb.total_days || 0) - (lb.used_days || 0) - (lb.pending_days || 0);
                   return (
                     <div key={lb.id} className="flex justify-between items-center text-sm">
                       <span className="text-muted-foreground">{lb.leave_types?.name || 'Leave'}</span>

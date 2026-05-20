@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Save, UserPlus, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const EMPLOYMENT_TYPES = ['full_time', 'part_time', 'contract', 'intern'] as const;
 const STATUSES = ['active', 'probation', 'on_leave', 'resigned', 'terminated'] as const;
@@ -58,6 +59,18 @@ export default function NewEmployee() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { profile } = useAuthStore();
+
+  const [createPortalAccount, setCreatePortalAccount] = useState(false);
+  const [portalPassword, setPortalPassword] = useState('');
+
+  const generateRandomPassword = () => {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+    let password = '';
+    for (let i = 0; i < 12; i++) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return password;
+  };
 
   const [form, setForm] = useState({
     first_name: '',
@@ -163,10 +176,38 @@ export default function NewEmployee() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
       queryClient.invalidateQueries({ queryKey: ['employee-count'] });
-      toast.success('SYSTEM::EMPLOYEE_CREATED — ' + (data.first_name + ' ' + data.last_name).toUpperCase());
+      
+      if (createPortalAccount) {
+        const toastId = toast.loading('CREATING_PORTAL_ACCOUNT::DISPATCHING_WELCOME_EMAIL...');
+        try {
+          const { data: resData, error: fnError } = await supabase.functions.invoke('create-portal-account', {
+            body: {
+              employee_id: data.id,
+              email: data.work_email,
+              password: portalPassword,
+              company_id: profile?.company_id,
+              first_name: data.first_name,
+              last_name: data.last_name
+            }
+          });
+          
+          if (fnError) throw fnError;
+          if (resData?.error) throw new Error(resData.error);
+          
+          toast.success('SYSTEM::PORTAL_ACCOUNT_READY — Credentials dispatched to work email.', { id: toastId });
+        } catch (err: any) {
+          toast.error(`ERROR::PORTAL_CREATION_FAILED — ${err.message || 'Check your SMTP settings.'}`, { 
+            id: toastId,
+            duration: 6000 
+          });
+        }
+      } else {
+        toast.success('SYSTEM::EMPLOYEE_CREATED — ' + (data.first_name + ' ' + data.last_name).toUpperCase());
+      }
+      
       navigate('/employees/' + data.id);
     },
     onError: (err: any) => {
@@ -183,6 +224,10 @@ export default function NewEmployee() {
     e.preventDefault();
     if (!form.first_name.trim() || !form.last_name.trim() || !form.work_email.trim()) {
       toast.error('ERROR::MISSING_REQUIRED_FIELDS');
+      return;
+    }
+    if (createPortalAccount && (!portalPassword || portalPassword.length < 6)) {
+      toast.error('ERROR::PASSWORD_MIN_LENGTH_6');
       return;
     }
     createMutation.mutate(form);
@@ -312,6 +357,76 @@ export default function NewEmployee() {
             />
           </CardContent>
         </Card>
+
+        {/* Portal Access */}
+        {form.status !== 'resigned' && form.status !== 'terminated' && (
+          <Card className="overflow-hidden">
+            <CardHeader className="border-b border-border/50 pb-4">
+              <CardTitle className="text-foreground font-semibold text-base flex items-center gap-2">
+                <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5">03</span>
+                PORTAL_ACCESS_SETUP
+              </CardTitle>
+              <CardDescription className="text-xs font-medium">Configure credentials and welcome notifications</CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-4">
+              <div className="flex items-start gap-3 p-4 rounded-lg bg-primary/5 border border-primary/10">
+                <Checkbox 
+                  id="createPortalAccount"
+                  checked={createPortalAccount} 
+                  onCheckedChange={(c) => {
+                    const checked = !!c;
+                    setCreatePortalAccount(checked);
+                    if (checked && !portalPassword) {
+                      setPortalPassword(generateRandomPassword());
+                    }
+                  }}
+                  className="mt-1"
+                />
+                <div className="space-y-1">
+                  <label htmlFor="createPortalAccount" className="text-sm font-semibold text-foreground cursor-pointer select-none">
+                    Create Portal Account Immediately
+                  </label>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    If enabled, a user account will be created automatically in Supabase Auth, and a welcome email containing their credentials will be dispatched using your custom company SMTP configuration.
+                  </p>
+                </div>
+              </div>
+
+              {createPortalAccount && (
+                <div className="space-y-2 grid sm:grid-cols-2 gap-4 items-end pt-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="space-y-1.5 sm:col-span-1">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      Temporary Password <span className="text-destructive ml-0.5">*</span>
+                    </label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="text"
+                        name="portalPassword"
+                        value={portalPassword}
+                        onChange={(e) => setPortalPassword(e.target.value)}
+                        required={createPortalAccount}
+                        minLength={6}
+                        placeholder="Enter temporary password"
+                        className="bg-background/50 border-border/50 text-sm h-10 focus:border-primary flex-1 font-mono"
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => setPortalPassword(generateRandomPassword())}
+                        className="h-10 px-3 text-xs"
+                      >
+                        Generate
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="text-xs text-muted-foreground leading-relaxed pb-2.5 sm:col-span-1">
+                    Password must be at least 6 characters. The password will be visible to the employee in the welcome email.
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Actions */}
         <div className="flex items-center justify-between">

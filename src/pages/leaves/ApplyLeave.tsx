@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, CalendarDays, Loader2, Send, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Loader2, Send, Clock, CheckCircle, XCircle, FileText, Upload, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { differenceInDays, parseISO } from 'date-fns';
 
@@ -21,7 +21,10 @@ export default function ApplyLeave() {
     start_date: '',
     end_date: '',
     reason: '',
+    document_url: '',
   });
+
+  const [uploadingDoc, setUploadingDoc] = useState(false);
 
   // Fetch logged-in employee record
   const { data: employee } = useQuery({
@@ -55,18 +58,36 @@ export default function ApplyLeave() {
   });
 
   // Fetch leave balances
-  const { data: leaveBalances = [] } = useQuery({
+  const { data: leaveBalances = [], isLoading: loadingBalances } = useQuery({
     queryKey: ['leave-balances', employee?.id],
     queryFn: async () => {
       const { data } = await supabase
         .from('leave_balances')
-        .select('*, leave_types(name, color)')
+        .select('*, leave_types(name, color, code, requires_document)')
         .eq('employee_id', employee!.id)
         .eq('year', new Date().getFullYear());
       return data || [];
     },
     enabled: !!employee?.id,
   });
+
+  // Auto-initialize mutation for missing leave balances
+  const initBalancesMutation = useMutation({
+    mutationFn: async (empId: string) => {
+      const { error } = await supabase.rpc('initialize_employee_leave_balances', { emp_id: empId });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leave-balances'] });
+      queryClient.invalidateQueries({ queryKey: ['leave-types'] });
+    }
+  });
+
+  useEffect(() => {
+    if (!loadingBalances && leaveBalances.length === 0 && employee?.id) {
+      initBalancesMutation.mutate(employee.id);
+    }
+  }, [loadingBalances, leaveBalances.length, employee?.id]);
 
   // Fetch recent leave requests
   const { data: myLeaves = [] } = useQuery({
@@ -88,6 +109,49 @@ export default function ApplyLeave() {
       ? Math.max(0, differenceInDays(parseISO(form.end_date), parseISO(form.start_date)) + 1)
       : 0;
 
+  const selectedBalance = leaveBalances.find(lb => lb.leave_type_id === form.leave_type_id);
+  const remainingDays = selectedBalance 
+    ? (selectedBalance.total_days || 0) - (selectedBalance.used_days || 0) - (selectedBalance.pending_days || 0) 
+    : 0;
+  
+  const requiresDoc = selectedBalance?.leave_types?.requires_document && totalDays >= 3;
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingDoc(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${employee?.id}/${Date.now()}.${fileExt}`;
+      
+      const { data, error } = await supabase.storage
+        .from('leave-documents')
+        .upload(fileName, file, { upsert: true });
+
+      if (error) {
+        if (error.message.includes('bucket not found') || error.message.includes('does not exist')) {
+          toast.error('Leave documents storage bucket not found. Please upload to a cloud service (e.g. Google Drive) and enter the link directly.');
+          setUploadingDoc(false);
+          return;
+        }
+        throw error;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('leave-documents')
+        .getPublicUrl(fileName);
+
+      setForm(prev => ({ ...prev, document_url: publicUrl }));
+      toast.success('Supporting document uploaded successfully!');
+    } catch (err: any) {
+      console.error('Upload error:', err);
+      toast.error(`Upload failed: ${err.message || 'Unknown error'}`);
+    } finally {
+      setUploadingDoc(false);
+    }
+  };
+
   const applyMutation = useMutation({
     mutationFn: async () => {
       if (!employee) throw new Error('Employee record not found.');
@@ -101,6 +165,7 @@ export default function ApplyLeave() {
           end_date: form.end_date,
           total_days: totalDays,
           reason: form.reason || null,
+          document_url: form.document_url || null,
           status: 'pending' as const,
         }])
         .select()
@@ -110,8 +175,9 @@ export default function ApplyLeave() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-leaves'] });
+      queryClient.invalidateQueries({ queryKey: ['leave-balances'] });
       toast.success('Leave request submitted successfully');
-      setForm({ leave_type_id: '', start_date: '', end_date: '', reason: '' });
+      setForm({ leave_type_id: '', start_date: '', end_date: '', reason: '', document_url: '' });
     },
     onError: (err: any) => {
       toast.error(err?.message || 'Failed to submit leave request');
@@ -126,6 +192,18 @@ export default function ApplyLeave() {
     }
     if (form.end_date < form.start_date) {
       toast.error('End date cannot be before start date');
+      return;
+    }
+    if (totalDays <= 0) {
+      toast.error('Leave duration must be at least 1 day');
+      return;
+    }
+    if (selectedBalance && totalDays > remainingDays) {
+      toast.error(`Insufficient leave balance. You requested ${totalDays} days, but only have ${remainingDays} days remaining.`);
+      return;
+    }
+    if (requiresDoc && !form.document_url) {
+      toast.error(`A supporting document is required for ${selectedBalance?.leave_types?.name} requests of 3 or more days.`);
       return;
     }
     applyMutation.mutate();
@@ -233,8 +311,78 @@ export default function ApplyLeave() {
               </div>
 
               {totalDays > 0 && (
-                <div className="rounded border border-border/50 bg-primary/5 px-4 py-3 text-sm text-primary">
-                  Duration: <strong>{totalDays} working day{totalDays > 1 ? 's' : ''}</strong>
+                <div className="space-y-3">
+                  <div className="rounded border border-border/50 bg-primary/5 px-4 py-3 text-sm text-primary flex justify-between items-center">
+                    <span>Duration: <strong>{totalDays} working day{totalDays > 1 ? 's' : ''}</strong></span>
+                    {selectedBalance && (
+                      <span className="text-xs font-medium">
+                        Remaining: <strong className={remainingDays >= totalDays ? 'text-success' : 'text-destructive'}>{remainingDays} days</strong>
+                      </span>
+                    )}
+                  </div>
+                  
+                  {selectedBalance && totalDays > remainingDays && (
+                    <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs text-destructive flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
+                      <AlertCircle className="h-4 w-4 shrink-0" />
+                      <div>
+                        <strong>Insufficient Balance:</strong> You only have {remainingDays} days remaining for this leave type, but requested {totalDays} days. Please adjust your dates.
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Supporting Document Uploader (Conditional) */}
+              {requiresDoc && (
+                <div className="space-y-3 border border-border/50 bg-amber-500/5 p-4 rounded-lg animate-in fade-in slide-in-from-top-2">
+                  <div className="flex items-start gap-2 text-xs text-amber-600 font-medium">
+                    <FileText className="h-4 w-4 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="uppercase tracking-wider font-bold">Supporting Document Required</p>
+                      <p className="text-muted-foreground font-normal mt-0.5">A medical certificate or official proof is required for {selectedBalance?.leave_types?.name || 'this leave type'} of 3 or more days.</p>
+                    </div>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-3 pt-1">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-semibold text-muted-foreground uppercase">Upload File</label>
+                      <div className="relative flex items-center justify-center border border-dashed border-border/70 hover:border-primary/50 bg-background/50 h-10 rounded-md cursor-pointer transition-all">
+                        <input
+                          type="file"
+                          onChange={handleFileChange}
+                          disabled={uploadingDoc}
+                          accept=".pdf,.png,.jpg,.jpeg"
+                          className="absolute inset-0 opacity-0 cursor-pointer"
+                        />
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          {uploadingDoc ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                          ) : (
+                            <Upload className="h-4 w-4 text-muted-foreground" />
+                          )}
+                          <span>{uploadingDoc ? 'Uploading...' : 'Choose File (PDF, Image)'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-semibold text-muted-foreground uppercase">Or Enter Document URL</label>
+                      <Input
+                        type="url"
+                        placeholder="https://drive.google.com/..."
+                        value={form.document_url}
+                        onChange={(e) => setForm(p => ({ ...p, document_url: e.target.value }))}
+                        className="bg-background/50 border-border/50 text-xs h-10"
+                      />
+                    </div>
+                  </div>
+
+                  {form.document_url && (
+                    <div className="text-[10px] text-success font-semibold flex items-center gap-1.5 bg-success/5 px-2.5 py-1.5 rounded border border-success/20 w-fit">
+                      <CheckCircle className="h-3 w-3" />
+                      <span>Document Attached: <a href={form.document_url} target="_blank" rel="noreferrer" className="underline font-bold truncate max-w-[180px] inline-block align-bottom">View Document</a></span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -251,7 +399,7 @@ export default function ApplyLeave() {
 
               <div className="flex gap-3 pt-2">
                 <Button type="button" variant="outline" onClick={() => navigate('/leave')}>Cancel</Button>
-                <Button type="submit" disabled={applyMutation.isPending} className="flex-1 gap-2">
+                <Button type="submit" disabled={applyMutation.isPending || uploadingDoc} className="flex-1 gap-2">
                   {applyMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   {applyMutation.isPending ? 'Submitting...' : 'Submit Request'}
                 </Button>

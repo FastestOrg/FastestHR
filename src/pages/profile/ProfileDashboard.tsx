@@ -1,5 +1,6 @@
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -59,8 +60,10 @@ export default function ProfileDashboard({ employee }: ProfileDashboardProps) {
   const navigate = useNavigate();
   const { percent, missing } = computeCompletion(employee);
 
+  const queryClient = useQueryClient();
+
   // Fetch leave balances
-  const { data: leaveBalances = [] } = useQuery({
+  const { data: leaveBalances = [], isLoading: loadingBalances } = useQuery({
     queryKey: ['leave-balances-profile', employee.id],
     queryFn: async () => {
       const year = new Date().getFullYear();
@@ -74,6 +77,23 @@ export default function ProfileDashboard({ employee }: ProfileDashboardProps) {
     enabled: !!employee.id,
     staleTime: 5 * 60 * 1000,
   });
+
+  // Auto-initialize mutation for missing leave balances
+  const initBalancesMutation = useMutation({
+    mutationFn: async (empId: string) => {
+      const { error } = await supabase.rpc('initialize_employee_leave_balances', { emp_id: empId });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leave-balances-profile'] });
+    }
+  });
+
+  useEffect(() => {
+    if (!loadingBalances && leaveBalances.length === 0 && employee.id) {
+      initBalancesMutation.mutate(employee.id);
+    }
+  }, [loadingBalances, leaveBalances.length, employee.id]);
 
   // Fetch recent announcements
   const { data: announcements = [] } = useQuery({
