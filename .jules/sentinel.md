@@ -27,3 +27,7 @@
 **Vulnerability:** In `OfferLetterRenderer.tsx`, `DocumentRenderer.tsx`, and `pdf-generator.ts`, `String.prototype.replace(regex, value)` was used to substitute variables into HTML templates. If the user input contained special regex tokens like `$&` (which inserts the matched substring), it caused unintended injections and manipulation of the final output.
 **Learning:** `String.prototype.replace()` interprets special replacement patterns (like `$&`, `$`, `$\``, `$'`) when passing a string as the second argument, bypassing simple HTML escaping if the token is valid in regex contexts.
 **Prevention:** Always use a replacer function `String.prototype.replace(regex, () => value)` when replacing with dynamic or untrusted strings, as functions do not evaluate these special regex tokens.
+## 2025-05-18 - Insecure Random Number Generation for Employee Portal Passwords
+**Vulnerability:** `Math.random()` was used to generate temporary passwords for new employee portal accounts.
+**Learning:** `Math.random()` is not cryptographically secure, and the generated passwords could potentially be predicted.
+**Prevention:** Always use `window.crypto.getRandomValues()` when generating random values for sensitive security features like passwords.
