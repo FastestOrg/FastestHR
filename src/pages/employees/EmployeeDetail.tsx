@@ -13,9 +13,17 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   ArrowLeft, Save, Pencil, X, Loader2,
   Mail, Phone, Building2, Briefcase, CalendarDays,
-  Clock, UserCheck, AlertTriangle, Trash2
+  Clock, UserCheck, AlertTriangle, Trash2, KeyRound
 } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from '@/components/ui/dialog';
 
 const STATUS_BADGE: Record<string, string> = {
   active: 'bg-success/10 text-success border-success/40',
@@ -66,6 +74,8 @@ export default function EmployeeDetail() {
   const [newDepartmentName, setNewDepartmentName] = useState('');
   const [isNewDesignation, setIsNewDesignation] = useState(false);
   const [newDesignationName, setNewDesignationName] = useState('');
+  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
 
   const { data: employee, isLoading } = useQuery<EmployeeRecord>({
     queryKey: ['employee', id],
@@ -253,6 +263,72 @@ export default function EmployeeDetail() {
     },
     onError: (err: any) => {
       toast.error(err?.message || 'Failed to terminate');
+    },
+  });
+
+  const setPasswordMutation = useMutation({
+    mutationFn: async (password: string) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      if (!employee?.user_id) {
+        // Employee has no portal account, create one
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-portal-account`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({
+            employee_id: employee?.id,
+            email: employee?.work_email,
+            password: password,
+            company_id: profile?.company_id,
+            first_name: employee?.first_name,
+            last_name: employee?.last_name,
+          }),
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to create portal account');
+        }
+        return { isNew: true, result };
+      } else {
+        // Employee already has an account, update password
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/set-employee-password`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({
+            target_user_id: employee.user_id,
+            new_password: password,
+          }),
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to set password');
+        }
+        return { isNew: false, result };
+      }
+    },
+    onSuccess: (data) => {
+      if (data.isNew) {
+        toast.success('Portal account created and credentials sent to employee');
+        queryClient.invalidateQueries({ queryKey: ['employee', id] });
+      } else {
+        toast.success('Password updated successfully');
+      }
+      setIsPasswordDialogOpen(false);
+      setNewPassword('');
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || 'Failed to process request');
     },
   });
 
@@ -668,6 +744,26 @@ export default function EmployeeDetail() {
             <AlertTriangle className="h-4 w-4" /> Danger Zone
           </CardTitle>
         </CardHeader>
+        <CardContent className="flex items-center justify-between py-4 border-b border-destructive/10">
+          <div>
+            <p className="text-sm text-foreground">
+              {employee.user_id ? 'Set Account Password' : 'Create Portal Account'}
+            </p>
+            <p className="text-xs font-medium text-muted-foreground">
+              {employee.user_id 
+                ? "Manually set a new password for this employee's portal access."
+                : "This employee doesn't have portal access yet. Create their account and set a password."}
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsPasswordDialogOpen(true)}
+          >
+            <KeyRound className="h-4 w-4 mr-2" />
+            {employee.user_id ? 'Set Password' : 'Create Account'}
+          </Button>
+        </CardContent>
         <CardContent className="flex items-center justify-between py-4">
           <div>
             <p className="text-sm text-foreground">Terminate Employee</p>
@@ -689,6 +785,40 @@ export default function EmployeeDetail() {
           </Button>
         </CardContent>
       </Card>
+
+      <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>{employee.user_id ? 'Set Employee Password' : 'Create Portal Account'}</DialogTitle>
+            <DialogDescription>
+              {employee.user_id 
+                ? `Enter a new password for ${employee.first_name} ${employee.last_name}. They will use this to log in to the portal.`
+                : `Enter a password to create the portal account for ${employee.first_name} ${employee.last_name}. They will receive an email with their credentials.`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Password</label>
+              <Input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Enter password (min 6 chars)"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPasswordDialogOpen(false)}>Cancel</Button>
+            <Button
+              onClick={() => setPasswordMutation.mutate(newPassword)}
+              disabled={newPassword.length < 6 || setPasswordMutation.isPending}
+            >
+              {setPasswordMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {employee.user_id ? 'Set Password' : 'Create Account'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
