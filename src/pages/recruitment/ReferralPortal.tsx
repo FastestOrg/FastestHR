@@ -109,9 +109,11 @@ export default function ReferralPortal() {
     toast.success('Sample CSV downloaded');
   };
 
+  // Optimization: Pre-calculate lowercased search term outside the filter loop
+  const searchLower = searchQuery.toLowerCase();
   const filteredJobs = jobs.filter(job => 
-    job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (job as any).departments?.name?.toLowerCase().includes(searchQuery.toLowerCase())
+    job.title.toLowerCase().includes(searchLower) ||
+    (job as any).departments?.name?.toLowerCase().includes(searchLower)
   );
 
   const selectedJobData = jobs.find(j => j.id === selectedJob);

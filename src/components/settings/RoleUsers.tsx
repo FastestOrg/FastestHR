@@ -113,9 +113,11 @@ export function RoleUsers({ roleId, companyId }: RoleUsersProps) {
 
   // Filter profiles that are not already assigned to this role, and match search
   const assignedUserIds = assignedUsers.map((u: any) => u.user_id);
+  // Optimization: Pre-calculate lowercased search term outside the filter loop
+  const searchLower = search.toLowerCase();
   const assignableProfiles = allProfiles
     .filter((p: any) => !assignedUserIds.includes(p.id))
-    .filter((p: any) => p.full_name?.toLowerCase().includes(search.toLowerCase()));
+    .filter((p: any) => p.full_name?.toLowerCase().includes(searchLower));
 
   return (
     <div className="space-y-6">
