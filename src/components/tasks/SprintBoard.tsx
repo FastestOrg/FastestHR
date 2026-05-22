@@ -136,7 +136,7 @@ export function SprintBoard() {
               <div className="mt-6 flex gap-2 lg:opacity-0 group-hover:opacity-100 transition-opacity">
                 <Button variant="outline" size="sm" className="w-full text-xs h-8">View Roadmap</Button>
                 {isAdminOrManager && (
-                   <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0">
+                   <Button variant="ghost" size="icon" aria-label="Sprint settings" className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0">
                      <Settings2 className="h-4 w-4" />
                    </Button>
                 )}

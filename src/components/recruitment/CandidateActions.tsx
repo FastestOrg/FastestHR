@@ -412,7 +412,7 @@ export function CandidateActions({
       )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-6 w-6 -mr-2 -mt-2 text-muted-foreground">
+          <Button variant="ghost" size="icon" aria-label="Candidate actions" className="h-6 w-6 -mr-2 -mt-2 text-muted-foreground">
             <MoreHorizontal className="w-4 h-4" />
           </Button>
         </DropdownMenuTrigger>
