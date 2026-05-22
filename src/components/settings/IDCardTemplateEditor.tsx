@@ -48,7 +48,8 @@ export function IDCardTemplateEditor() {
           id_card_template: template,
           id_card_primary_color: primaryColor,
         } as any)
-        .eq('id', profile!.company_id!);
+        .eq('id', profile!.company_id!)
+        .select('id');
       if (error) throw error;
     },
     onSuccess: () => {

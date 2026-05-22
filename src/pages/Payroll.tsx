@@ -199,7 +199,7 @@ export default function Payroll() {
       if (!isCompValid) throw new Error('Total must equal 100%');
       const { error } = await supabase.from('companies').update({
         compensation_structure: compStructure,
-      } as any).eq('id', profile!.company_id!);
+      } as any).eq('id', profile!.company_id!).select('id');
       if (error) throw error;
     },
     onSuccess: () => {

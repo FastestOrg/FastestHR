@@ -69,7 +69,7 @@ export default function Settings() {
         smtp_from_email: form.smtp_from_email || null, smtp_from_name: form.smtp_from_name || null,
         offer_sequence_prefix: form.offer_sequence_prefix || null,
         offer_sequence_current: form.offer_sequence_current ? parseInt(form.offer_sequence_current) : 0,
-      }).eq('id', profile.company_id);
+      }).eq('id', profile.company_id).select('id');
       if (error) throw error;
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['my-company'] }); toast.success('Settings saved'); },
@@ -248,7 +248,8 @@ function GeneralTab({ form, setForm, company }: any) {
       const { error: updateError } = await supabase
         .from('companies')
         .update({ logo_url: logoUrl })
-        .eq('id', profile?.company_id);
+        .eq('id', profile?.company_id)
+        .select('id');
       if (updateError) throw updateError;
 
       queryClient.invalidateQueries({ queryKey: ['my-company'] });

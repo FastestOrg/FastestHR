@@ -23,7 +23,7 @@ export default function VirtualIDCard() {
     queryFn: async () => {
       const { data: emp } = await supabase
         .from('employees')
-        .select('*, companies(*), designations(title)')
+        .select('*, companies(id, name, logo_url, id_card_template, id_card_primary_color), designations(title)')
         .eq('user_id', profile!.id)
         .single();
       return emp as any;
