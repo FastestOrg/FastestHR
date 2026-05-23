@@ -64,10 +64,13 @@ export default function NewEmployee() {
   const [portalPassword, setPortalPassword] = useState('');
 
   const generateRandomPassword = () => {
+    // SECURITY: Use crypto.getRandomValues instead of Math.random() for secure password generation
     const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
     let password = '';
+    const randomValues = new Uint32Array(12);
+    window.crypto.getRandomValues(randomValues);
     for (let i = 0; i < 12; i++) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length));
+      password += chars.charAt(randomValues[i] % chars.length);
     }
     return password;
   };
