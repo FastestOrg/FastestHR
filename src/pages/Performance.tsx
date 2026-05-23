@@ -22,10 +22,41 @@ interface GoalForm {
   due_date: string;
   type: string;
 }
+
+interface ReviewCycle {
+  id: string;
+  name: string;
+  start_date: string;
+  end_date: string;
+  type: string;
+  status: string;
+  company_id: string;
+}
+
+interface Goal {
+  id: string;
+  company_id: string;
+  employee_id: string;
+  title: string;
+  description: string | null;
+  due_date: string | null;
+  type: string;
+  progress: number;
+  status: 'active' | 'on_track' | 'at_risk' | 'completed' | 'missed';
+  created_by: string;
+  employees?: {
+    first_name: string | null;
+    last_name: string | null;
+  } | null;
+  key_results?: {
+    rating?: number;
+    comment?: string;
+    updated_at?: string;
+  } | null;
+}
+
 const emptyGoalForm: GoalForm = { title: '', description: '', due_date: '', type: 'individual' };
 
-// ⚡ Bolt: Hoisted static object configuration outside of component body
-// to prevent unnecessary memory reallocation on every render.
 const statusColor: Record<string, string> = {
   active: 'border-success text-success bg-success/10',
   on_track: 'border-success text-success bg-success/10',
@@ -56,7 +87,7 @@ export default function Performance() {
     enabled: !!profile?.id,
   });
 
-  const { data: goals = [], isLoading: loadingGoals } = useQuery({
+  const { data: goals = [], isLoading: loadingGoals } = useQuery<Goal[]>({
     queryKey: ['goals', profile?.company_id],
     queryFn: async () => {
       if (!profile?.company_id) return [];
@@ -66,12 +97,12 @@ export default function Performance() {
         .eq('company_id', profile.company_id)
         .order('created_at', { ascending: false })
         .limit(30);
-      return data || [];
+      return (data as unknown as Goal[]) || [];
     },
     enabled: !!profile?.company_id,
   });
 
-  const { data: reviewCycles = [] } = useQuery({
+  const { data: reviewCycles = [] } = useQuery<ReviewCycle[]>({
     queryKey: ['review-cycles', profile?.company_id],
     queryFn: async () => {
       if (!profile?.company_id) return [];
@@ -81,15 +112,28 @@ export default function Performance() {
         .eq('company_id', profile.company_id)
         .order('created_at', { ascending: false })
         .limit(5);
-      return data || [];
+      return (data as ReviewCycle[]) || [];
     },
     enabled: !!profile?.company_id,
   });
+
+  const activeCycles = reviewCycles.filter(c => c.status === 'active');
 
   const createGoalMutation = useMutation({
     mutationFn: async (f: GoalForm) => {
       if (!employee) throw new Error('Employee record not found');
       if (!profile?.company_id) throw new Error('Profile or company not found');
+
+      // ⚡ Robust validation: enforce goal due-date falls within active appraisal cycles
+      if (activeCycles.length > 0 && f.due_date) {
+        const fallsInCycle = activeCycles.some(cyc => 
+          f.due_date >= cyc.start_date && f.due_date <= cyc.end_date
+        );
+        if (!fallsInCycle) {
+          throw new Error(`Timeline Error: The goal due-date (${f.due_date}) must fall within the timeframe of an active review cycle (e.g., "${activeCycles[0].name}" from ${activeCycles[0].start_date} to ${activeCycles[0].end_date}).`);
+        }
+      }
+
       const { error } = await supabase.from('goals').insert([{
         company_id: profile.company_id,
         employee_id: employee.id,
@@ -103,30 +147,52 @@ export default function Performance() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['goals'] });
-      toast.success('Objective created');
+      toast.success('Objective created successfully');
       setDialogOpen(false);
       setForm(emptyGoalForm);
     },
-    onError: (err: any) => toast.error(err?.message || 'Failed to create'),
+    onError: (err) => {
+      const msg = err instanceof Error ? err.message : 'Failed to create objective';
+      toast.error(msg);
+    },
   });
 
   const updateProgressMutation = useMutation({
     mutationFn: async ({ id, progress }: { id: string; progress: number }) => {
       const status = progress >= 100 ? 'completed' : progress >= 70 ? 'on_track' : 'active';
-      const { error } = await supabase.from('goals').update({ progress, status: status as any }).eq('id', id);
+      const { error } = await supabase.from('goals').update({ progress, status: status as 'active' | 'on_track' | 'completed' }).eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['goals'] });
       setUpdatingGoal(null);
-      toast.success('Progress updated');
+      toast.success('Objective progress updated');
     },
   });
 
   const createCycleMutation = useMutation({
     mutationFn: async () => {
       if (!cycleForm.name.trim()) throw new Error('Name is required');
+      if (!cycleForm.start_date || !cycleForm.end_date) throw new Error('Start date and end date are required');
+      if (cycleForm.end_date < cycleForm.start_date) throw new Error('End date cannot be before start date');
       if (!profile?.company_id) throw new Error('Company ID is required');
+
+      // ⚡ Lockout Check: Prevent creation of overlapping review cycles
+      const { data: existing, error: fetchErr } = await supabase
+        .from('review_cycles')
+        .select('id, name, start_date, end_date')
+        .eq('company_id', profile.company_id);
+
+      if (fetchErr) throw fetchErr;
+
+      if (existing) {
+        for (const cyc of existing) {
+          if (cycleForm.start_date <= cyc.end_date && cycleForm.end_date >= cyc.start_date) {
+            throw new Error(`Overlap Boundary Alert: Cycle "${cycleForm.name}" overlaps with existing cycle "${cyc.name}" (${cyc.start_date} to ${cyc.end_date}).`);
+          }
+        }
+      }
+
       const { error } = await supabase.from('review_cycles').insert([{
         company_id: profile.company_id,
         name: cycleForm.name,
@@ -139,51 +205,83 @@ export default function Performance() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['review-cycles'] });
-      toast.success('Review cycle created');
+      toast.success('Review cycle created successfully');
       setCycleDialogOpen(false);
       setCycleForm({ name: '', start_date: '', end_date: '', type: 'quarterly' });
     },
-    onError: (e: any) => toast.error(e?.message || 'Failed to create cycle'),
+    onError: (e) => {
+      const msg = e instanceof Error ? e.message : 'Failed to create cycle';
+      toast.error(msg);
+    },
+  });
+
+  const saveFeedbackMutation = useMutation({
+    mutationFn: async ({ goalId, rating, comment }: { goalId: string; rating: number; comment: string }) => {
+      const { error } = await supabase
+        .from('goals')
+        .update({
+          key_results: {
+            rating,
+            comment,
+            updated_at: new Date().toISOString()
+          }
+        })
+        .eq('id', goalId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['goals'] });
+      setFeedbackGoal(null);
+      toast.success('Manager feedback saved successfully');
+    },
+    onError: (err) => {
+      const msg = err instanceof Error ? err.message : 'Failed to save feedback';
+      toast.error(msg);
+    },
   });
 
   const saveFeedback = (goalId: string) => {
     const fb = feedback[goalId];
     if (!fb || !fb.comment.trim()) { toast.error('Please add feedback text'); return; }
-    toast.success('Feedback saved');
-    setFeedbackGoal(null);
+    saveFeedbackMutation.mutate({
+      goalId,
+      rating: fb.rating || 0,
+      comment: fb.comment
+    });
   };
 
-  const activeGoals = goals.filter((g: any) => g.status === 'active' || g.status === 'on_track' || g.status === 'at_risk');
-  const completedGoals = goals.filter((g: any) => g.status === 'completed');
-  const avgProgress = goals.length > 0 ? Math.round(goals.reduce((s: number, g: any) => s + (g.progress || 0), 0) / goals.length) : 0;
+  const activeGoals = goals.filter((g) => g.status === 'active' || g.status === 'on_track' || g.status === 'at_risk');
+  const completedGoals = goals.filter((g) => g.status === 'completed');
+  const avgProgress = goals.length > 0 ? Math.round(goals.reduce((s: number, g) => s + (g.progress || 0), 0) / goals.length) : 0;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Performance & Goals</h1>
-          <p className="text-muted-foreground mt-1">OKR tracking & appraisal cycles</p>
+          <h1 className="text-3xl font-bold tracking-tight">Performance & OKRs</h1>
+          <p className="text-muted-foreground mt-1 text-sm">OKR tracking & appraisal cycles</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           {isAdmin && (
             <Dialog open={cycleDialogOpen} onOpenChange={setCycleDialogOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" className="gap-2"><Zap className="h-4 w-4" /> New Review Cycle</Button>
+                <Button variant="outline" className="flex-1 sm:flex-none gap-2 text-xs sm:text-sm h-9 px-3 rounded-xl"><Zap className="h-4 w-4 text-primary" /> New Cycle</Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="rounded-2xl">
                 <DialogHeader>
                   <DialogTitle>Create Review Cycle</DialogTitle>
                   <DialogDescription>Set up a performance review period</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
-                    <Label>Cycle Name</Label>
-                    <Input placeholder="e.g., Q1 2026 Review" value={cycleForm.name} onChange={(e) => setCycleForm(f => ({ ...f, name: e.target.value }))} />
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase">Cycle Name</Label>
+                    <Input placeholder="e.g., Q1 2026 Review" value={cycleForm.name} onChange={(e) => setCycleForm(f => ({ ...f, name: e.target.value }))} className="rounded-lg shadow-sm" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Type</Label>
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase">Type</Label>
                     <Select value={cycleForm.type} onValueChange={(v) => setCycleForm(f => ({ ...f, type: v }))}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="rounded-lg"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="quarterly">Quarterly</SelectItem>
                         <SelectItem value="half_yearly">Half-Yearly</SelectItem>
@@ -194,48 +292,62 @@ export default function Performance() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label>Start Date</Label>
-                      <Input type="date" value={cycleForm.start_date} onChange={(e) => setCycleForm(f => ({ ...f, start_date: e.target.value }))} />
+                      <Label className="text-xs font-semibold text-muted-foreground uppercase">Start Date</Label>
+                      <Input type="date" value={cycleForm.start_date} onChange={(e) => setCycleForm(f => ({ ...f, start_date: e.target.value }))} className="rounded-lg shadow-sm" />
                     </div>
                     <div className="space-y-2">
-                      <Label>End Date</Label>
-                      <Input type="date" value={cycleForm.end_date} onChange={(e) => setCycleForm(f => ({ ...f, end_date: e.target.value }))} />
+                      <Label className="text-xs font-semibold text-muted-foreground uppercase">End Date</Label>
+                      <Input type="date" value={cycleForm.end_date} onChange={(e) => setCycleForm(f => ({ ...f, end_date: e.target.value }))} className="rounded-lg shadow-sm" />
                     </div>
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button variant="outline" onClick={() => setCycleDialogOpen(false)}>Cancel</Button>
-                  <Button onClick={() => createCycleMutation.mutate()} disabled={createCycleMutation.isPending}>Create Cycle</Button>
+                  <Button variant="outline" onClick={() => setCycleDialogOpen(false)} className="rounded-lg">Cancel</Button>
+                  <Button onClick={() => createCycleMutation.mutate()} disabled={createCycleMutation.isPending} className="rounded-lg">Create Cycle</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
           )}
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="gap-2"><Plus className="h-4 w-4" /> New Objective</Button>
+              <Button className="flex-1 sm:flex-none gap-2 text-xs sm:text-sm h-9 px-3 rounded-xl"><Plus className="h-4 w-4" /> New Goal</Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-lg">
+            <DialogContent className="sm:max-w-lg rounded-2xl">
               <DialogHeader>
                 <DialogTitle>Create New Objective</DialogTitle>
                 <DialogDescription>Define a goal with measurable key results</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label>Objective Title</Label>
-                  <Input placeholder="e.g., Increase customer satisfaction" value={form.title} onChange={(e) => setForm(f => ({ ...f, title: e.target.value }))} />
+                  <Label className="text-xs font-semibold text-muted-foreground uppercase">Objective Title</Label>
+                  <Input placeholder="e.g., Increase customer satisfaction" value={form.title} onChange={(e) => setForm(f => ({ ...f, title: e.target.value }))} className="rounded-lg shadow-sm" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Description</Label>
-                  <Textarea placeholder="Describe the objective and key results..." rows={3} value={form.description} onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))} />
+                  <Label className="text-xs font-semibold text-muted-foreground uppercase">Description</Label>
+                  <Textarea placeholder="Describe the objective and key results..." rows={3} value={form.description} onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))} className="rounded-lg resize-none shadow-sm" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Due Date</Label>
-                  <Input type="date" value={form.due_date} onChange={(e) => setForm(f => ({ ...f, due_date: e.target.value }))} />
+                  <Label className="text-xs font-semibold text-muted-foreground uppercase">Due Date</Label>
+                  <Input type="date" value={form.due_date} onChange={(e) => setForm(f => ({ ...f, due_date: e.target.value }))} className="rounded-lg shadow-sm" />
                 </div>
+                
+                {/* Visual active cycles timeline helper */}
+                {activeCycles.length > 0 && (
+                  <div className="text-[11px] bg-primary/5 text-primary border border-primary/10 rounded-xl p-3 mt-1.5 space-y-1 shadow-sm">
+                    <span className="font-bold uppercase tracking-wider text-[10px]">Active Review Timelines:</span>
+                    <ul className="list-disc pl-4 space-y-0.5 font-medium">
+                      {activeCycles.map(cyc => (
+                        <li key={cyc.id}>
+                          "{cyc.name}": <span className="font-semibold">{cyc.start_date}</span> to <span className="font-semibold">{cyc.end_date}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-                <Button onClick={() => { if (!form.title.trim()) { toast.error('Title is required'); return; } createGoalMutation.mutate(form); }} disabled={createGoalMutation.isPending}>
+                <Button variant="outline" onClick={() => setDialogOpen(false)} className="rounded-lg">Cancel</Button>
+                <Button onClick={() => { if (!form.title.trim()) { toast.error('Title is required'); return; } createGoalMutation.mutate(form); }} disabled={createGoalMutation.isPending} className="rounded-lg">
                   {createGoalMutation.isPending ? 'Creating...' : 'Create Objective'}
                 </Button>
               </DialogFooter>
@@ -244,46 +356,46 @@ export default function Performance() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card><CardContent className="p-6">
-          <TrendingUp className="w-8 h-8 text-primary mb-4" />
-          <h3 className="text-sm text-muted-foreground mb-1 uppercase">Avg. Progress</h3>
-          <div className="text-4xl font-bold">{avgProgress}%</div>
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
+        <Card className="rounded-xl shadow-sm border-border/50 bg-card/25"><CardContent className="p-4 sm:p-6">
+          <TrendingUp className="w-6 h-6 sm:w-8 sm:h-8 text-primary mb-3 sm:mb-4" />
+          <h3 className="text-[10px] sm:text-xs text-muted-foreground mb-1 uppercase tracking-wider font-semibold">Avg Progress</h3>
+          <div className="text-2xl sm:text-4xl font-bold">{avgProgress}%</div>
         </CardContent></Card>
-        <Card><CardContent className="p-6">
-          <Target className="w-8 h-8 text-warning mb-4" />
-          <h3 className="text-sm text-muted-foreground mb-1 uppercase">Active Goals</h3>
-          <div className="text-4xl font-bold text-warning">{activeGoals.length}</div>
+        <Card className="rounded-xl shadow-sm border-border/50 bg-card/25"><CardContent className="p-4 sm:p-6">
+          <Target className="w-6 h-6 sm:w-8 sm:h-8 text-warning mb-3 sm:mb-4" />
+          <h3 className="text-[10px] sm:text-xs text-muted-foreground mb-1 uppercase tracking-wider font-semibold">Active Goals</h3>
+          <div className="text-2xl sm:text-4xl font-bold text-warning">{activeGoals.length}</div>
         </CardContent></Card>
-        <Card><CardContent className="p-6">
-          <Award className="w-8 h-8 text-success mb-4" />
-          <h3 className="text-sm text-muted-foreground mb-1 uppercase">Completed</h3>
-          <div className="text-4xl font-bold text-success">{completedGoals.length}</div>
+        <Card className="rounded-xl shadow-sm border-border/50 bg-card/25"><CardContent className="p-4 sm:p-6">
+          <Award className="w-6 h-6 sm:w-8 sm:h-8 text-success mb-3 sm:mb-4" />
+          <h3 className="text-[10px] sm:text-xs text-muted-foreground mb-1 uppercase tracking-wider font-semibold">Completed</h3>
+          <div className="text-2xl sm:text-4xl font-bold text-success">{completedGoals.length}</div>
         </CardContent></Card>
-        <Card><CardContent className="p-6">
-          <Zap className="w-8 h-8 text-info mb-4" />
-          <h3 className="text-sm text-muted-foreground mb-1 uppercase">Review Cycles</h3>
-          <div className="text-4xl font-bold text-info">{reviewCycles.length}</div>
+        <Card className="rounded-xl shadow-sm border-border/50 bg-card/25"><CardContent className="p-4 sm:p-6">
+          <Zap className="w-6 h-6 sm:w-8 sm:h-8 text-info mb-3 sm:mb-4" />
+          <h3 className="text-[10px] sm:text-xs text-muted-foreground mb-1 uppercase tracking-wider font-semibold">Cycles</h3>
+          <div className="text-2xl sm:text-4xl font-bold text-info">{reviewCycles.length}</div>
         </CardContent></Card>
       </div>
 
       {/* Review Cycles */}
       {reviewCycles.length > 0 && (
-        <Card>
-          <CardHeader className="border-b border-border/50 pb-4">
-            <CardTitle className="text-base flex items-center gap-2"><Zap className="w-4 h-4" /> Active Review Cycles</CardTitle>
+        <Card className="rounded-2xl border border-border/50 shadow-sm overflow-hidden">
+          <CardHeader className="border-b border-border/50 pb-4 bg-muted/5">
+            <CardTitle className="text-base flex items-center gap-2 font-bold"><Zap className="w-4 h-4 text-primary" /> Active Review Cycles</CardTitle>
           </CardHeader>
-          <CardContent className="pt-4">
-            <div className="space-y-2">
-              {reviewCycles.map((cycle: any) => (
-                <div key={cycle.id} className="flex items-center justify-between p-3 rounded border border-border/50 bg-background/50">
+          <CardContent className="pt-4 bg-card/10">
+            <div className="space-y-3">
+              {reviewCycles.map((cycle) => (
+                <div key={cycle.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl border border-border/50 bg-background/50 gap-3 shadow-sm hover:border-primary/20 transition-all">
                   <div>
-                    <p className="font-medium text-sm">{cycle.name}</p>
-                    <p className="text-xs text-muted-foreground">{cycle.start_date} → {cycle.end_date}</p>
+                    <p className="font-bold text-sm text-foreground">{cycle.name}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 font-medium">{cycle.start_date} → {cycle.end_date}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="capitalize text-[10px]">{cycle.type?.replace('_', ' ')}</Badge>
-                    <Badge variant="outline" className={cycle.status === 'active' ? 'border-success text-success bg-success/10' : 'border-muted text-muted-foreground'}>
+                  <div className="flex items-center gap-2 justify-end w-full sm:w-auto border-t border-border/10 pt-2 sm:pt-0 sm:border-none">
+                    <Badge variant="outline" className="capitalize text-[9px] tracking-tight rounded-full">{cycle.type?.replace('_', ' ')}</Badge>
+                    <Badge variant="outline" className={`text-[9px] rounded-full ${cycle.status === 'active' ? 'border-success text-success bg-success/10' : 'border-muted text-muted-foreground'}`}>
                       {cycle.status}
                     </Badge>
                   </div>
@@ -294,47 +406,77 @@ export default function Performance() {
         </Card>
       )}
 
-      <Card className="overflow-hidden">
-        <CardHeader>
-          <CardTitle>Current Objectives</CardTitle>
-          <CardDescription>Track progress on your goals</CardDescription>
+      <Card className="overflow-hidden rounded-2xl border border-border/50 shadow-sm">
+        <CardHeader className="bg-muted/5 border-b border-border/40 pb-4">
+          <CardTitle className="text-base font-bold">Current Objectives</CardTitle>
+          <CardDescription className="text-xs">Track progress on your goals</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4 pt-6 bg-card/10">
           {loadingGoals ? (
-            [1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full" />)
+            [1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full rounded-xl" />)
           ) : goals.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-8">
+            <div className="flex flex-col items-center gap-2 py-8 text-center">
               <Target className="h-10 w-10 text-muted-foreground/30" />
-              <p className="text-sm text-muted-foreground">No goals created yet</p>
-              <Button variant="outline" size="sm" onClick={() => setDialogOpen(true)}>Create Your First Goal</Button>
+              <p className="text-sm text-muted-foreground font-semibold">No goals created yet</p>
+              <Button variant="outline" size="sm" onClick={() => setDialogOpen(true)} className="rounded-lg mt-2">Create Your First Goal</Button>
             </div>
           ) : (
-            goals.map((goal: any) => (
-              <div key={goal.id} className="space-y-2 p-3 rounded-lg border border-border/50 bg-background/30 hover:bg-background/60 transition-colors">
-                <div className="flex justify-between items-center">
+            goals.map((goal) => (
+              <div key={goal.id} className="space-y-3 p-3.5 rounded-xl border border-border/50 bg-background/40 hover:bg-background/80 transition-colors shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
-                    <div className="font-medium">{goal.title}</div>
+                    <div className="font-bold text-foreground text-sm sm:text-base">{goal.title}</div>
                     {goal.employees && (
-                      <span className="text-xs text-muted-foreground">{goal.employees.first_name} {goal.employees.last_name}</span>
+                      <span className="text-xs text-muted-foreground mt-0.5 block font-medium">{goal.employees.first_name} {goal.employees.last_name}</span>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className={statusColor[goal.status] || ''}>
+                  <div className="flex items-center gap-2 justify-end w-full sm:w-auto border-t border-border/10 pt-2 sm:pt-0 sm:border-none">
+                    <Badge variant="outline" className={`text-[10px] capitalize rounded-full ${statusColor[goal.status] || ''}`}>
                       {goal.status?.replace('_', ' ')}
                     </Badge>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setUpdatingGoal(updatingGoal === goal.id ? null : goal.id)} aria-label="Update goal">
-                      <Pencil className="h-3.5 w-3.5" />
+                    <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10 hover:text-primary rounded-lg" onClick={() => setUpdatingGoal(updatingGoal === goal.id ? null : goal.id)} aria-label="Update goal">
+                      <Pencil className="h-4 w-4" />
                     </Button>
                     {isAdmin && (
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setFeedbackGoal(feedbackGoal === goal.id ? null : goal.id)} aria-label="Add feedback">
-                        <MessageSquare className="h-3.5 w-3.5" />
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 hover:bg-primary/10 hover:text-primary rounded-lg" 
+                        onClick={() => {
+                          if (feedbackGoal !== goal.id) {
+                            const existing = goal.key_results;
+                            if (existing && typeof existing === 'object' && 'comment' in existing) {
+                              setFeedback(prev => ({
+                                ...prev,
+                                [goal.id]: {
+                                  rating: existing.rating || 0,
+                                  comment: existing.comment || ''
+                                }
+                              }));
+                            } else {
+                              setFeedback(prev => ({
+                                ...prev,
+                                [goal.id]: {
+                                  rating: 0,
+                                  comment: ''
+                                }
+                              }));
+                            }
+                            setFeedbackGoal(goal.id);
+                          } else {
+                            setFeedbackGoal(null);
+                          }
+                        }} 
+                        aria-label="Add feedback"
+                      >
+                        <MessageSquare className="h-4 w-4" />
                       </Button>
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
                   <Progress value={goal.progress || 0} className="h-2" />
-                  <span className="text-sm text-muted-foreground w-12 text-right">{goal.progress || 0}%</span>
+                  <span className="text-xs sm:text-sm font-bold text-muted-foreground w-12 text-right">{goal.progress || 0}%</span>
                 </div>
                 {updatingGoal === goal.id && (
                   <div className="flex items-center gap-4 pt-2 border-t border-border/30">
@@ -352,12 +494,13 @@ export default function Performance() {
                 {feedbackGoal === goal.id && isAdmin && (
                   <div className="pt-3 mt-2 border-t border-border/30 space-y-3">
                     <h5 className="text-xs font-semibold uppercase text-muted-foreground flex items-center gap-1">
-                      <MessageSquare className="w-3 h-3" /> Manager Feedback
+                      <MessageSquare className="w-3 h-3 text-primary/70" /> Manager Feedback
                     </h5>
                     <div className="flex gap-1">
                       {[1, 2, 3, 4, 5].map(star => (
                         <button
                           key={star}
+                          type="button"
                           onClick={() => setFeedback(prev => ({ ...prev, [goal.id]: { ...prev[goal.id], rating: star, comment: prev[goal.id]?.comment || '' } }))}
                           className="focus:outline-none"
                         >
@@ -371,13 +514,39 @@ export default function Performance() {
                       rows={2}
                       value={feedback[goal.id]?.comment || ''}
                       onChange={(e) => setFeedback(prev => ({ ...prev, [goal.id]: { ...prev[goal.id], rating: prev[goal.id]?.rating || 0, comment: e.target.value } }))}
-                      className="text-sm"
+                      className="text-sm rounded-lg"
                     />
-                    <Button size="sm" onClick={() => saveFeedback(goal.id)}>Save Feedback</Button>
+                    <div className="flex gap-2">
+                      <Button size="sm" type="button" onClick={() => saveFeedback(goal.id)} disabled={saveFeedbackMutation.isPending} className="rounded-lg text-xs">
+                        {saveFeedbackMutation.isPending ? 'Saving...' : 'Save Feedback'}
+                      </Button>
+                      <Button size="sm" type="button" variant="outline" onClick={() => setFeedbackGoal(null)} className="rounded-lg text-xs">
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {/* Display Saved Feedback to everyone */}
+                {goal.key_results && typeof goal.key_results === 'object' && 'comment' in goal.key_results && (
+                  <div className="pt-3 mt-2 border-t border-border/20 bg-muted/20 p-3 rounded-lg space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h5 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                        <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" /> Manager Feedback
+                      </h5>
+                      <div className="flex gap-0.5">
+                        {[1, 2, 3, 4, 5].map(star => (
+                          <Star
+                            key={star}
+                            className={`w-3.5 h-3.5 ${((goal.key_results as { rating?: number }).rating || 0) >= star ? 'text-yellow-500 fill-yellow-500' : 'text-muted-foreground/20'}`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <p className="text-xs text-foreground italic">"{(goal.key_results as { comment?: string }).comment}"</p>
                   </div>
                 )}
                 {goal.due_date && (
-                  <p className="text-xs text-muted-foreground">Due: {goal.due_date}</p>
+                  <p className="text-xs text-muted-foreground font-semibold">Due: {goal.due_date}</p>
                 )}
               </div>
             ))

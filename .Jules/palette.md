@@ -12,3 +12,6 @@
 ## 2026-05-13 - Password Visibility Toggles
 **Learning:** While primary password fields often get visibility toggles during initial development, 'Confirm Password' fields and secondary auth flows (like Reset Password) are frequently missed, leading to frustrating blind-typing errors and friction.
 **Action:** Always verify that *all* password input variants within a form or flow include a show/hide toggle, not just the primary input.
+## 2026-05-15 - Password visibility on 'Confirm Password' fields
+**Learning:** Found that while main password fields often have visibility toggles, 'Confirm Password' fields are frequently overlooked. This inconsistency causes UX friction as users can't verify what they typed in the confirmation field, leading to potential blind typing errors.
+**Action:** Ensure all password input fields, including confirmation fields, have a consistent 'show/hide' visibility toggle.

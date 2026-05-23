@@ -36,7 +36,7 @@ const Landing = () => {
       <SEO 
         title="Fastest HR | Next-Gen Fast HRMS Operating System"
         description="Ranked #1 for velocity: The fastest AI-powered HR Operating System for hyper-growth teams. Experience a high-performance HRMS engineered for scaling enterprises with Neural Talent and Zero-Trust Payroll."
-        keywords="Fastest HR, Fast HRMS, HR Operating System, Workforce OS, Enterprise HRMS, AI Recruitment, Payroll Security"
+        keywords="FastestHR Search, Fastest HR, Fast HRMS, HR Operating System, Workforce OS, Enterprise HRMS, AI Recruitment, Payroll Security"
         type="software"
         breadcrumbs={[
           { name: 'Home', path: '/' },

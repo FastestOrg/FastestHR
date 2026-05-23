@@ -44,6 +44,8 @@ export default function Onboarding() {
   const [assignIdOpen, setAssignIdOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
+  const [rejectingDocId, setRejectingDocId] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
 
   // Fetch current employee context if user is an employee
   const { data: currentEmployee } = useQuery({
@@ -163,6 +165,25 @@ export default function Onboarding() {
     },
   });
 
+  const verifyDocMutation = useMutation({
+    mutationFn: async ({ submissionId, status }: { submissionId: string, status: string }) => {
+      const { error } = await supabase
+        .from('onboarding_document_submissions')
+        .update({ status })
+        .eq('id', submissionId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['onboarding-doc-submissions', selectedEmployee] });
+      toast.success('Document updated successfully');
+      setRejectingDocId(null);
+      setRejectionReason('');
+    },
+    onError: (err: any) => {
+      toast.error('Failed to update status: ' + err.message);
+    }
+  });
+
   // Helpers
   const recentHires = newHires.filter((e: any) => {
     if (!e.date_of_joining) return true;
@@ -213,37 +234,37 @@ export default function Onboarding() {
           <p className="text-muted-foreground mt-1">Digital onboarding workflow for new hires</p>
         </div>
         {isAdmin && (
-          <Button variant="outline" className="gap-2 border-primary/20 hover:bg-primary/5" onClick={() => setSettingsOpen(true)}>
+          <Button variant="outline" className="w-full sm:w-auto gap-2 border-primary/20 hover:bg-primary/5 h-9 text-xs sm:text-sm" onClick={() => setSettingsOpen(true)}>
             <Settings2 className="h-4 w-4" /> Onboarding Settings
           </Button>
         )}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card className="bg-gradient-to-br from-primary/5 to-transparent">
-          <CardContent className="p-6 flex items-center gap-4">
-            <UserPlus className="w-8 h-8 text-primary" />
+      <div className="flex overflow-x-auto gap-3 pb-2 scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-3 sm:gap-4">
+        <Card className="bg-gradient-to-br from-primary/5 to-transparent shrink-0 w-[180px] sm:w-auto">
+          <CardContent className="p-4 sm:p-6 flex items-center gap-3 sm:gap-4">
+            <UserPlus className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
             <div>
-              <p className="text-sm text-muted-foreground font-medium">Active Onboarding</p>
-              <p className="text-3xl font-bold">{recentHires.filter((e: any) => e.status === 'probation').length}</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground font-semibold uppercase tracking-wider">Active</p>
+              <p className="text-xl sm:text-3xl font-black">{recentHires.filter((e: any) => e.status === 'probation').length}</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-gradient-to-br from-success/5 to-transparent">
-          <CardContent className="p-6 flex items-center gap-4">
-            <CheckCircle2 className="w-8 h-8 text-success" />
+        <Card className="bg-gradient-to-br from-success/5 to-transparent shrink-0 w-[180px] sm:w-auto">
+          <CardContent className="p-4 sm:p-6 flex items-center gap-3 sm:gap-4">
+            <CheckCircle2 className="w-6 h-6 sm:w-8 sm:h-8 text-success" />
             <div>
-              <p className="text-sm text-muted-foreground font-medium">Invited to Portal</p>
-              <p className="text-3xl font-bold text-success">{recentHires.filter((e: any) => e.status === 'active').length}</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground font-semibold uppercase tracking-wider">Invited</p>
+              <p className="text-xl sm:text-3xl font-black text-success">{recentHires.filter((e: any) => e.status === 'active').length}</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-gradient-to-br from-warning/5 to-transparent">
-          <CardContent className="p-6 flex items-center gap-4">
-            <Circle className="w-8 h-8 text-warning" />
+        <Card className="bg-gradient-to-br from-warning/5 to-transparent shrink-0 w-[180px] sm:w-auto">
+          <CardContent className="p-4 sm:p-6 flex items-center gap-3 sm:gap-4">
+            <Circle className="w-6 h-6 sm:w-8 sm:h-8 text-warning" />
             <div>
-              <p className="text-sm text-muted-foreground font-medium">Actions Required</p>
-              <p className="text-3xl font-bold text-warning">{recentHires.filter((e: any) => !e.employee_code).length}</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground font-semibold uppercase tracking-wider">Pending</p>
+              <p className="text-xl sm:text-3xl font-black text-warning">{recentHires.filter((e: any) => !e.employee_code).length}</p>
             </div>
           </CardContent>
         </Card>
@@ -315,27 +336,27 @@ export default function Onboarding() {
           ) : (
             <>
               <Card>
-                <CardHeader className="pb-3 border-b border-border/50">
-                   <div className="flex items-center justify-between">
+                <CardHeader className="pb-4 border-b border-border/50">
+                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                      <div className="flex items-center gap-3">
                         <Avatar className="h-12 w-12 border-2 border-primary/20">
                             <AvatarImage src={selectedEmpData?.avatar_url || ''} />
                             <AvatarFallback>{selectedEmpData?.first_name?.[0]}</AvatarFallback>
                         </Avatar>
                         <div>
-                            <CardTitle className="text-xl">{selectedEmpData?.first_name} {selectedEmpData?.last_name}</CardTitle>
-                            <CardDescription>{selectedEmpData?.work_email}</CardDescription>
+                            <CardTitle className="text-lg sm:text-xl font-bold">{selectedEmpData?.first_name} {selectedEmpData?.last_name}</CardTitle>
+                            <CardDescription className="text-xs sm:text-sm">{selectedEmpData?.work_email}</CardDescription>
                         </div>
                      </div>
-                     <div className="flex gap-2">
+                     <div className="flex items-center gap-2 justify-end w-full sm:w-auto border-t border-border/10 pt-3 sm:pt-0 sm:border-none">
                         {!selectedEmpData?.employee_code && (
-                           <Button size="sm" className="gap-2" onClick={() => setAssignIdOpen(true)}>
-                             <Hash className="h-4 w-4" /> Assign ID
+                           <Button size="sm" className="flex-1 sm:flex-none gap-1.5 text-xs h-8 px-2.5" onClick={() => setAssignIdOpen(true)}>
+                             <Hash className="h-3.5 w-3.5" /> Assign ID
                            </Button>
                         )}
                         {selectedEmpData?.status === 'probation' && (
-                           <Button size="sm" variant="secondary" className="gap-2" onClick={() => setInviteOpen(true)}>
-                             <Mail className="h-4 w-4" /> Invite to Portal
+                           <Button size="sm" variant="secondary" className="flex-1 sm:flex-none gap-1.5 text-xs h-8 px-2.5" onClick={() => setInviteOpen(true)}>
+                             <Mail className="h-3.5 w-3.5" /> Invite
                            </Button>
                         )}
                      </div>

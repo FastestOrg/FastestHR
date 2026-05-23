@@ -223,14 +223,14 @@ export function TaskList() {
                 <div className="flex-1">
                   <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="h-12 bg-background border-primary/20 rounded-xl" />
                 </div>
-                <div className="flex flex-center items-center font-bold text-muted-foreground">-</div>
+                <div className="flex items-center justify-center font-bold text-muted-foreground">-</div>
                 <div className="flex-1">
                   <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="h-12 bg-background border-primary/20 rounded-xl" />
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Button onClick={() => addTaskMutation.mutate({ title: newTaskTitle, start: startTime, end: endTime })} disabled={!newTaskTitle} className="flex-1 h-12 rounded-xl">Add to Schedule</Button>
-                <Button variant="ghost" onClick={() => setIsAddingTask(false)} className="h-12 rounded-xl">Cancel</Button>
+              <div className="flex flex-col sm:flex-row gap-2 w-full md:col-span-1">
+                <Button onClick={() => addTaskMutation.mutate({ title: newTaskTitle, start: startTime, end: endTime })} disabled={!newTaskTitle} className="h-12 rounded-xl flex-1">Add to Schedule</Button>
+                <Button variant="ghost" onClick={() => setIsAddingTask(false)} className="h-12 rounded-xl w-full sm:w-auto">Cancel</Button>
               </div>
             </div>
           </CardContent>
@@ -252,41 +252,54 @@ export function TaskList() {
           </div>
         ) : (
           tasks?.map((task) => (
-            <div key={task.id} className="relative group pl-12 sm:pl-20 py-2">
-              {/* Timeline Connector */}
-              <div className="absolute left-6 sm:left-10 top-0 bottom-0 w-[2px] bg-border/50 group-last:bottom-auto group-last:h-12" />
-              <div className={`absolute left-4 sm:left-8 top-12 -translate-y-1/2 h-4 w-4 rounded-full border-2 bg-background z-10 transition-all ${runningTaskId === task.id ? 'border-primary ring-4 ring-primary/20' : 'border-border group-hover:border-primary/50'}`} />
+            <div key={task.id} className="relative group md:pl-20 py-2">
+              {/* Timeline Connector - visible on desktop only */}
+              <div className="hidden md:block absolute left-10 top-0 bottom-0 w-[2px] bg-border/50 group-last:bottom-auto group-last:h-12" />
+              <div className={`hidden md:block absolute left-8 top-12 -translate-y-1/2 h-4 w-4 rounded-full border-2 bg-background z-10 transition-all ${runningTaskId === task.id ? 'border-primary ring-4 ring-primary/20' : 'border-border group-hover:border-primary/50'}`} />
               
-              {/* Time Label */}
-              <div className="absolute left-0 top-11 -translate-y-1/2 w-12 sm:w-20 text-right pr-4 sm:pr-8 text-[10px] sm:text-xs font-bold uppercase tracking-tighter text-muted-foreground whitespace-nowrap">
+              {/* Time Label - visible on desktop only */}
+              <div className="hidden md:block absolute left-0 top-11 -translate-y-1/2 w-20 text-right pr-8 text-xs font-bold uppercase tracking-tighter text-muted-foreground whitespace-nowrap">
                 {formatScheduledTime(task.scheduled_start)}
               </div>
-
-              <Card className={`overflow-hidden transition-all duration-300 border-none shadow-sm hover:shadow-xl ${task.status === 'completed' ? 'opacity-60 bg-secondary/10' : 'bg-card'}`}>
+ 
+              <Card className={`overflow-hidden transition-all duration-300 border border-border/10 md:border-none shadow-sm hover:shadow-xl ${task.status === 'completed' ? 'opacity-60 bg-secondary/10' : 'bg-card'}`}>
                 <CardContent className="p-4 sm:p-6">
+                  {/* Mobile Time Badge - hidden on desktop */}
+                  <div className="md:hidden flex flex-wrap items-center gap-2 mb-3">
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary px-2.5 py-1 rounded-full border border-primary/20">
+                      {formatScheduledTime(task.scheduled_start)} - {formatScheduledTime(task.scheduled_end)}
+                    </span>
+                    {task.task_time_logs?.length > 0 && (
+                      <span className="text-[10px] font-bold uppercase tracking-wider bg-green-500/10 text-green-500 px-2.5 py-1 rounded-full border border-green-500/20 flex items-center gap-1">
+                        <Timer className="h-3 w-3" />
+                        {formatTime(getTaskDuration(task))}
+                      </span>
+                    )}
+                  </div>
+
                   <div className="flex flex-col md:flex-row md:items-center gap-6">
                     <div className="flex-1 space-y-2">
                       <div className="flex items-center gap-2">
-                        <h3 className={`font-bold text-xl transition-all ${task.status === 'completed' ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                        <h3 className={`font-bold text-lg sm:text-xl transition-all ${task.status === 'completed' ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
                           {task.title}
                         </h3>
                         {task.status === 'completed' && <CheckCircle className="h-5 w-5 text-green-500" />}
                       </div>
-                      <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                      <div className="hidden md:flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
                         <div className="flex items-center gap-1.5 bg-secondary/30 px-2.5 py-1 rounded-lg">
                           <Clock className="h-3.5 w-3.5" />
-                          <span className="font-semibold">{formatScheduledTime(task.scheduled_start)} - {formatScheduledTime(task.scheduled_end)}</span>
+                          <span className="font-semibold text-xs sm:text-sm">{formatScheduledTime(task.scheduled_start)} - {formatScheduledTime(task.scheduled_end)}</span>
                         </div>
                         {task.task_time_logs?.length > 0 && (
                           <div className="flex items-center gap-1.5 text-primary font-bold">
                             <Timer className="h-3.5 w-3.5" />
-                            <span>{formatTime(getTaskDuration(task))} tracked</span>
+                            <span className="text-xs sm:text-sm">{formatTime(getTaskDuration(task))} tracked</span>
                           </div>
                         )}
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-2 mt-2 md:mt-0">
+ 
+                    <div className="flex items-center gap-2 mt-2 md:mt-0 w-full md:w-auto">
                       {runningTaskId === task.id ? (
                         <Button 
                           onClick={() => stopTimerMutation.mutate(task.id)}

@@ -71,24 +71,24 @@ export default function Employees() {
         </Button>
       </div>
 
-      <div className="flex gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search employees..."
-            className="pl-9 bg-background/50 backdrop-blur-sm"
+            className="pl-9 bg-background/50 backdrop-blur-sm w-full"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <div className="flex rounded-md border border-border/50 bg-background/50 p-1 backdrop-blur-sm">
-          <Button variant={view === 'grid' ? 'secondary' : 'ghost'} size="icon" onClick={() => setView('grid')} title="Grid View" aria-label="Grid view">
+        <div className="flex justify-between sm:justify-start rounded-md border border-border/50 bg-background/50 p-1 backdrop-blur-sm">
+          <Button variant={view === 'grid' ? 'secondary' : 'ghost'} size="icon" onClick={() => setView('grid')} title="Grid View" aria-label="Grid view" className="flex-1 sm:flex-none">
             <Grid3X3 className="h-4 w-4" />
           </Button>
-          <Button variant={view === 'list' ? 'secondary' : 'ghost'} size="icon" onClick={() => setView('list')} title="List View" aria-label="List view">
+          <Button variant={view === 'list' ? 'secondary' : 'ghost'} size="icon" onClick={() => setView('list')} title="List View" aria-label="List view" className="flex-1 sm:flex-none">
             <List className="h-4 w-4" />
           </Button>
-          <Button variant={view === 'org' ? 'secondary' : 'ghost'} size="icon" onClick={() => setView('org')} title="Hierarchy View" aria-label="Hierarchy view">
+          <Button variant={view === 'org' ? 'secondary' : 'ghost'} size="icon" onClick={() => setView('org')} title="Hierarchy View" aria-label="Hierarchy view" className="flex-1 sm:flex-none">
             <Network className="h-4 w-4" />
           </Button>
         </div>
@@ -164,7 +164,14 @@ export default function Employees() {
           </div>
         </Card>
       ) : (
-        <OrgChartPro employees={employees} />
+        <div className="space-y-2">
+          <p className="text-[10px] text-muted-foreground md:hidden text-center italic">✦ Swipe / drag to explore the organization chart</p>
+          <div className="w-full overflow-x-auto pb-4 scrollbar-hide border border-border/40 rounded-xl bg-background/20 p-2">
+            <div className="min-w-[640px]">
+              <OrgChartPro employees={employees} />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
