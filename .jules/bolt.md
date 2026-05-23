@@ -28,6 +28,13 @@
 ## 2024-05-18 - Unnecessary API calls due to missing input debouncing
 **Learning:** Raw input search values used directly inside React Query `queryKey` without debouncing can trigger excessive network and database calls (one per keystroke) leading to significant overhead.
 **Action:** Always wrap user text input state with `useDebounce` and use the debounced value in the query dependencies instead of the raw input.
+## 2024-12-05 - Optimize O(N) includes to O(1) Set in filters
+**Learning:** Using `Array.includes()` inside an `Array.filter()` callback creates an O(N*M) nested loop pattern, which becomes a performance bottleneck as the filtered array and the lookup array grow in size.
+**Action:** When filtering an array based on the absence or presence of items in another array, always convert the lookup array into a `Set` before the loop, and use `Set.has()` instead of `Array.includes()` for O(1) lookups.
+
+## 2024-12-05 - Hoist String Methods outside Array Filtering Loops
+**Learning:** Calling string manipulation methods like `.toLowerCase()` on an unchanging search parameter directly inside an `Array.filter()` callback causes the same operation to be redundantly executed for every item in the array, wasting CPU cycles and generating excessive garbage collection overhead.
+**Action:** Always extract invariant computations, such as `search.toLowerCase()`, into a constant variable outside the loop before starting the array iteration or filtering.
 
 ## 2024-12-05 - Batching sequential Database Queries inside mapping loops
 **Learning:** Resolving N+1 issues when inserting/syncing tasks requires extracting keys, issuing a single `.in()` query, then running local filters to identify missing rows, and finally issuing a single bulk `.insert(array)`. When comparing timestamps retrieved from Supabase with locally constructed ISO strings, direct string comparison can fail due to time zone representation differences (`+00:00` vs `Z`).
