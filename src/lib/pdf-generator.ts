@@ -20,6 +20,10 @@ interface GenerateOfferParams extends GeneratePDFParams {
   candidateId: string;
   offerLink?: string;
   compensationStructure?: CompensationStructure | null;
+  status?: string;
+  signedAt?: string;
+  signingIp?: string;
+  signingUserAgent?: string;
 }
 
 interface GeneratePDFParams {
@@ -253,7 +257,41 @@ async function generateAndUploadPDF(
   // For SendDesk, variables are usually already replaced before calling this, 
   // but we support it for consistency.
   const vars = buildVariableMap(params);
-  const finalHtml = substituteVariables(htmlContent, vars);
+  let finalHtml = substituteVariables(htmlContent, vars);
+
+  // Append Certificate of Digital Signature if offer is signed
+  if ((params as any).status === 'signed') {
+    const auditBlock = `
+      <div style="margin-top: 50px; padding: 20px; border: 2px dashed #10b981; border-radius: 8px; background-color: #f0fdf4; font-family: sans-serif; page-break-inside: avoid;">
+        <h3 style="margin: 0 0 10px 0; color: #166534; font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+          ✓ Secure Digital Signature Certificate
+        </h3>
+        <table style="width: 100%; border-collapse: collapse; margin: 0; font-size: 11px;">
+          <tr>
+            <td style="padding: 4px 0; color: #64748b; font-weight: 500; width: 140px; border: none;">Candidate Name:</td>
+            <td style="padding: 4px 0; color: #0f172a; font-weight: 600; border: none;">${escapeHtml((params as any).candidateName || '')}</td>
+          </tr>
+          <tr>
+            <td style="padding: 4px 0; color: #64748b; font-weight: 500; border: none;">IP Address:</td>
+            <td style="padding: 4px 0; color: #0f172a; font-family: monospace; border: none;">${escapeHtml((params as any).signingIp || 'N/A')}</td>
+          </tr>
+          <tr>
+            <td style="padding: 4px 0; color: #64748b; font-weight: 500; border: none;">Timestamp (UTC):</td>
+            <td style="padding: 4px 0; color: #0f172a; border: none;">${(params as any).signedAt ? new Date((params as any).signedAt).toUTCString() : 'N/A'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 4px 0; color: #64748b; font-weight: 500; border: none;">User Agent:</td>
+            <td style="padding: 4px 0; color: #64748b; font-size: 10px; line-height: 1.2; border: none;">${escapeHtml((params as any).signingUserAgent || 'N/A')}</td>
+          </tr>
+          <tr>
+            <td style="padding: 4px 0; color: #64748b; font-weight: 500; border: none;">Security Method:</td>
+            <td style="padding: 4px 0; color: #166534; font-weight: 600; border: none;">Double-Factor Email OTP Challenge Verified</td>
+          </tr>
+        </table>
+      </div>
+    `;
+    finalHtml = finalHtml + auditBlock;
+  }
 
   // 2. Build the source element
   const pdfElement = isPredefinedHtml
@@ -358,4 +396,481 @@ export function replaceHtmlVariables(
 ): string {
   const vars = buildVariableMap(params);
   return substituteVariables(htmlContent, vars);
+}
+
+interface GeneratePayslipPDFParams {
+  companyName: string;
+  employeeName: string;
+  employeeEmail: string;
+  employeeCode?: string;
+  department?: string;
+  designation?: string;
+  periodStart: string;
+  periodEnd: string;
+  slip: any;
+  currency?: string;
+}
+
+export async function generateAndDownloadPayslipPDF(params: GeneratePayslipPDFParams): Promise<void> {
+  const {
+    companyName,
+    employeeName,
+    employeeEmail,
+    employeeCode,
+    department,
+    designation,
+    periodStart,
+    periodEnd,
+    slip,
+    currency = 'USD'
+  } = params;
+
+  // 1. If pdf_url is already cached in the database, fetch signed URL and trigger download
+  if (slip?.pdf_url) {
+    try {
+      const { data, error } = await supabase.storage
+        .from('payslips')
+        .createSignedUrl(slip.pdf_url, 60);
+      if (!error && data?.signedUrl) {
+        const a = document.createElement('a');
+        a.href = data.signedUrl;
+        a.target = '_blank';
+        a.download = `Payslip_${employeeName.replace(/\s+/g, '_')}_${periodStart}_to_${periodEnd}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        return;
+      } else {
+        console.warn("Failed to get signed URL for cached payslip, regenerating...", error);
+      }
+    } catch (err) {
+      console.warn("Error retrieving cached payslip PDF, regenerating...", err);
+    }
+  }
+
+  function formatCurrency(amount: number, curr: string = 'USD') {
+    try {
+      return new Intl.NumberFormat(curr === 'INR' ? 'en-IN' : 'en-US', {
+        style: 'currency',
+        currency: curr,
+      }).format(amount);
+    } catch (e) {
+      return `${curr} ${amount.toFixed(2)}`;
+    }
+  }
+
+  function convertNumberToWords(amount: number, curr: string = 'USD'): string {
+    const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+    const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+    
+    function convertLessThanThousand(num: number): string {
+      if (num === 0) return '';
+      let result = '';
+      if (num >= 100) {
+        result += ones[Math.floor(num / 100)] + ' Hundred ';
+        num %= 100;
+      }
+      if (num >= 20) {
+        result += tens[Math.floor(num / 10)] + ' ';
+        num %= 10;
+      }
+      if (num > 0) {
+        result += ones[num] + ' ';
+      }
+      return result.trim();
+    }
+
+    const integerPart = Math.floor(amount);
+    const decimalPart = Math.round((amount - integerPart) * 100);
+
+    if (integerPart === 0 && decimalPart === 0) {
+      return 'Zero';
+    }
+
+    let words = '';
+    let temp = integerPart;
+
+    const units = ['', 'Thousand', 'Million', 'Billion'];
+    let unitIndex = 0;
+
+    while (temp > 0) {
+      const chunk = temp % 1000;
+      if (chunk > 0) {
+        const chunkWords = convertLessThanThousand(chunk);
+        words = chunkWords + ' ' + units[unitIndex] + ' ' + words;
+      }
+      temp = Math.floor(temp / 1000);
+      unitIndex++;
+    }
+
+    words = words.trim();
+    if (curr === 'INR') {
+      words = words + ' Rupees';
+      if (decimalPart > 0) {
+        words += ' and ' + convertLessThanThousand(decimalPart) + ' Paisa';
+      }
+      words += ' Only';
+    } else if (curr === 'USD') {
+      words = words + ' Dollars';
+      if (decimalPart > 0) {
+        words += ' and ' + convertLessThanThousand(decimalPart) + ' Cents';
+      }
+      words += ' Only';
+    } else if (curr === 'EUR') {
+      words = words + ' Euros';
+      if (decimalPart > 0) {
+        words += ' and ' + convertLessThanThousand(decimalPart) + ' Cents';
+      }
+      words += ' Only';
+    } else if (curr === 'GBP') {
+      words = words + ' Pounds';
+      if (decimalPart > 0) {
+        words += ' and ' + convertLessThanThousand(decimalPart) + ' Pence';
+      }
+      words += ' Only';
+    } else if (curr === 'AED') {
+      words = words + ' Dirhams';
+      if (decimalPart > 0) {
+        words += ' and ' + convertLessThanThousand(decimalPart) + ' Fils';
+      }
+      words += ' Only';
+    } else if (curr === 'SAR') {
+      words = words + ' Riyals';
+      if (decimalPart > 0) {
+        words += ' and ' + convertLessThanThousand(decimalPart) + ' Halalas';
+      }
+      words += ' Only';
+    } else {
+      words = words + ' ' + curr;
+      if (decimalPart > 0) {
+        words += ' and ' + convertLessThanThousand(decimalPart) + ' Cents';
+      }
+      words += ' Only';
+    }
+    return words;
+  }
+
+  const earningsList: { name: string; amount: number }[] = [];
+  const deductionsList: { name: string; amount: number }[] = [];
+
+  const jurisdiction = slip.breakdown?.jurisdiction || 'USA';
+  const overtimePayout = slip.breakdown?.overtime_payout || 0;
+  const overtimeHours = slip.breakdown?.overtime_hours || 0;
+  const overtimeMultiplier = slip.breakdown?.overtime_multiplier || 1.5;
+  const attendancePenalty = slip.breakdown?.attendance_penalty || 0;
+  const lateCount = slip.breakdown?.late_count || 0;
+
+  // regular base salary excludes overtime payout
+  const gross = slip.gross_salary || 0;
+  const regularGross = Math.max(0, gross - overtimePayout);
+  const totalDed = slip.total_deductions || 0;
+
+  // Distribute earnings
+  if (jurisdiction === 'IND') {
+    const basic = Math.round(regularGross * 0.50 * 100) / 100;
+    const hra = Math.round(regularGross * 0.30 * 100) / 100;
+    const da = Math.round(regularGross * 0.10 * 100) / 100;
+    const special = Math.round((regularGross - basic - hra - da) * 100) / 100;
+
+    earningsList.push({ name: 'Basic Salary', amount: basic });
+    earningsList.push({ name: 'House Rent Allowance (HRA)', amount: hra });
+    earningsList.push({ name: 'Dearness Allowance (DA)', amount: da });
+    if (special > 0) {
+      earningsList.push({ name: 'Special Allowance', amount: special });
+    }
+  } else {
+    const basic = Math.round(regularGross * 0.70 * 100) / 100;
+    const special = Math.round((regularGross - basic) * 100) / 100;
+
+    earningsList.push({ name: 'Basic Pay', amount: basic });
+    if (special > 0) {
+      earningsList.push({ name: 'Special Allowance', amount: special });
+    }
+  }
+
+  // Append Overtime Pay if present
+  if (overtimePayout > 0) {
+    earningsList.push({ name: `Overtime Pay (${overtimeHours} hrs at ${overtimeMultiplier}x)`, amount: overtimePayout });
+  }
+
+  // Distribute deductions
+  const taxDetail = slip.breakdown?.details || {};
+  if (jurisdiction === 'IND') {
+    const taxMonthly = slip.breakdown?.income_tax_monthly || 0;
+    const epfMonthly = taxDetail.epfMonthly || 0;
+    
+    if (taxMonthly > 0) {
+      deductionsList.push({ name: 'Income Tax (TDS)', amount: taxMonthly });
+    }
+    if (epfMonthly > 0) {
+      deductionsList.push({ name: 'Employee Provident Fund (EPF)', amount: epfMonthly });
+    }
+
+    // Append Attendance Penalty if present
+    if (attendancePenalty > 0) {
+      deductionsList.push({ name: `Late-in Penalty (${lateCount} Late In)`, amount: attendancePenalty });
+    }
+
+    const calculatedDed = taxMonthly + epfMonthly + attendancePenalty;
+    const otherDed = Math.round((totalDed - calculatedDed) * 100) / 100;
+    if (otherDed > 0) {
+      deductionsList.push({ name: 'Other Deductions / LOP Adjustment', amount: otherDed });
+    } else if (otherDed < 0) {
+      if (deductionsList.length > 0) {
+        deductionsList[deductionsList.length - 1].amount = Math.round((deductionsList[deductionsList.length - 1].amount + otherDed) * 100) / 100;
+      }
+    }
+  } else {
+    const taxMonthly = slip.breakdown?.income_tax_monthly || 0;
+    const ssMonthly = taxDetail.socialSecurityMonthly || 0;
+    const medicareMonthly = taxDetail.medicareMonthly || 0;
+
+    if (taxMonthly > 0) {
+      deductionsList.push({ name: 'Federal Income Tax', amount: taxMonthly });
+    }
+    if (ssMonthly > 0) {
+      deductionsList.push({ name: 'Social Security Tax', amount: ssMonthly });
+    }
+    if (medicareMonthly > 0) {
+      deductionsList.push({ name: 'Medicare Tax', amount: medicareMonthly });
+    }
+
+    // Append Attendance Penalty if present
+    if (attendancePenalty > 0) {
+      deductionsList.push({ name: `Late-in Penalty (${lateCount} Late In)`, amount: attendancePenalty });
+    }
+
+    const calculatedDed = taxMonthly + ssMonthly + medicareMonthly + attendancePenalty;
+    const otherDed = Math.round((totalDed - calculatedDed) * 100) / 100;
+    if (otherDed > 0) {
+      deductionsList.push({ name: 'Other Deductions / LOP Adjustment', amount: otherDed });
+    } else if (otherDed < 0) {
+      if (deductionsList.length > 0) {
+        deductionsList[deductionsList.length - 1].amount = Math.round((deductionsList[deductionsList.length - 1].amount + otherDed) * 100) / 100;
+      }
+    }
+  }
+
+  if (deductionsList.length === 0 && totalDed > 0) {
+    deductionsList.push({ name: 'Statutory Deductions', amount: totalDed });
+  }
+
+  const amountInWords = convertNumberToWords(slip.net_salary || 0, currency);
+
+  const container = document.createElement('div');
+  container.style.cssText = 'width: 210mm; padding: 20px; background: white; margin: 0; box-sizing: border-box; font-family: sans-serif;';
+  
+  container.innerHTML = `
+    <div style="padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+      <!-- Header -->
+      <div style="display: flex; justify-content: space-between; border-bottom: 2px solid #3b82f6; padding-bottom: 12px; margin-bottom: 15px;">
+        <div>
+          <h1 style="margin: 0; font-size: 20px; font-weight: 800; color: #1e3a8a;">${escapeHtml(companyName)}</h1>
+          <p style="margin: 2px 0 0 0; font-size: 11px; color: #64748b; font-weight: 500;">Official Payslip Document</p>
+        </div>
+        <div style="text-align: right;">
+          <h2 style="margin: 0; font-size: 18px; font-weight: 700; color: #0f172a;">PAYSLIP</h2>
+          <p style="margin: 2px 0 0 0; font-size: 11px; color: #3b82f6; font-weight: 600;">${escapeHtml(periodStart)} — ${escapeHtml(periodEnd)}</p>
+        </div>
+      </div>
+
+      <!-- Employee details -->
+      <div style="display: flex; gap: 20px; background-color: #f8fafc; padding: 12px; border-radius: 6px; margin-bottom: 15px; border: 1px solid #f1f5f9; font-size: 12px;">
+        <div style="flex: 1;">
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr style="height: 20px;">
+              <td style="color: #64748b; font-weight: 500; width: 110px;">Employee Name:</td>
+              <td style="color: #0f172a; font-weight: 600;">${escapeHtml(employeeName)}</td>
+            </tr>
+            <tr style="height: 20px;">
+              <td style="color: #64748b; font-weight: 500;">Email Address:</td>
+              <td style="color: #0f172a;">${escapeHtml(employeeEmail)}</td>
+            </tr>
+            ${employeeCode ? `
+            <tr style="height: 20px;">
+              <td style="color: #64748b; font-weight: 500;">Employee ID:</td>
+              <td style="color: #0f172a; font-weight: 600;">${escapeHtml(employeeCode)}</td>
+            </tr>` : ''}
+            ${department ? `
+            <tr style="height: 20px;">
+              <td style="color: #64748b; font-weight: 500;">Department:</td>
+              <td style="color: #0f172a;">${escapeHtml(department)}</td>
+            </tr>` : ''}
+          </table>
+        </div>
+        <div style="flex: 1;">
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr style="height: 20px;">
+              <td style="color: #64748b; font-weight: 500; width: 110px;">Designation:</td>
+              <td style="color: #0f172a; font-weight: 600;">${escapeHtml(designation || 'Staff')}</td>
+            </tr>
+            <tr style="height: 20px;">
+              <td style="color: #64748b; font-weight: 500;">Tax Jurisdiction:</td>
+              <td style="color: #0f172a; font-weight: 600;">${escapeHtml(jurisdiction)}</td>
+            </tr>
+            <tr style="height: 20px;">
+              <td style="color: #64748b; font-weight: 500;">Working Days:</td>
+              <td style="color: #0f172a;">${slip.working_days || 0}</td>
+            </tr>
+            <tr style="height: 20px;">
+              <td style="color: #64748b; font-weight: 500;">Paid / LOP Days:</td>
+              <td style="color: #0f172a;"><span style="color: #10b981; font-weight: 600;">${slip.paid_days || 0} Paid</span> / <span style="color: #ef4444; font-weight: 600;">${slip.lop_days || 0} LOP</span></td>
+            </tr>
+          </table>
+        </div>
+      </div>
+
+      <!-- Earnings & Deductions Tables -->
+      <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+        <!-- Earnings -->
+        <div style="flex: 1; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden;">
+          <div style="background-color: #eff6ff; padding: 8px 12px; border-bottom: 1px solid #e2e8f0;">
+            <h3 style="margin: 0; font-size: 11px; font-weight: 700; color: #1e40af; letter-spacing: 0.05em; text-transform: uppercase;">Earnings</h3>
+          </div>
+          <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;">
+            ${earningsList.map(item => `
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 8px 12px; color: #475569; font-weight: 500;">${escapeHtml(item.name)}</td>
+                <td style="padding: 8px 12px; text-align: right; color: #0f172a; font-weight: 600;">${formatCurrency(item.amount, currency)}</td>
+              </tr>
+            `).join('')}
+            <tr style="background-color: #f8fafc; font-weight: bold; border-top: 1px solid #e2e8f0;">
+              <td style="padding: 10px 12px; color: #1e3a8a; font-weight: 700;">Total Earnings (A)</td>
+              <td style="padding: 10px 12px; text-align: right; color: #1e3a8a; font-weight: 700;">${formatCurrency(slip.gross_salary || 0, currency)}</td>
+            </tr>
+          </table>
+        </div>
+
+        <!-- Deductions -->
+        <div style="flex: 1; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden;">
+          <div style="background-color: #fff1f2; padding: 8px 12px; border-bottom: 1px solid #e2e8f0;">
+            <h3 style="margin: 0; font-size: 11px; font-weight: 700; color: #9f1239; letter-spacing: 0.05em; text-transform: uppercase;">Deductions</h3>
+          </div>
+          <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;">
+            ${deductionsList.length === 0 ? `
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 8px 12px; color: #94a3b8; font-style: italic;">No deductions</td>
+                <td style="padding: 8px 12px; text-align: right; color: #94a3b8; font-style: italic;">${formatCurrency(0, currency)}</td>
+              </tr>
+            ` : deductionsList.map(item => `
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 8px 12px; color: #475569; font-weight: 500;">${escapeHtml(item.name)}</td>
+                <td style="padding: 8px 12px; text-align: right; color: #0f172a; font-weight: 600;">${formatCurrency(item.amount, currency)}</td>
+              </tr>
+            `).join('')}
+            <tr style="background-color: #f8fafc; font-weight: bold; border-top: 1px solid #e2e8f0;">
+              <td style="padding: 10px 12px; color: #9f1239; font-weight: 700;">Total Deductions (B)</td>
+              <td style="padding: 10px 12px; text-align: right; color: #9f1239; font-weight: 700;">${formatCurrency(slip.total_deductions || 0, currency)}</td>
+            </tr>
+          </table>
+        </div>
+      </div>
+
+      <!-- Summary -->
+      <div style="background-color: #f0fdf4; border: 1.5px solid #bbf7d0; border-radius: 6px; padding: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <div>
+          <h3 style="margin: 0; font-size: 11px; font-weight: 700; color: #166534; text-transform: uppercase; letter-spacing: 0.05em;">Net Pay Take-Home (A - B)</h3>
+          <p style="margin: 3px 0 0 0; font-size: 10px; color: #15803d; font-style: italic; font-weight: 500;">Amount in words: ${amountInWords}</p>
+        </div>
+        <div style="font-size: 18px; font-weight: 800; color: #166534;">
+          ${formatCurrency(slip.net_salary || 0, currency)}
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div style="border-top: 1px solid #e2e8f0; padding-top: 12px; text-align: center; font-size: 10px; color: #94a3b8; font-weight: 500;">
+        <p style="margin: 0 0 2px 0;">This is a system generated payslip. No physical signature is required.</p>
+        <p style="margin: 0;">&copy; ${new Date().getFullYear()} ${escapeHtml(companyName)}. All rights reserved.</p>
+      </div>
+    </div>
+  `;
+
+  const opt = {
+    margin: [0, 0, 0, 0] as [number, number, number, number],
+    filename: `Payslip_${employeeName.replace(/\s+/g, '_')}_${periodStart}_to_${periodEnd}.pdf`,
+    image: { type: 'jpeg' as const, quality: 0.98 },
+    html2canvas: { 
+      scale: 2, 
+      useCORS: true,
+      windowWidth: 794 
+    },
+    jsPDF: { unit: 'px' as const, format: [794, 1123] as [number, number], orientation: 'portrait' as const }
+  };
+
+  const originalOverflow = document.body.style.overflow;
+  let pdfBlob: Blob | null = null;
+  try {
+    document.body.style.overflow = 'hidden';
+    container.style.position = 'absolute';
+    container.style.top = '-9999px';
+    container.style.left = '-9999px';
+    container.style.visibility = 'hidden';
+    document.body.appendChild(container);
+
+    pdfBlob = await html2pdf().set(opt).from(container).output('blob');
+  } finally {
+    document.body.style.overflow = originalOverflow;
+    if (document.body.contains(container)) {
+      document.body.removeChild(container);
+    }
+  }
+
+  if (!pdfBlob) {
+    throw new Error("Failed to generate PDF Blob");
+  }
+
+  // 3. Upload to secure bucket if we have a valid slip and employee/company IDs
+  if (slip?.id && slip?.company_id && slip?.employee_id) {
+    const fileExtension = 'pdf';
+    const uniqueId = Date.now();
+    const fileName = `${slip.company_id}/${slip.employee_id}/Payslip_${periodStart}_to_${periodEnd}_${uniqueId}.${fileExtension}`;
+    
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('payslips')
+      .upload(fileName, pdfBlob, {
+        contentType: 'application/pdf',
+        upsert: true,
+      });
+
+    if (uploadError) {
+      throw new Error(`Failed to upload payslip PDF: ${uploadError.message}`);
+    }
+
+    // Update the payslip record with the path
+    const { error: updateError } = await supabase
+      .from('payslips')
+      .update({ pdf_url: uploadData.path })
+      .eq('id', slip.id);
+
+    if (updateError) {
+      console.error("Failed to update payslip with pdf_url:", updateError);
+    }
+
+    // Get signed URL to trigger download
+    const { data: signedData, error: signedError } = await supabase.storage
+      .from('payslips')
+      .createSignedUrl(uploadData.path, 60);
+
+    if (signedError || !signedData?.signedUrl) {
+      throw new Error(`Failed to create signed URL for uploaded payslip: ${signedError?.message || 'unknown error'}`);
+    }
+
+    const a = document.createElement('a');
+    a.href = signedData.signedUrl;
+    a.target = '_blank';
+    a.download = `Payslip_${employeeName.replace(/\s+/g, '_')}_${periodStart}_to_${periodEnd}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } else {
+    // Fallback: trigger standard browser download if no DB record matches
+    const url = URL.createObjectURL(pdfBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Payslip_${employeeName.replace(/\s+/g, '_')}_${periodStart}_to_${periodEnd}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 }

@@ -71,17 +71,17 @@ Build ALL of the following:
   [x] RBAC permission matrix UI (Settings)
   [x] Role-specific dashboards with real charts and live data
   [x] User-friendly, responsive UI for all pages
-  [ ] All CRUD operations backend implementation mapping / edge cases
-  [ ] File upload functionality (S3/R2 compatible)
-  [ ] PDF generation for payslips, letters, and certificates
-  [ ] Email notification system with branded templates
-  [ ] Real-time notifications (Socket.io / Supabase Realtime)
+  [x] All CRUD operations backend implementation mapping / edge cases
+  [x] File upload functionality (S3/R2 compatible)
+  [x] PDF generation for payslips, letters, and certificates
+  [x] Email notification system with branded templates
+  [x] Real-time notifications (Socket.io / Supabase Realtime)
   [x] Global search (Cmd+K UI Shell)
-  [ ] Data export (CSV + PDF) on all reports functionality
+  [x] Data export (CSV + PDF) on all reports functionality
   [x] Dark mode support
   [x] Mobile-responsive design on all pages
   [ ] PWA manifest + service worker
-  [ ] API documentation (Swagger)
+  [x] API documentation (Swagger / Premium Dev Portal)
   [ ] Docker Compose for local development (if not using Supabase cloud)
   [ ] Seed file with realistic dummy data for demo
-  [ ] README with setup instructions
+  [x] README with setup instructions

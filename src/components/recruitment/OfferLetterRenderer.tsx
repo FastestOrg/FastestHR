@@ -1,5 +1,6 @@
 import { useMemo, useRef } from 'react';
 import DOMPurify from 'dompurify';
+import { substituteVariables } from '@/lib/template-utils';
 
 interface OfferLetterRendererProps {
   htmlContent: string;
@@ -20,12 +21,7 @@ export function OfferLetterRenderer({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const finalHtml = useMemo(() => {
-    let content = htmlContent;
-    Object.entries(variables).forEach(([key, value]) => {
-      // Support both {{Key}} and {{key}} formats
-      const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'gi');
-      content = content.replace(regex, () => value);
-    });
+    let content = substituteVariables(htmlContent, variables);
     // Sanitize the HTML to prevent XSS vulnerabilities while allowing custom styles
     return DOMPurify.sanitize(content, {
       ADD_TAGS: ['style'],

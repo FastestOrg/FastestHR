@@ -116,12 +116,11 @@ export function RoleUsers({ roleId, companyId }: RoleUsersProps) {
     const assignedUserIds = new Set(assignedUsers.map((u: any) => u.user_id));
     const searchLower = search.toLowerCase();
 
-    return allProfiles
-      .filter((p: any) => !assignedUserIds.has(p.id))
-      .filter((p: any) => {
-        if (!searchLower) return true;
-        return p.full_name?.toLowerCase().includes(searchLower);
-      });
+    return allProfiles.filter((p: any) => {
+      if (assignedUserIds.has(p.id)) return false;
+      if (!searchLower) return true;
+      return p.full_name?.toLowerCase().includes(searchLower);
+    });
   }, [allProfiles, assignedUsers, search]);
 
   return (

@@ -107,7 +107,8 @@ export function OnboardingSettingsDialog({ open, onOpenChange, companyId }: Onbo
       const { error } = await supabase
         .from('companies')
         .update(updates)
-        .eq('id', companyId);
+        .eq('id', companyId)
+        .select('id');
       if (error) throw error;
     },
     onSuccess: () => {

@@ -57,16 +57,16 @@ export function SprintBoard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold flex items-center gap-2">
             <LayoutGrid className="h-6 w-6 text-primary" />
             Company Sprints
           </h2>
-          <p className="text-muted-foreground">Strategic milestones set by the organization.</p>
+          <p className="text-muted-foreground mt-0.5 text-sm sm:text-base">Strategic milestones set by the organization.</p>
         </div>
         {isAdminOrManager && (
-          <Button onClick={() => setIsAddingSprint(true)} variant="outline" className="border-primary/20 hover:bg-primary/5">
+          <Button onClick={() => setIsAddingSprint(true)} variant="outline" className="w-full sm:w-auto border-primary/20 hover:bg-primary/5 h-10 text-sm">
             <Plus className="h-4 w-4 mr-2" />
             New Sprint
           </Button>
@@ -133,10 +133,10 @@ export function SprintBoard() {
                 <span>{format(new Date(sprint.end_date), 'MMM d, yyyy')}</span>
               </div>
               
-              <div className="mt-6 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="mt-6 flex gap-2 lg:opacity-0 group-hover:opacity-100 transition-opacity">
                 <Button variant="outline" size="sm" className="w-full text-xs h-8">View Roadmap</Button>
                 {isAdminOrManager && (
-                   <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
+                   <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0">
                      <Settings2 className="h-4 w-4" />
                    </Button>
                 )}
