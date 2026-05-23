@@ -113,13 +113,16 @@ export function RoleUsers({ roleId, companyId }: RoleUsersProps) {
 
   // Filter profiles that are not already assigned to this role, and match search
   const assignableProfiles = useMemo(() => {
+    // Optimization: Convert assigned users to a Set for O(1) lookups to avoid O(N*M) array.includes() calls
     const assignedUserIds = new Set(assignedUsers.map((u: any) => u.user_id));
-    const searchLower = search.toLowerCase();
+
+    // Optimization: Calculate lowercase search term once outside the loop to prevent redundant string allocation
+    const lowerSearch = search.toLowerCase();
 
     return allProfiles.filter((p: any) => {
       if (assignedUserIds.has(p.id)) return false;
-      if (!searchLower) return true;
-      return p.full_name?.toLowerCase().includes(searchLower);
+      if (!lowerSearch) return true;
+      return p.full_name?.toLowerCase().includes(lowerSearch);
     });
   }, [allProfiles, assignedUsers, search]);
 
