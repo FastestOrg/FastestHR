@@ -363,6 +363,7 @@ export default function KPI() {
         const { error } = await supabase.from('kpi_settings').update(payload).eq('id', form.id);
         if (error) throw error;
       } else {
+        delete payload.id;
         const { error } = await supabase.from('kpi_settings').insert([payload]);
         if (error) throw error;
       }

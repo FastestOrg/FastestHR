@@ -11,7 +11,16 @@ export interface TaxBreakdown {
   incomeTaxAnnual: number;
   statutoryDeductionsMonthly: number;
   netTakeHomeMonthly: number;
-  details: Record<string, any>;
+  details: Record<string, unknown>;
+}
+
+export interface TaxDeclarations {
+  regime?: 'new' | 'old';
+  section_80c?: number;
+  section_80d?: number;
+  hra_exemption?: number;
+  pre_tax_deductions?: number;
+  [key: string]: unknown;
 }
 
 /**
@@ -40,12 +49,17 @@ function calculateProgressiveTax(taxableIncome: number, brackets: { limit: numbe
 /**
  * US Tax Calculations (Federal Income Tax + FICA)
  */
-export function calculateUSTaxes(monthlyGross: number, declarations: any = {}): TaxBreakdown {
-  const grossAnnual = monthlyGross * 12;
+export function calculateUSTaxes(monthlyGross: number, declarations: TaxDeclarations = {}): TaxBreakdown {
+  // Sanitize input to prevent NaN or negative numbers
+  const sanitizedMonthlyGross = typeof monthlyGross === 'number' && !isNaN(monthlyGross) ? Math.max(0, monthlyGross) : 0;
+  const grossAnnual = sanitizedMonthlyGross * 12;
   
-  // US Standard Deduction (2026 estimate: ~$15,000 for single)
+  // US Standard Deduction (2026 estimate: ~$15,000 for single filer)
   const standardDeduction = 15000;
-  const itemizedDeductions = Number(declarations.pre_tax_deductions || 0);
+  
+  // Sanitize declaration values
+  const safeDeclarations = declarations && typeof declarations === 'object' ? declarations : {};
+  const itemizedDeductions = Math.max(0, Number(safeDeclarations.pre_tax_deductions || 0));
   const taxableIncome = Math.max(0, grossAnnual - standardDeduction - itemizedDeductions);
 
   // Progressive US Federal Brackets (2026 Single Filer estimate)
@@ -62,18 +76,21 @@ export function calculateUSTaxes(monthlyGross: number, declarations: any = {}): 
   const federalTaxAnnual = calculateProgressiveTax(taxableIncome, brackets);
   const federalTaxMonthly = federalTaxAnnual / 12;
 
-  // FICA Social Security (6.2% up to $168,600 cap) and Medicare (1.45%)
+  // FICA Social Security (6.2% up to $168,600 cap in 2024/2025)
   const socialSecurityRate = 0.062;
-  const medicareRate = 0.0145;
+  const ssAnnual = Math.min(grossAnnual, 168600) * socialSecurityRate;
+  const ssMonthly = ssAnnual / 12;
 
-  const ssMonthly = Math.min(monthlyGross, 168600 / 12) * socialSecurityRate;
-  const medicareMonthly = monthlyGross * medicareRate;
+  // FICA Medicare (1.45% base + 0.9% additional medicare tax for single earners on gross exceeding $200,000)
+  const baseMedicareAnnual = grossAnnual * 0.0145;
+  const additionalMedicareAnnual = grossAnnual > 200000 ? (grossAnnual - 200000) * 0.009 : 0;
+  const medicareMonthly = (baseMedicareAnnual + additionalMedicareAnnual) / 12;
+
   const statutoryMonthly = ssMonthly + medicareMonthly;
-
-  const netMonthly = monthlyGross - federalTaxMonthly - statutoryMonthly;
+  const netMonthly = Math.max(0, sanitizedMonthlyGross - federalTaxMonthly - statutoryMonthly);
 
   return {
-    grossMonthly: monthlyGross,
+    grossMonthly: sanitizedMonthlyGross,
     grossAnnual,
     taxableIncome,
     incomeTaxMonthly: federalTaxMonthly,
@@ -86,7 +103,8 @@ export function calculateUSTaxes(monthlyGross: number, declarations: any = {}): 
       federalTaxAnnual,
       socialSecurityMonthly: ssMonthly,
       medicareMonthly,
-      statutoryMonthly
+      statutoryMonthly,
+      additionalMedicareAnnual
     }
   };
 }
@@ -94,31 +112,33 @@ export function calculateUSTaxes(monthlyGross: number, declarations: any = {}): 
 /**
  * India Tax Calculations (Regime choice + EPF + Progressive slabs)
  */
-export function calculateIndiaTaxes(monthlyGross: number, declarations: any = {}): TaxBreakdown {
-  const grossAnnual = monthlyGross * 12;
+export function calculateIndiaTaxes(monthlyGross: number, declarations: TaxDeclarations = {}): TaxBreakdown {
+  // Sanitize input to prevent NaN or negative numbers
+  const sanitizedMonthlyGross = typeof monthlyGross === 'number' && !isNaN(monthlyGross) ? Math.max(0, monthlyGross) : 0;
+  const grossAnnual = sanitizedMonthlyGross * 12;
   
-  // Standard Deduction (₹50,000 / ₹75,000 for standard)
-  const standardDeduction = 75000;
-  
-  const regime = declarations.regime || 'new'; // 'new' or 'old'
+  const safeDeclarations = declarations && typeof declarations === 'object' ? declarations : {};
+  const regime = safeDeclarations.regime || 'new'; // 'new' or 'old'
+
+  // Standard Deduction (FY 2024-25 / FY 2025-26): ₹75,000 for New Regime, ₹50,000 for Old Regime
+  const standardDeduction = regime === 'old' ? 50000 : 75000;
   
   // India EPF Employee contribution (12% of basic, basic assumed 50% of gross)
-  const basicSalaryMonthly = monthlyGross * 0.50;
+  const basicSalaryMonthly = sanitizedMonthlyGross * 0.50;
   const epfMonthly = basicSalaryMonthly * 0.12;
 
-  let taxableIncome = grossAnnual - standardDeduction;
-
+  let taxableIncome = Math.max(0, grossAnnual - standardDeduction);
   let brackets = [];
   
   if (regime === 'old') {
     // Deductions under 80C, 80D, HRA for Old regime
-    const section80C = Math.min(150000, Number(declarations.section_80c || 0) + (epfMonthly * 12));
-    const section80D = Math.min(25000, Number(declarations.section_80d || 0));
-    const hraExemption = Number(declarations.hra_exemption || 0);
+    const section80C = Math.min(150000, Math.max(0, Number(safeDeclarations.section_80c || 0)) + (epfMonthly * 12));
+    const section80D = Math.min(25000, Math.max(0, Number(safeDeclarations.section_80d || 0)));
+    const hraExemption = Math.max(0, Number(safeDeclarations.hra_exemption || 0));
 
     taxableIncome = Math.max(0, taxableIncome - section80C - section80D - hraExemption);
 
-    // Old Regime Brackets
+    // Old Regime Brackets (FY 2024-25 / FY 2025-26)
     brackets = [
       { limit: 250000, rate: 0.00 },
       { limit: 500000, rate: 0.05 },
@@ -126,7 +146,7 @@ export function calculateIndiaTaxes(monthlyGross: number, declarations: any = {}
       { limit: null, rate: 0.30 }
     ];
   } else {
-    // New regime has higher standard deduction, but no 80C/80D/HRA deductions.
+    // New Regime Brackets (Revised FY 2024-25 / FY 2025-26)
     brackets = [
       { limit: 300000, rate: 0.00 },
       { limit: 600000, rate: 0.05 },
@@ -139,17 +159,40 @@ export function calculateIndiaTaxes(monthlyGross: number, declarations: any = {}
 
   let taxAnnual = calculateProgressiveTax(taxableIncome, brackets);
 
-  // Health and Education Cess (4% on income tax)
+  // Apply Section 87A Tax Rebate (Crucial legal compliance logic)
+  let rebate87A = 0;
+  if (regime === 'new') {
+    if (taxableIncome <= 700000) {
+      rebate87A = taxAnnual;
+      taxAnnual = 0;
+    } else {
+      // New Regime Section 87A Marginal Relief:
+      // Tax payable cannot exceed the amount by which taxable income exceeds ₹7,00,000
+      const excessIncome = taxableIncome - 700000;
+      if (taxAnnual > excessIncome) {
+        rebate87A = taxAnnual - excessIncome;
+        taxAnnual = excessIncome;
+      }
+    }
+  } else {
+    // Old Regime: Tax rebate up to ₹12,500 if taxable income does not exceed ₹5,00,000
+    if (taxableIncome <= 500000) {
+      rebate87A = taxAnnual;
+      taxAnnual = 0;
+    }
+  }
+
+  // Health and Education Cess (4% on income tax after rebate/marginal relief)
   const cess = taxAnnual * 0.04;
   taxAnnual += cess;
 
   const taxMonthly = taxAnnual / 12;
   const statutoryMonthly = epfMonthly;
 
-  const netMonthly = monthlyGross - taxMonthly - statutoryMonthly;
+  const netMonthly = Math.max(0, sanitizedMonthlyGross - taxMonthly - statutoryMonthly);
 
   return {
-    grossMonthly: monthlyGross,
+    grossMonthly: sanitizedMonthlyGross,
     grossAnnual,
     taxableIncome,
     incomeTaxMonthly: taxMonthly,
@@ -160,6 +203,7 @@ export function calculateIndiaTaxes(monthlyGross: number, declarations: any = {}
       regime,
       standardDeduction,
       epfMonthly,
+      rebate87A,
       cess,
       taxableIncome,
       taxAnnual
@@ -173,7 +217,7 @@ export function calculateIndiaTaxes(monthlyGross: number, declarations: any = {}
 export function calculatePayrollTaxAndNet(
   jurisdiction: string,
   monthlyGross: number,
-  declarations: any = {}
+  declarations: TaxDeclarations = {}
 ): TaxBreakdown {
   if (jurisdiction === 'IND') {
     return calculateIndiaTaxes(monthlyGross, declarations);
