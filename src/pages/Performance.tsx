@@ -146,11 +146,37 @@ export default function Performance() {
     onError: (e: any) => toast.error(e?.message || 'Failed to create cycle'),
   });
 
+  const saveFeedbackMutation = useMutation({
+    mutationFn: async ({ goalId, rating, comment }: { goalId: string; rating: number; comment: string }) => {
+      const { error } = await supabase
+        .from('goals')
+        .update({
+          key_results: {
+            rating,
+            comment,
+            updated_at: new Date().toISOString()
+          }
+        })
+        .eq('id', goalId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['goals'] });
+      setFeedbackGoal(null);
+      toast.success('Manager feedback saved successfully');
+    },
+    onError: (err: any) => toast.error(err?.message || 'Failed to save feedback'),
+  });
+
   const saveFeedback = (goalId: string) => {
     const fb = feedback[goalId];
     if (!fb || !fb.comment.trim()) { toast.error('Please add feedback text'); return; }
-    toast.success('Feedback saved');
-    setFeedbackGoal(null);
+    saveFeedbackMutation.mutate({
+      goalId,
+      rating: fb.rating || 0,
+      comment: fb.comment
+    });
   };
 
   const activeGoals = goals.filter((g: any) => g.status === 'active' || g.status === 'on_track' || g.status === 'at_risk');
@@ -326,7 +352,37 @@ export default function Performance() {
                       <Pencil className="h-4 w-4" />
                     </Button>
                     {isAdmin && (
-                      <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10 hover:text-primary rounded-lg" onClick={() => setFeedbackGoal(feedbackGoal === goal.id ? null : goal.id)} aria-label="Add feedback">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 hover:bg-primary/10 hover:text-primary rounded-lg" 
+                        onClick={() => {
+                          if (feedbackGoal !== goal.id) {
+                            const existing = goal.key_results as any;
+                            if (existing && typeof existing === 'object' && 'comment' in existing) {
+                              setFeedback(prev => ({
+                                ...prev,
+                                [goal.id]: {
+                                  rating: existing.rating || 0,
+                                  comment: existing.comment || ''
+                                }
+                              }));
+                            } else {
+                              setFeedback(prev => ({
+                                ...prev,
+                                [goal.id]: {
+                                  rating: 0,
+                                  comment: ''
+                                }
+                              }));
+                            }
+                            setFeedbackGoal(goal.id);
+                          } else {
+                            setFeedbackGoal(null);
+                          }
+                        }} 
+                        aria-label="Add feedback"
+                      >
                         <MessageSquare className="h-4 w-4" />
                       </Button>
                     )}
@@ -358,6 +414,7 @@ export default function Performance() {
                       {[1, 2, 3, 4, 5].map(star => (
                         <button
                           key={star}
+                          type="button"
                           onClick={() => setFeedback(prev => ({ ...prev, [goal.id]: { ...prev[goal.id], rating: star, comment: prev[goal.id]?.comment || '' } }))}
                           className="focus:outline-none"
                         >
@@ -373,7 +430,33 @@ export default function Performance() {
                       onChange={(e) => setFeedback(prev => ({ ...prev, [goal.id]: { ...prev[goal.id], rating: prev[goal.id]?.rating || 0, comment: e.target.value } }))}
                       className="text-sm"
                     />
-                    <Button size="sm" onClick={() => saveFeedback(goal.id)}>Save Feedback</Button>
+                    <div className="flex gap-2">
+                      <Button size="sm" type="button" onClick={() => saveFeedback(goal.id)} disabled={saveFeedbackMutation.isPending}>
+                        {saveFeedbackMutation.isPending ? 'Saving...' : 'Save Feedback'}
+                      </Button>
+                      <Button size="sm" type="button" variant="outline" onClick={() => setFeedbackGoal(null)}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {/* Display Saved Feedback to everyone */}
+                {goal.key_results && typeof goal.key_results === 'object' && 'comment' in (goal.key_results as any) && (
+                  <div className="pt-3 mt-2 border-t border-border/20 bg-muted/20 p-3 rounded-lg space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h5 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                        <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" /> Manager Feedback
+                      </h5>
+                      <div className="flex gap-0.5">
+                        {[1, 2, 3, 4, 5].map(star => (
+                          <Star
+                            key={star}
+                            className={`w-3.5 h-3.5 ${((goal.key_results as any).rating || 0) >= star ? 'text-yellow-500 fill-yellow-500' : 'text-muted-foreground/20'}`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <p className="text-xs text-foreground italic">"{(goal.key_results as any).comment}"</p>
                   </div>
                 )}
                 {goal.due_date && (

@@ -12,7 +12,7 @@ import { UserMinus, ClipboardCheck, DollarSign, MessageSquare, Package, Plus, Al
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth-store';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 
 const assetChecklist = [
@@ -25,6 +25,36 @@ const assetChecklist = [
   'Uniforms',
   'Books / Documents',
 ];
+
+const getDaysBetween = (d1Str: string, d2Str: string) => {
+  if (!d1Str || !d2Str) return 0;
+  const d1 = new Date(d1Str);
+  const d2 = new Date(d2Str);
+  const diffTime = Math.abs(d2.getTime() - d1.getTime());
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+};
+
+const getDaysInMonth = (dateStr: string) => {
+  if (!dateStr) return 30;
+  const date = new Date(dateStr);
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+};
+
+const getDayOfMonth = (dateStr: string) => {
+  if (!dateStr) return 0;
+  return new Date(dateStr).getDate();
+};
+
+const getCurrencySymbol = (code?: string) => {
+  switch (code?.toUpperCase()) {
+    case 'INR': return '₹';
+    case 'EUR': return '€';
+    case 'GBP': return '£';
+    case 'USD':
+    default: return '$';
+  }
+};
+
 
 // ⚡ Bolt: Hoisted static object configuration outside of component body
 // to prevent unnecessary memory reallocation on every render.
@@ -176,17 +206,251 @@ export default function ExitManagement() {
     });
   };
 
-  const markSettlementDone = (exitId: string) => {
-    updateMutation.mutate({
-      id: exitId,
-      updates: {
-        settlement_done: true,
-        status: 'completed'
-      }
-    });
-  };
-
   const selectedRecord = exits.find(e => e.id === selectedExit);
+
+  const [settlementInput, setSettlementInput] = useState({
+    baseSalary: 0,
+    workingDaysInMonth: 30,
+    daysWorked: 0,
+    standardNoticeDays: 30,
+    noticeServedDays: 0,
+    remainingLeaves: 0,
+    customBonus: 0,
+    customDeduction: 0,
+    adjustmentReason: '',
+    waiveNoticeRecovery: false,
+  });
+
+  // Query salary structure for exit employee
+  const { data: salaryStructure } = useQuery({
+    queryKey: ['exit-salary-structure', selectedRecord?.employee_id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('salary_structures')
+        .select('*')
+        .eq('employee_id', selectedRecord!.employee_id)
+        .order('effective_from', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!selectedRecord?.employee_id,
+  });
+
+  // Query leave balances for exit employee
+  const { data: leaveBalances = [] } = useQuery({
+    queryKey: ['exit-leave-balances', selectedRecord?.employee_id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('leave_balances')
+        .select('*, leave_types(name, color, code)')
+        .eq('employee_id', selectedRecord!.employee_id)
+        .eq('year', new Date().getFullYear());
+      return data || [];
+    },
+    enabled: !!selectedRecord?.employee_id,
+  });
+
+  // Query company profile to fetch dynamic currency setting
+  const { data: companyProfile } = useQuery({
+    queryKey: ['company-profile', profile?.company_id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('companies')
+        .select('*')
+        .eq('id', profile!.company_id!)
+        .single();
+      return data;
+    },
+    enabled: !!profile?.company_id,
+  });
+
+  // Auto-populate settlement calculations when selected exit changes
+  useEffect(() => {
+    if (selectedRecord) {
+      if (selectedRecord.settlement_done && selectedRecord.settlement_summary) {
+        const summary = selectedRecord.settlement_summary as any;
+        setSettlementInput({
+          baseSalary: summary.base_salary || 0,
+          workingDaysInMonth: summary.working_days_in_month || 30,
+          daysWorked: summary.days_worked || 0,
+          standardNoticeDays: summary.standard_notice_days || 30,
+          noticeServedDays: summary.notice_served_days || 0,
+          remainingLeaves: summary.remaining_leaves || 0,
+          customBonus: summary.custom_bonus || 0,
+          customDeduction: summary.custom_deduction || 0,
+          adjustmentReason: summary.custom_adjustment_reason || '',
+          waiveNoticeRecovery: summary.waive_notice_recovery || false,
+        });
+      } else {
+        const annualGross = salaryStructure ? Number(salaryStructure.gross_salary) : 0;
+        const monthlySalary = annualGross > 0 ? (annualGross / 12) : 0;
+        const daysInMonth = selectedRecord.last_working_day ? getDaysInMonth(selectedRecord.last_working_day) : 30;
+        const daysWorked = selectedRecord.last_working_day ? getDayOfMonth(selectedRecord.last_working_day) : 0;
+        
+        const servedDays = (selectedRecord.resignation_date && selectedRecord.last_working_day)
+          ? getDaysBetween(selectedRecord.resignation_date, selectedRecord.last_working_day)
+          : 0;
+          
+        const totalUnusedLeaves = leaveBalances.reduce((acc: number, curr: any) => {
+          const remaining = (curr.total_days || 0) - (curr.used_days || 0);
+          return acc + Math.max(0, remaining);
+        }, 0);
+
+        setSettlementInput({
+          baseSalary: Math.round(monthlySalary),
+          workingDaysInMonth: daysInMonth,
+          daysWorked: daysWorked,
+          standardNoticeDays: 30,
+          noticeServedDays: servedDays,
+          remainingLeaves: totalUnusedLeaves,
+          customBonus: 0,
+          customDeduction: 0,
+          adjustmentReason: '',
+          waiveNoticeRecovery: false,
+        });
+      }
+    }
+  }, [selectedRecord, salaryStructure, leaveBalances]);
+
+  const handleSaveSettlement = async (exitId: string) => {
+    if (!selectedRecord) return;
+    
+    const toastId = toast.loading("Finalizing offboarding settlement ledgers...");
+    
+    try {
+      const dailySalary = settlementInput.baseSalary / settlementInput.workingDaysInMonth;
+      const unpaidSalaryVal = Math.round(dailySalary * settlementInput.daysWorked * 100) / 100;
+      
+      const noticeShortfall = Math.max(0, settlementInput.standardNoticeDays - settlementInput.noticeServedDays);
+      const noticeRecoveryVal = settlementInput.waiveNoticeRecovery 
+        ? 0 
+        : Math.round(noticeShortfall * dailySalary * 100) / 100;
+      
+      const leaveEncashmentVal = Math.round(settlementInput.remainingLeaves * dailySalary * 100) / 100;
+      
+      const netSettlementVal = Math.round(
+        (unpaidSalaryVal - noticeRecoveryVal + leaveEncashmentVal + Number(settlementInput.customBonus) - Number(settlementInput.customDeduction)) * 100
+      ) / 100;
+
+      const summaryObj = {
+        base_salary: settlementInput.baseSalary,
+        working_days_in_month: settlementInput.workingDaysInMonth,
+        days_worked: settlementInput.daysWorked,
+        standard_notice_days: settlementInput.standardNoticeDays,
+        notice_served_days: settlementInput.noticeServedDays,
+        remaining_leaves: settlementInput.remainingLeaves,
+        unpaid_salary: unpaidSalaryVal,
+        notice_recovery: noticeRecoveryVal,
+        leave_encashment: leaveEncashmentVal,
+        custom_bonus: Number(settlementInput.customBonus),
+        custom_deduction: Number(settlementInput.customDeduction),
+        custom_adjustment_reason: settlementInput.adjustmentReason,
+        net_settlement: netSettlementVal,
+        daily_salary: Math.round(dailySalary * 100) / 100,
+        shortfall_days: noticeShortfall,
+        waive_notice_recovery: settlementInput.waiveNoticeRecovery
+      };
+
+      // 1. Zero out remaining leave balances
+      const { data: activeBalances } = await supabase
+        .from('leave_balances')
+        .select('id, total_days')
+        .eq('employee_id', selectedRecord.employee_id)
+        .eq('year', new Date().getFullYear());
+
+      if (activeBalances && activeBalances.length > 0) {
+        for (const bal of activeBalances) {
+          await supabase
+            .from('leave_balances')
+            .update({ used_days: bal.total_days })
+            .eq('id', bal.id);
+        }
+      }
+
+      // 2. Create offboarding payroll run record
+      const resignationDateStr = selectedRecord.resignation_date || new Date().toISOString().split('T')[0];
+      const lastWorkingDateStr = selectedRecord.last_working_day || new Date().toISOString().split('T')[0];
+
+      const { data: newRun, error: runError } = await supabase
+        .from('payroll_runs')
+        .insert({
+          company_id: profile!.company_id!,
+          period_start: resignationDateStr,
+          period_end: lastWorkingDateStr,
+          status: 'finalized',
+          total_gross: unpaidSalaryVal + leaveEncashmentVal + Number(settlementInput.customBonus),
+          total_deductions: noticeRecoveryVal + Number(settlementInput.customDeduction),
+          total_net: netSettlementVal,
+          processed_by: profile!.id,
+          finalized_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (runError) throw runError;
+
+      // 3. Create payslip ledger entry
+      if (newRun) {
+        const breakdownJSON = {
+          unpaid_salary: unpaidSalaryVal,
+          notice_recovery: noticeRecoveryVal,
+          leave_encashment: leaveEncashmentVal,
+          custom_bonus: Number(settlementInput.customBonus),
+          custom_deduction: Number(settlementInput.customDeduction),
+          adjustment_reason: settlementInput.adjustmentReason,
+          settlement_type: 'final_offboarding_settlement'
+        };
+
+        const { error: payslipError } = await supabase
+          .from('payslips')
+          .insert({
+            payroll_run_id: newRun.id,
+            employee_id: selectedRecord.employee_id,
+            company_id: profile!.company_id!,
+            gross_salary: unpaidSalaryVal + leaveEncashmentVal + Number(settlementInput.customBonus),
+            total_deductions: noticeRecoveryVal + Number(settlementInput.customDeduction),
+            net_salary: netSettlementVal,
+            working_days: settlementInput.workingDaysInMonth,
+            paid_days: settlementInput.daysWorked,
+            lop_days: 0,
+            breakdown: breakdownJSON
+          });
+
+        if (payslipError) throw payslipError;
+      }
+
+      // 4. Update exit record details and employee status to terminated
+      const { error: exitUpdateErr } = await supabase
+        .from('employee_exits')
+        .update({
+          settlement_done: true,
+          status: 'completed',
+          settlement_summary: summaryObj
+        })
+        .eq('id', exitId);
+
+      if (exitUpdateErr) throw exitUpdateErr;
+
+      const { error: empUpdateErr } = await supabase
+        .from('employees')
+        .update({ status: 'terminated' })
+        .eq('id', selectedRecord.employee_id);
+
+      if (empUpdateErr) throw empUpdateErr;
+
+      // Invalidate queries to reload details dynamically
+      queryClient.invalidateQueries({ queryKey: ['exits'] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['activeEmployees'] });
+      queryClient.invalidateQueries({ queryKey: ['exit-leave-balances'] });
+
+      toast.success("Offboarding settlement and payslip ledger finalized successfully!", { id: toastId });
+    } catch (err: any) {
+      console.error("Failed to complete settlement transaction:", err);
+      toast.error(err?.message || "Failed to finalize offboarding settlement.", { id: toastId });
+    }
+  };
 
   // Set initial interview answers when selection changes
   const handleTabChange = (val: string) => {
@@ -435,25 +699,254 @@ export default function ExitManagement() {
                     </div>
                   </TabsContent>
                   
-                  <TabsContent value="settlement" className="p-6 space-y-4 mt-0">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-sm font-medium">Final Settlement Summary</h4>
-                      {selectedRecord.settlement_done && <Badge variant="outline" className="border-success text-success bg-success/10">Settled</Badge>}
-                    </div>
-                    {/* Placeholder content for settlement, in real app, fetch from payroll module */}
-                    <div className="space-y-3">
-                      <div className="p-4 border border-border/50 bg-background/40 rounded-md text-center">
-                         <p className="text-sm text-muted-foreground mb-4">Settlement usually connects with the Payroll module. Mark as completed once the final checks are cleared.</p>
-                         {!selectedRecord.settlement_done ? (
-                           <Button onClick={() => markSettlementDone(selectedRecord.id)} disabled={updateMutation.isPending}>
-                             {updateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                             Mark Settlement as Processed
-                           </Button>
-                         ) : (
-                           <Button variant="outline" disabled>Settlement Done</Button>
-                         )}
+                  <TabsContent value="settlement" className="p-6 space-y-6 mt-0">
+                    <div className="flex items-center justify-between border-b border-border/50 pb-4">
+                      <div>
+                        <h4 className="text-base font-semibold">Final Settlement Summary</h4>
+                        <p className="text-xs text-muted-foreground mt-0.5">Calculate unpaid dues, notice recovery, and leave balances.</p>
                       </div>
+                      {selectedRecord.settlement_done ? (
+                        <Badge className="border-success text-success bg-success/10 text-xs font-semibold px-2.5 py-1">
+                          Settlement Finalized ✓
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="border-warning text-warning bg-warning/10 text-xs font-semibold px-2.5 py-1">
+                          Draft Settlement
+                        </Badge>
+                      )}
                     </div>
+
+                    {/* Dynamic Calculations Panel */}
+                    {(() => {
+                      const currency = companyProfile?.currency || 'USD';
+                      const symbol = getCurrencySymbol(currency);
+                      
+                      const formatCurrency = (val: number) => {
+                        return `${symbol}${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                      };
+
+                      const baseSalary = Number(settlementInput.baseSalary) || 0;
+                      const workingDaysInMonth = Number(settlementInput.workingDaysInMonth) || 30;
+                      const daysWorked = Number(settlementInput.daysWorked) || 0;
+                      const standardNoticeDays = Number(settlementInput.standardNoticeDays) || 30;
+                      const noticeServedDays = Number(settlementInput.noticeServedDays) || 0;
+                      const remainingLeaves = Number(settlementInput.remainingLeaves) || 0;
+                      const customBonus = Number(settlementInput.customBonus) || 0;
+                      const customDeduction = Number(settlementInput.customDeduction) || 0;
+                      const waiveNoticeRecovery = !!settlementInput.waiveNoticeRecovery;
+
+                      const dailySalary = workingDaysInMonth > 0 ? (baseSalary / workingDaysInMonth) : 0;
+                      const unpaidSalaryVal = dailySalary * daysWorked;
+                      const shortfallDays = Math.max(0, standardNoticeDays - noticeServedDays);
+                      const noticeRecoveryVal = waiveNoticeRecovery ? 0 : shortfallDays * dailySalary;
+                      const leaveEncashmentVal = remainingLeaves * dailySalary;
+
+                      const totalEarnings = unpaidSalaryVal + leaveEncashmentVal + customBonus;
+                      const totalDeductions = noticeRecoveryVal + customDeduction;
+                      const netSettlementVal = totalEarnings - totalDeductions;
+
+                      return (
+                        <div className="space-y-6">
+                          {/* If not finalized, display input form for Admin */}
+                          {!selectedRecord.settlement_done && isAdmin ? (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-muted/20 p-4 rounded-lg border border-border/50">
+                              <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold text-muted-foreground">Monthly Gross Salary ({symbol})</Label>
+                                <Input
+                                  type="number"
+                                  className="h-9 text-sm"
+                                  value={settlementInput.baseSalary || ''}
+                                  onChange={(e) => setSettlementInput(prev => ({ ...prev, baseSalary: Number(e.target.value) }))}
+                                />
+                                {!salaryStructure && (
+                                  <p className="text-[10px] text-warning flex items-center gap-1 mt-1">
+                                    <AlertTriangle className="w-3 h-3" /> No profile salary structure; manual entry required.
+                                  </p>
+                                )}
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold text-muted-foreground">Days in Final Month</Label>
+                                <Input
+                                  type="number"
+                                  className="h-9 text-sm"
+                                  value={settlementInput.workingDaysInMonth || ''}
+                                  onChange={(e) => setSettlementInput(prev => ({ ...prev, workingDaysInMonth: Number(e.target.value) }))}
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold text-muted-foreground">Days Worked in Final Month</Label>
+                                <Input
+                                  type="number"
+                                  className="h-9 text-sm"
+                                  value={settlementInput.daysWorked || ''}
+                                  onChange={(e) => setSettlementInput(prev => ({ ...prev, daysWorked: Number(e.target.value) }))}
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold text-muted-foreground">Standard Notice (Days)</Label>
+                                <Input
+                                  type="number"
+                                  className="h-9 text-sm"
+                                  value={settlementInput.standardNoticeDays || ''}
+                                  onChange={(e) => setSettlementInput(prev => ({ ...prev, standardNoticeDays: Number(e.target.value) }))}
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold text-muted-foreground">Notice Served (Days)</Label>
+                                <Input
+                                  type="number"
+                                  className="h-9 text-sm"
+                                  value={settlementInput.noticeServedDays || ''}
+                                  onChange={(e) => setSettlementInput(prev => ({ ...prev, noticeServedDays: Number(e.target.value) }))}
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold text-muted-foreground">Leaves to Encash</Label>
+                                <Input
+                                  type="number"
+                                  className="h-9 text-sm"
+                                  value={settlementInput.remainingLeaves || 0}
+                                  onChange={(e) => setSettlementInput(prev => ({ ...prev, remainingLeaves: Number(e.target.value) }))}
+                                />
+                              </div>
+                              <div className="space-y-1.5 flex flex-col justify-end pb-1.5">
+                                <div className="flex items-center space-x-2 h-9">
+                                  <Checkbox
+                                    id="waiveNotice"
+                                    checked={settlementInput.waiveNoticeRecovery}
+                                    onCheckedChange={(checked) => setSettlementInput(prev => ({ ...prev, waiveNoticeRecovery: !!checked }))}
+                                  />
+                                  <Label htmlFor="waiveNotice" className="text-xs font-semibold text-warning cursor-pointer select-none">
+                                    Waive Notice Recovery
+                                  </Label>
+                                </div>
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold text-muted-foreground">Custom Bonus ({symbol})</Label>
+                                <Input
+                                  type="number"
+                                  className="h-9 text-sm"
+                                  placeholder="0.00"
+                                  value={settlementInput.customBonus || ''}
+                                  onChange={(e) => setSettlementInput(prev => ({ ...prev, customBonus: Number(e.target.value) }))}
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold text-muted-foreground">Custom Deduction ({symbol})</Label>
+                                <Input
+                                  type="number"
+                                  className="h-9 text-sm"
+                                  placeholder="0.00"
+                                  value={settlementInput.customDeduction || ''}
+                                  onChange={(e) => setSettlementInput(prev => ({ ...prev, customDeduction: Number(e.target.value) }))}
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold text-muted-foreground">Adjustment Reason</Label>
+                                <Input
+                                  type="text"
+                                  className="h-9 text-sm"
+                                  placeholder="e.g. Gratuity, asset claim"
+                                  value={settlementInput.adjustmentReason || ''}
+                                  onChange={(e) => setSettlementInput(prev => ({ ...prev, adjustmentReason: e.target.value }))}
+                                />
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {/* Payslip/Settlement Side-by-Side Sheet View */}
+                          <div className="grid md:grid-cols-2 gap-6">
+                            {/* Earnings Column */}
+                            <div className="p-5 rounded-xl border border-success/20 bg-success/5 shadow-sm">
+                              <h5 className="font-semibold text-sm text-success mb-4 flex items-center gap-2">
+                                <Plus className="w-4 h-4" /> Earnings & Allowances
+                              </h5>
+                              <div className="space-y-3 text-sm">
+                                <div className="flex justify-between border-b border-border/30 pb-2">
+                                  <span className="text-muted-foreground">Unpaid Salary ({daysWorked} days worked)</span>
+                                  <span className="font-medium text-foreground">{formatCurrency(unpaidSalaryVal)}</span>
+                                </div>
+                                <div className="flex justify-between border-b border-border/30 pb-2">
+                                  <span className="text-muted-foreground">Leave Encashment ({remainingLeaves} days)</span>
+                                  <span className="font-medium text-foreground">{formatCurrency(leaveEncashmentVal)}</span>
+                                </div>
+                                {customBonus > 0 && (
+                                  <div className="flex justify-between border-b border-border/30 pb-2 text-success">
+                                    <span>Custom Bonus ({settlementInput.adjustmentReason || 'Bonus'})</span>
+                                    <span className="font-semibold">+{formatCurrency(customBonus)}</span>
+                                  </div>
+                                )}
+                                <div className="flex justify-between font-bold pt-2 text-success text-base">
+                                  <span>Total Earnings</span>
+                                  <span>{formatCurrency(totalEarnings)}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Deductions Column */}
+                            <div className="p-5 rounded-xl border border-destructive/20 bg-destructive/5 shadow-sm">
+                              <h5 className="font-semibold text-sm text-destructive mb-4 flex items-center gap-2">
+                                <UserMinus className="w-4 h-4" /> Recoveries & Deductions
+                              </h5>
+                              <div className="space-y-3 text-sm">
+                                <div className="flex justify-between border-b border-border/30 pb-2">
+                                  <span className="text-muted-foreground flex items-center gap-1.5">
+                                    Notice Shortfall Recovery ({shortfallDays} days shortfall)
+                                    {waiveNoticeRecovery && (
+                                      <Badge variant="outline" className="border-warning/30 text-warning bg-warning/5 text-[10px] font-medium py-0 px-1.5 leading-none h-4">
+                                        Waived
+                                      </Badge>
+                                    )}
+                                  </span>
+                                  <span className="font-medium text-foreground">{formatCurrency(noticeRecoveryVal)}</span>
+                                </div>
+                                {customDeduction > 0 && (
+                                  <div className="flex justify-between border-b border-border/30 pb-2 text-destructive">
+                                    <span>Custom Claim / Damage ({settlementInput.adjustmentReason || 'Deduction'})</span>
+                                    <span className="font-semibold">-{formatCurrency(customDeduction)}</span>
+                                  </div>
+                                )}
+                                <div className="flex justify-between font-bold pt-2 text-destructive text-base">
+                                  <span>Total Deductions</span>
+                                  <span>{formatCurrency(totalDeductions)}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Final Net Summary Card */}
+                          <div className={`p-6 rounded-xl border shadow-sm flex flex-col md:flex-row justify-between items-center gap-4 ${
+                            netSettlementVal >= 0 
+                              ? 'border-success/30 bg-gradient-to-r from-success/10 to-transparent' 
+                              : 'border-destructive/30 bg-gradient-to-r from-destructive/10 to-transparent'
+                          }`}>
+                            <div className="space-y-1">
+                              <p className="text-xs uppercase tracking-wider font-semibold text-muted-foreground">Net Settlement Amount</p>
+                              <h3 className={`text-3xl font-extrabold ${netSettlementVal >= 0 ? 'text-success' : 'text-destructive'}`}>
+                                {formatCurrency(netSettlementVal)}
+                              </h3>
+                              <p className="text-xs text-muted-foreground">
+                                {netSettlementVal >= 0 
+                                  ? 'This amount is payable to the employee.' 
+                                  : 'This amount is recoverable from the employee.'}
+                              </p>
+                            </div>
+                            
+                            {!selectedRecord.settlement_done && isAdmin && (
+                              <Button 
+                                size="lg" 
+                                className="font-semibold px-6 shadow-md transition-all duration-200 hover:scale-102"
+                                onClick={() => handleSaveSettlement(selectedRecord.id)} 
+                                disabled={updateMutation.isPending}
+                              >
+                                {updateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Finalize & Process Settlement
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </TabsContent>
                 </Tabs>
               </CardContent>

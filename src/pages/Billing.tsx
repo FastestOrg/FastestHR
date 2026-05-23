@@ -35,6 +35,7 @@ import {
   CreditCard,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { getCurrencySymbol, formatAmount } from '@/lib/utils';
 
 declare global {
   interface Window {
@@ -191,7 +192,7 @@ export default function Billing() {
   });
 
   // ─── Derived Values ──────────────────────────────────────────────
-  const currencySymbol = company?.currency === 'INR' ? '₹' : company?.currency === 'EUR' ? '€' : '$';
+  const currencySymbol = getCurrencySymbol(company?.currency);
   const walletBalance = Number(company?.wallet_balance) || 0;
   const licenseLimit = Number(company?.license_limit) || 1;
   const pricePerLicense = Number(company?.price_per_license) || 500;
@@ -219,7 +220,7 @@ export default function Billing() {
       const result = data as any;
       if (result?.valid) {
         setDiscountInfo(result);
-        toast.success(`Discount applied! Saving ₹${result.discount}`);
+        toast.success(`Discount applied! Saving ${currencySymbol}${formatAmount(result.discount, company?.currency)}`);
       } else {
         setDiscountInfo(null);
         toast.error(result?.error || 'Invalid discount code');
@@ -267,7 +268,7 @@ export default function Billing() {
         amount: orderData.amount,
         currency: orderData.currency,
         name: 'FastestHR',
-        description: `Add ₹${amount} credits`,
+        description: `Add ${currencySymbol}${formatAmount(amount, company?.currency)} credits`,
         order_id: orderData.order_id,
         handler: async (response: any) => {
           try {
@@ -289,7 +290,7 @@ export default function Billing() {
             });
             const verifyData = await verifyRes.json();
             if (verifyData.success) {
-              toast.success(`₹${amount} credited to wallet!`);
+              toast.success(`${currencySymbol}${formatAmount(amount, company?.currency)} credited to wallet!`);
               setAddCreditsOpen(false);
               setCreditAmount('');
               setDiscountCode('');
@@ -446,7 +447,7 @@ export default function Billing() {
           <div>
             <p className="font-semibold text-red-500">Low Wallet Balance</p>
             <p className="text-sm text-muted-foreground">
-              Your balance ({currencySymbol}{walletBalance.toLocaleString('en-IN')}) is less than 3 months of subscription cost ({currencySymbol}{threeMonthCost.toLocaleString('en-IN')}).
+              Your balance ({currencySymbol}{formatAmount(walletBalance, company?.currency)}) is less than 3 months of subscription cost ({currencySymbol}{formatAmount(threeMonthCost, company?.currency)}).
               Add funds to avoid service interruption.
             </p>
           </div>
@@ -567,7 +568,7 @@ export default function Billing() {
             <div className="rounded-lg bg-muted/10 border border-border/30 p-3 mb-4">
               <div className="flex justify-between text-xs text-muted-foreground mb-1">
                 <span>Monthly cost</span>
-                <span className="font-medium text-foreground">{currencySymbol}{monthlySubscriptionCost.toLocaleString('en-IN')}</span>
+                <span className="font-medium text-foreground">{currencySymbol}{formatAmount(monthlySubscriptionCost, company?.currency)}</span>
               </div>
               <div className="flex justify-between text-xs text-muted-foreground">
                 <span>{licenseLimit} seat{licenseLimit > 1 ? 's' : ''} × {currencySymbol}{pricePerLicense}</span>
@@ -692,7 +693,7 @@ export default function Billing() {
                     </div>
                     <div className="text-right">
                       <span className={`font-bold text-sm ${tx.type === 'credit' ? 'text-emerald-500' : 'text-red-500'}`}>
-                        {tx.type === 'credit' ? '+' : '-'}{currencySymbol}{Number(tx.amount).toLocaleString('en-IN')}
+                        {tx.type === 'credit' ? '+' : '-'}{currencySymbol}{formatAmount(Number(tx.amount), company?.currency)}
                       </span>
                     </div>
                   </div>
@@ -737,7 +738,7 @@ export default function Billing() {
                   className={`text-xs hover:scale-105 active:scale-95 transition-transform ${Number(creditAmount) === amt ? 'border-indigo-500 bg-indigo-500/10 text-indigo-500' : ''}`}
                   onClick={() => { setCreditAmount(String(amt)); setDiscountInfo(null); }}
                 >
-                  {currencySymbol}{amt.toLocaleString('en-IN')}
+                  {currencySymbol}{formatAmount(amt, company?.currency)}
                 </Button>
               ))}
             </div>
@@ -779,21 +780,21 @@ export default function Billing() {
               <div className="rounded-lg bg-muted/20 border border-border/40 p-4 space-y-2 animate-in fade-in duration-300">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Amount</span>
-                  <span className="font-medium">{currencySymbol}{Number(creditAmount).toLocaleString('en-IN')}</span>
+                  <span className="font-medium">{currencySymbol}{formatAmount(Number(creditAmount), company?.currency)}</span>
                 </div>
                 {discountInfo && (
                   <div className="flex justify-between text-sm text-emerald-500">
                     <span>Discount</span>
-                    <span>-{currencySymbol}{discountInfo.discount.toLocaleString('en-IN')}</span>
+                    <span>-{currencySymbol}{formatAmount(discountInfo.discount, company?.currency)}</span>
                   </div>
                 )}
                 <div className="border-t border-border/40 pt-2 flex justify-between text-sm font-bold">
                   <span>You pay</span>
-                  <span>{currencySymbol}{finalPayAmount.toLocaleString('en-IN')}</span>
+                  <span>{currencySymbol}{formatAmount(finalPayAmount, company?.currency)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Credits added</span>
-                  <span className="font-medium text-indigo-500">{currencySymbol}{Number(creditAmount).toLocaleString('en-IN')}</span>
+                  <span className="font-medium text-indigo-500">{currencySymbol}{formatAmount(Number(creditAmount), company?.currency)}</span>
                 </div>
               </div>
             )}
@@ -806,7 +807,7 @@ export default function Billing() {
               className="bg-indigo-500 hover:bg-indigo-600 text-white"
             >
               {isProcessingPayment ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CreditCard className="w-4 h-4 mr-2" />}
-              Pay {currencySymbol}{finalPayAmount.toLocaleString('en-IN')}
+              Pay {currencySymbol}{formatAmount(finalPayAmount, company?.currency)}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -854,19 +855,19 @@ export default function Billing() {
               <div className="border-t border-border/40 pt-2 flex justify-between text-sm font-bold">
                 <span>Total (from wallet)</span>
                 <span className={walletBalance < extendCost ? 'text-red-500' : 'text-emerald-500'}>
-                  {currencySymbol}{extendCost.toLocaleString('en-IN')}
+                  {currencySymbol}{formatAmount(extendCost, company?.currency)}
                 </span>
               </div>
               <div className="flex justify-between text-xs text-muted-foreground">
                 <span>Wallet balance</span>
-                <span>{currencySymbol}{walletBalance.toLocaleString('en-IN')}</span>
+                <span>{currencySymbol}{formatAmount(walletBalance, company?.currency)}</span>
               </div>
             </div>
 
             {walletBalance < extendCost && (
               <div className="flex items-center gap-2 text-sm text-red-500 bg-red-500/5 rounded-lg p-3 border border-red-500/20 animate-in fade-in duration-300">
                 <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                <span>Insufficient balance. Please add {currencySymbol}{(extendCost - walletBalance).toLocaleString('en-IN')} more to your wallet.</span>
+                <span>Insufficient balance. Please add {currencySymbol}{formatAmount(extendCost - walletBalance, company?.currency)} more to your wallet.</span>
               </div>
             )}
           </div>
@@ -878,7 +879,7 @@ export default function Billing() {
               className="bg-amber-500 hover:bg-amber-600 text-white"
             >
               {isExtending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
-              Extend & Pay {currencySymbol}{extendCost.toLocaleString('en-IN')}
+              Extend & Pay {currencySymbol}{formatAmount(extendCost, company?.currency)}
             </Button>
           </DialogFooter>
         </DialogContent>

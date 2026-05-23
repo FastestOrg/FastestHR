@@ -33,7 +33,7 @@ export default function ApplyLeave() {
       if (!profile?.id) return null;
       const { data } = await supabase
         .from('employees')
-        .select('id, first_name, last_name, company_id')
+        .select('id, first_name, last_name, company_id, reporting_manager_id')
         .eq('user_id', profile.id)
         .is('deleted_at', null)
         .maybeSingle();
@@ -104,10 +104,57 @@ export default function ApplyLeave() {
     enabled: !!employee?.id,
   });
 
-  const totalDays =
-    form.start_date && form.end_date
-      ? Math.max(0, differenceInDays(parseISO(form.end_date), parseISO(form.start_date)) + 1)
-      : 0;
+  // Fetch company work days
+  const { data: companyDetails } = useQuery({
+    queryKey: ['company-details', employee?.company_id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('companies')
+        .select('work_days')
+        .eq('id', employee!.company_id)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!employee?.company_id,
+  });
+
+  // Fetch company holidays
+  const { data: holidaysList = [] } = useQuery({
+    queryKey: ['company-holidays', employee?.company_id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('holidays')
+        .select('date')
+        .eq('company_id', employee!.company_id);
+      return data || [];
+    },
+    enabled: !!employee?.company_id,
+  });
+
+  const calculateNetLeaveDays = (startDateStr: string, endDateStr: string) => {
+    if (!startDateStr || !endDateStr) return 0;
+    const start = parseISO(startDateStr);
+    const end = parseISO(endDateStr);
+    if (end < start) return 0;
+
+    const activeHolidays = new Set(holidaysList.map(h => h.date));
+    const allowedWorkDays = companyDetails?.work_days || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+
+    let count = 0;
+    let current = new Date(start);
+    while (current <= end) {
+      const dateStr = current.toLocaleDateString('en-CA');
+      const weekdayName = current.toLocaleDateString('en-US', { weekday: 'short' });
+      
+      if (allowedWorkDays.includes(weekdayName) && !activeHolidays.has(dateStr)) {
+        count++;
+      }
+      current.setDate(current.getDate() + 1);
+    }
+    return count;
+  };
+
+  const totalDays = calculateNetLeaveDays(form.start_date, form.end_date);
 
   const selectedBalance = leaveBalances.find(lb => lb.leave_type_id === form.leave_type_id);
   const remainingDays = selectedBalance 
@@ -115,6 +162,24 @@ export default function ApplyLeave() {
     : 0;
   
   const requiresDoc = selectedBalance?.leave_types?.requires_document && totalDays >= 3;
+
+  // Real-time overlapping request check
+  const { data: overlappingRequests = [] } = useQuery({
+    queryKey: ['overlapping-leaves', employee?.id, form.start_date, form.end_date],
+    queryFn: async () => {
+      if (!employee?.id || !form.start_date || !form.end_date) return [];
+      const { data, error } = await supabase
+        .from('leave_requests')
+        .select('id, start_date, end_date, leave_types(name)')
+        .eq('employee_id', employee.id)
+        .in('status', ['approved', 'pending'])
+        .lte('start_date', form.end_date)
+        .gte('end_date', form.start_date);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!employee?.id && !!form.start_date && !!form.end_date && form.start_date <= form.end_date,
+  });
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -155,6 +220,38 @@ export default function ApplyLeave() {
   const applyMutation = useMutation({
     mutationFn: async () => {
       if (!employee) throw new Error('Employee record not found.');
+
+      // 1. Check for overlapping approved or pending leave requests
+      const { data: overlaps, error: checkError } = await supabase
+        .from('leave_requests')
+        .select('id, start_date, end_date, leave_types(name)')
+        .eq('employee_id', employee.id)
+        .in('status', ['approved', 'pending'])
+        .lte('start_date', form.end_date)
+        .gte('end_date', form.start_date);
+
+      if (checkError) {
+        console.error('Error checking overlapping leaves:', checkError);
+        throw new Error('Failed to validate leave request overlap. Please try again.');
+      }
+
+      if (overlaps && overlaps.length > 0) {
+        const overlap = overlaps[0];
+        const leaveTypeName = (overlap.leave_types as any)?.name || 'another request';
+        throw new Error(
+          `You already have a pending or approved leave request (${leaveTypeName}) from ${overlap.start_date} to ${overlap.end_date} that overlaps with your selected dates.`
+        );
+      }
+
+      const hasManager = !!employee.reporting_manager_id;
+      const tiersObj = {
+        tiers: {
+          ...(hasManager ? { manager: { status: 'pending', id: employee.reporting_manager_id } } : {}),
+          hr: { status: 'pending' }
+        }
+      };
+
+      // 2. Proceed with insert if no overlap is detected
       const { data, error } = await supabase
         .from('leave_requests')
         .insert([{
@@ -167,17 +264,69 @@ export default function ApplyLeave() {
           reason: form.reason || null,
           document_url: form.document_url || null,
           status: 'pending' as const,
+          rejection_reason: JSON.stringify(tiersObj)
         }])
         .select()
         .single();
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: async (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['my-leaves'] });
       queryClient.invalidateQueries({ queryKey: ['leave-balances'] });
       toast.success('Leave request submitted successfully');
+
+      const submittedStart = form.start_date;
+      const submittedEnd = form.end_date;
+
       setForm({ leave_type_id: '', start_date: '', end_date: '', reason: '', document_url: '' });
+
+      // Real-time Notification Dispatch (Phase 5)
+      try {
+        if (employee) {
+          let managerUserId: string | null = null;
+          if (employee.reporting_manager_id) {
+            const { data: mgr } = await supabase
+              .from('employees')
+              .select('user_id')
+              .eq('id', employee.reporting_manager_id)
+              .maybeSingle();
+            managerUserId = mgr?.user_id || null;
+          }
+
+          if (managerUserId) {
+            await supabase.from('notifications').insert({
+              company_id: employee.company_id,
+              user_id: managerUserId,
+              type: 'leave_request',
+              title: 'New Leave Request Submitted',
+              message: `${employee.first_name} ${employee.last_name} has requested leave from ${submittedStart} to ${submittedEnd}.`,
+              link: '/leave'
+            });
+          } else {
+            // Fallback: Notify company admins and HR managers
+            const { data: admins } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('company_id', employee.company_id)
+              .in('platform_role', ['company_admin', 'hr_manager']);
+
+            if (admins && admins.length > 0) {
+              const notificationsToInsert = admins.map(adm => ({
+                company_id: employee.company_id,
+                user_id: adm.id,
+                type: 'leave_request',
+                title: 'New Leave Request Submitted',
+                message: `${employee.first_name} ${employee.last_name} has requested leave from ${submittedStart} to ${submittedEnd}.`,
+                link: '/leave'
+              }));
+              await supabase.from('notifications').insert(notificationsToInsert);
+            }
+          }
+        }
+      } catch (notifErr) {
+        console.error("Error dispatching leave submission notification:", notifErr);
+      }
     },
     onError: (err: any) => {
       toast.error(err?.message || 'Failed to submit leave request');
@@ -310,6 +459,15 @@ export default function ApplyLeave() {
                 </div>
               </div>
 
+              {overlappingRequests && overlappingRequests.length > 0 && (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs text-destructive flex items-start gap-2.5 animate-in fade-in slide-in-from-top-2">
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="font-semibold">Collision Alert:</strong> You already have a pending or approved leave request ({(overlappingRequests[0] as any).leave_types?.name || 'Leave'}) from {overlappingRequests[0].start_date} to {overlappingRequests[0].end_date} that overlaps with your selected dates.
+                  </div>
+                </div>
+              )}
+
               {totalDays > 0 && (
                 <div className="space-y-3">
                   <div className="rounded border border-border/50 bg-primary/5 px-4 py-3 text-sm text-primary flex justify-between items-center">
@@ -399,9 +557,13 @@ export default function ApplyLeave() {
 
               <div className="flex gap-3 pt-2">
                 <Button type="button" variant="outline" onClick={() => navigate('/leave')}>Cancel</Button>
-                <Button type="submit" disabled={applyMutation.isPending || uploadingDoc} className="flex-1 gap-2">
+                <Button 
+                  type="submit" 
+                  disabled={applyMutation.isPending || uploadingDoc || (overlappingRequests && overlappingRequests.length > 0)} 
+                  className="flex-1 gap-2"
+                >
                   {applyMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  {applyMutation.isPending ? 'Submitting...' : 'Submit Request'}
+                  {applyMutation.isPending ? 'Submitting...' : (overlappingRequests && overlappingRequests.length > 0) ? 'Overlapping Dates' : 'Submit Request'}
                 </Button>
               </div>
             </form>

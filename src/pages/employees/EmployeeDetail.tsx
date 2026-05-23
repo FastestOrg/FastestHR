@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   ArrowLeft, Save, Pencil, X, Loader2,
   Mail, Phone, Building2, Briefcase, CalendarDays,
-  Clock, UserCheck, AlertTriangle, Trash2, KeyRound
+  Clock, UserCheck, AlertTriangle, Trash2, KeyRound, MapPin
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -37,7 +37,7 @@ const EMPLOYMENT_TYPES = ['full_time', 'part_time', 'contract', 'intern'] as con
 const STATUS_OPTIONS = ['active', 'probation', 'on_leave', 'resigned', 'terminated'] as const;
 const GENDERS = ['male', 'female', 'other', 'prefer_not_to_say'] as const;
 
-type Tab = 'profile' | 'attendance' | 'leaves' | 'payroll';
+type Tab = 'profile' | 'attendance' | 'leaves' | 'payroll' | 'shifts';
 
 interface EmployeeRecord {
   id: string;
@@ -57,9 +57,11 @@ interface EmployeeRecord {
   department_id: string | null;
   designation_id: string | null;
   reporting_manager_id: string | null;
+  location_id: string | null;
   custom_fields?: any;
   departments?: { name: string } | null;
   designations?: { title: string } | null;
+  company_locations?: { name: string } | null;
 }
 
 export default function EmployeeDetail() {
@@ -82,7 +84,7 @@ export default function EmployeeDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('employees')
-        .select('*, departments(name), designations(title)')
+        .select('*, departments(name), designations(title), company_locations(name)')
         .eq('id', id!)
         .is('deleted_at', null)
         .single();
@@ -136,6 +138,16 @@ export default function EmployeeDetail() {
     enabled: !!profile?.company_id,
   });
 
+  const { data: locations = [] } = useQuery({
+    queryKey: ['company-locations', profile?.company_id],
+    queryFn: async () => {
+      if (!profile?.company_id) return [];
+      const { data } = await supabase.from('company_locations').select('id, name').eq('company_id', profile.company_id).eq('is_active', true).order('name');
+      return (data || []) as { id: string; name: string }[];
+    },
+    enabled: !!profile?.company_id,
+  });
+
   const { data: leaveHistory = [] } = useQuery({
     queryKey: ['leave-history', id],
     queryFn: async () => {
@@ -162,6 +174,89 @@ export default function EmployeeDetail() {
       return data || [];
     },
     enabled: !!id && activeTab === 'attendance',
+  });
+
+  const { data: employeeShifts = [], refetch: refetchEmployeeShifts } = useQuery({
+    queryKey: ['employee-shifts', id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('employee_shifts')
+        .select('*, shifts(name, start_time, end_time)')
+        .eq('employee_id', id!)
+        .order('effective_from', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!id && activeTab === 'shifts',
+  });
+
+  const { data: availableShifts = [] } = useQuery({
+    queryKey: ['available-shifts', profile?.company_id],
+    queryFn: async () => {
+      if (!profile?.company_id) return [];
+      const { data, error } = await supabase
+        .from('shifts')
+        .select('*')
+        .eq('company_id', profile.company_id)
+        .order('name');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!profile?.company_id && activeTab === 'shifts',
+  });
+
+  const [assignShiftForm, setAssignShiftForm] = useState({
+    shift_id: '',
+    effective_from: new Date().toISOString().split('T')[0],
+    effective_to: '',
+  });
+
+  const assignShiftMutation = useMutation({
+    mutationFn: async () => {
+      if (!id) throw new Error("No employee ID");
+      if (!assignShiftForm.shift_id) throw new Error("Please select a shift");
+      if (!assignShiftForm.effective_from) throw new Error("Please select an effective from date");
+
+      const { error } = await supabase
+        .from('employee_shifts')
+        .insert({
+          employee_id: id,
+          shift_id: assignShiftForm.shift_id,
+          effective_from: assignShiftForm.effective_from,
+          effective_to: assignShiftForm.effective_to || null,
+        });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      refetchEmployeeShifts();
+      setAssignShiftForm({
+        shift_id: '',
+        effective_from: new Date().toISOString().split('T')[0],
+        effective_to: '',
+      });
+      toast.success('Shift assigned successfully');
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || 'Failed to assign shift');
+    }
+  });
+
+  const deleteShiftAllocationMutation = useMutation({
+    mutationFn: async (allocationId: string) => {
+      const { error } = await supabase
+        .from('employee_shifts')
+        .delete()
+        .eq('id', allocationId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      refetchEmployeeShifts();
+      toast.success('Shift allocation removed successfully');
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || 'Failed to remove shift allocation');
+    }
   });
 
   const updateMutation = useMutation({
@@ -203,6 +298,7 @@ export default function EmployeeDetail() {
         department_id: deptId,
         designation_id: desigId,
         reporting_manager_id: payload.reporting_manager_id || null,
+        location_id: payload.location_id || null,
         date_of_joining: payload.date_of_joining || null,
         date_of_birth: payload.date_of_birth || null,
         gender: payload.gender,
@@ -384,6 +480,7 @@ export default function EmployeeDetail() {
     { id: 'attendance', label: 'Attendance' },
     { id: 'leaves', label: 'Leave History' },
     { id: 'payroll', label: 'Payroll' },
+    { id: 'shifts', label: 'Shift Allocation' },
   ];
 
   return (
@@ -488,6 +585,10 @@ export default function EmployeeDetail() {
                 <UserCheck className="h-4 w-4 text-primary/60" />
                 <span>Gender: {employee.gender || '—'}</span>
               </div>
+              <div className="flex items-center gap-2 text-muted-foreground col-span-1 sm:col-span-2 md:col-span-3">
+                <MapPin className="h-4 w-4 text-primary/60" />
+                <span>Assigned Office Branch: {employee.company_locations?.name || <span className="text-warning font-medium">All Branches (Default Geofence)</span>}</span>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -576,6 +677,10 @@ export default function EmployeeDetail() {
                   value: m.id,
                   label: `${m.first_name} ${m.last_name}${m.employee_code ? ` (${m.employee_code})` : ''}`,
                 }))
+              },
+              {
+                label: 'Office Location / Branch', name: 'location_id',
+                options: locations.map(l => ({ value: l.id, label: l.name }))
               },
             ] as { label: string; name: string; options: { value: string; label: string }[] }[]).map(({ label, name, options }) => {
               const selectedOption = options.find(o => o.value === (employee as any)[name]);
@@ -733,6 +838,119 @@ export default function EmployeeDetail() {
             <Button onClick={() => navigate('/payroll')} className="mt-4 shadow-sm hover:shadow-md transition-all group">
               Go to Payroll <ArrowLeft className="ml-2 h-4 w-4 rotate-180 group-hover:translate-x-1 transition-transform" />
             </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Shift Allocation tab */}
+      {activeTab === 'shifts' && (
+        <Card className="overflow-hidden border-border/40 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <CardHeader className="border-b border-border/10 bg-muted/20 pb-4">
+            <CardTitle className="text-foreground font-medium text-base flex items-center gap-2">
+              <Clock className="h-4 w-4 text-primary/70" /> Shift Allocation
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-6 space-y-6">
+            {/* Assign Shift Form */}
+            {profile?.platform_role !== 'user' && (
+              <div className="p-4 rounded-lg border border-border bg-muted/5 space-y-4">
+                <h3 className="font-semibold text-sm">Assign New Shift</h3>
+                <div className="grid sm:grid-cols-3 gap-4 items-end">
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase">Select Shift</label>
+                    <select
+                      value={assignShiftForm.shift_id}
+                      onChange={(e) => setAssignShiftForm(prev => ({ ...prev, shift_id: e.target.value }))}
+                      className="flex h-10 w-full rounded-md border border-border/50 bg-background px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none shadow-sm"
+                    >
+                      <option value="">— Choose Shift —</option>
+                      {availableShifts.map((s: any) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.start_time.substring(0, 5)} - {s.end_time.substring(0, 5)})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase">Effective From</label>
+                    <Input
+                      type="date"
+                      value={assignShiftForm.effective_from}
+                      onChange={(e) => setAssignShiftForm(prev => ({ ...prev, effective_from: e.target.value }))}
+                      className="bg-background border-border/50 text-sm h-10"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase">Effective To (Optional)</label>
+                    <Input
+                      type="date"
+                      value={assignShiftForm.effective_to}
+                      onChange={(e) => setAssignShiftForm(prev => ({ ...prev, effective_to: e.target.value }))}
+                      className="bg-background border-border/50 text-sm h-10"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end pt-2">
+                  <Button
+                    size="sm"
+                    onClick={() => assignShiftMutation.mutate()}
+                    disabled={assignShiftMutation.isPending}
+                  >
+                    {assignShiftMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+                    Assign Shift
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Allocated Shifts List */}
+            <div className="space-y-4">
+              <h3 className="font-semibold text-sm">Shift Assignment History</h3>
+              {employeeShifts.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 py-8 text-center text-muted-foreground">
+                  <Clock className="h-8 w-8 opacity-20" />
+                  <p className="text-sm">No shifts assigned to this employee yet.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-border/30">
+                  {employeeShifts.map((alloc: any) => {
+                    const isActive = !alloc.effective_to || new Date(alloc.effective_to) >= new Date();
+                    return (
+                      <div key={alloc.id} className="flex items-center justify-between py-4 text-sm hover:bg-muted/10 transition-colors px-2 rounded-md">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-primary">{alloc.shifts?.name || 'Shift'}</span>
+                            <Badge variant={isActive ? 'default' : 'outline'} className="text-[9px] px-1.5 h-4">
+                              {isActive ? 'Active' : 'Past'}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Timings: {alloc.shifts?.start_time?.substring(0, 5) || '—'} to {alloc.shifts?.end_time?.substring(0, 5) || '—'}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5 font-mono">
+                            Effective: {alloc.effective_from} {alloc.effective_to ? `to ${alloc.effective_to}` : '(Onwards)'}
+                          </p>
+                        </div>
+                        {profile?.platform_role !== 'user' && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-destructive/50 hover:text-destructive h-8 w-8 hover:bg-destructive/10"
+                            onClick={() => {
+                              if (confirm('Are you sure you want to remove this shift assignment?')) {
+                                deleteShiftAllocationMutation.mutate(alloc.id);
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}

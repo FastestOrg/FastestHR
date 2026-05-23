@@ -88,6 +88,7 @@ export default function NewEmployee() {
     employment_type: 'full_time' as typeof EMPLOYMENT_TYPES[number],
     status: 'active' as typeof STATUSES[number],
     reporting_manager_id: '',
+    location_id: '',
   });
 
   const { data: departments = [] } = useQuery({
@@ -103,6 +104,15 @@ export default function NewEmployee() {
     queryKey: ['designations', profile?.company_id],
     queryFn: async () => {
       const { data } = await supabase.from('designations').select('id, title').eq('company_id', profile!.company_id!).order('title');
+      return data || [];
+    },
+    enabled: !!profile?.company_id,
+  });
+
+  const { data: locations = [] } = useQuery({
+    queryKey: ['company-locations', profile?.company_id],
+    queryFn: async () => {
+      const { data } = await supabase.from('company_locations').select('id, name').eq('company_id', profile!.company_id!).eq('is_active', true).order('name');
       return data || [];
     },
     enabled: !!profile?.company_id,
@@ -161,6 +171,7 @@ export default function NewEmployee() {
             department_id: payload.department_id || null,
             designation_id: payload.designation_id || null,
             reporting_manager_id: payload.reporting_manager_id || null,
+            location_id: payload.location_id || null,
             date_of_birth: payload.date_of_birth || null,
             date_of_joining: payload.date_of_joining || null,
             personal_email: payload.personal_email || null,
@@ -354,6 +365,13 @@ export default function NewEmployee() {
               value={form.status}
               onChange={handleChange}
               options={STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) }))}
+            />
+            <SelectField
+              label="Office Location / Branch"
+              name="location_id"
+              value={form.location_id}
+              onChange={handleChange}
+              options={locations.map((l: any) => ({ value: l.id, label: l.name }))}
             />
           </CardContent>
         </Card>
