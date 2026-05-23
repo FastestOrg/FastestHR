@@ -9,6 +9,7 @@ import { useAuthStore } from '@/store/auth-store';
 import { useTheme } from '@/hooks/use-theme';
 import { HelmetProvider } from 'react-helmet-async';
 import { getCompanySlugFromHost } from '@/utils/tenantUtils';
+import { Capacitor } from '@capacitor/core';
 
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
@@ -52,6 +53,9 @@ import Companies from '@/pages/admin/Companies';
 import Subscriptions from '@/pages/admin/Subscriptions';
 import SystemSettings from '@/pages/admin/SystemSettings';
 import Roles from '@/pages/settings/Roles';
+import AttritionInsights from '@/pages/admin/AttritionInsights';
+import CultureHub from '@/pages/CultureHub';
+import KPI from '@/pages/KPI';
 
 // Sub-pages (lazy loaded for performance)
 const NewEmployee = lazy(() => import('@/pages/employees/NewEmployee'));
@@ -64,6 +68,7 @@ const AIInterview = lazy(() => import('@/pages/company/AIInterview'));
 const CandidateLogin = lazy(() => import('@/pages/candidate/CandidateLogin'));
 const CandidatePortal = lazy(() => import('@/pages/candidate/CandidatePortal'));
 const ReferralPortal = lazy(() => import('@/pages/recruitment/ReferralPortal'));
+const EmployeeProfile = lazy(() => import('@/pages/profile/EmployeeProfile'));
 
 import PlaceholderPage from '@/pages/PlaceholderPage';
 import NotFound from '@/pages/NotFound';
@@ -143,13 +148,13 @@ function AppRoutes() {
       </AnimatePresence>
       <Routes>
       {/* Public routes */}
-      <Route path="/" element={<Landing />} />
+      <Route path="/" element={Capacitor.isNativePlatform() ? <Navigate to="/login" replace /> : <Landing />} />
       <Route path="/blog" element={<BlogList />} />
       <Route path="/blog/:slug" element={<BlogPost />} />
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
       <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
-      <Route path="/reset-password" element={<PublicRoute><ResetPassword /></PublicRoute>} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/offer/:token" element={<OfferView />} />
       <Route path="/ai-interview/:hash" element={<Suspense fallback={<LazyFallback />}><AIInterview /></Suspense>} />
       <Route path="/id/:publicId" element={<PublicIDCard />} />
@@ -174,6 +179,7 @@ function AppRoutes() {
 
       {/* Core HR modules */}
       <Route path="/dashboard" element={withLayout(<Dashboard />)} />
+      <Route path="/profile" element={withLayout(<EmployeeProfile />)} />
       <Route path="/employees" element={withLayout(<Employees />)} />
       <Route path="/employees/new" element={withLayout(<NewEmployee />)} />
       <Route path="/employees/:id" element={withLayout(<EmployeeDetail />)} />
@@ -183,6 +189,8 @@ function AppRoutes() {
       <Route path="/payroll" element={withLayout(<Payroll />)} />
       <Route path="/performance" element={withLayout(<Performance />)} />
       <Route path="/recruitment" element={withLayout(<Recruitment />)} />
+      <Route path="/culture" element={withLayout(<CultureHub />)} />
+      <Route path="/kpi" element={withLayout(<KPI />)} />
       <Route path="/recruitment/new" element={withLayout(<NewJob />)} />
       <Route path="/recruitment/edit/:id" element={withLayout(<NewJob />)} />
       <Route path="/referrals" element={withLayout(<ReferralPortal />)} />
@@ -206,6 +214,7 @@ function AppRoutes() {
       <Route path="/admin/companies" element={withLayout(<Companies />, 'super_admin')} />
       <Route path="/admin/subscriptions" element={withLayout(<Subscriptions />, 'super_admin')} />
       <Route path="/admin/system" element={withLayout(<SystemSettings />, 'super_admin')} />
+      <Route path="/admin/attrition" element={withLayout(<AttritionInsights />, 'company_admin')} />
 
       {/* Footer Pages */}
       <Route path="/platform/core-engine" element={<CoreEngine />} />
@@ -231,7 +240,7 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <BrowserRouter>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <AppRoutes />
         </BrowserRouter>
       </TooltipProvider>

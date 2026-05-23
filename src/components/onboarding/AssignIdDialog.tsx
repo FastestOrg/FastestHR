@@ -55,7 +55,8 @@ export function AssignIdDialog({ open, onOpenChange, employeeId, employeeName, c
       const { error: compError } = await supabase
         .from('companies')
         .update({ employee_id_next_number: (company?.employee_id_next_number || 1) + 1 })
-        .eq('id', companyId);
+        .eq('id', companyId)
+        .select('id');
       if (compError) throw compError;
 
       // 3. Trigger email automation (Simplified for now - can be expanded to edge function)

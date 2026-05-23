@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">FastestHR</string>
+    <string name="title_activity_main">FastestHR</string>
+    <string name="package_name">com.fastesthr</string>
+    <string name="custom_url_scheme">com.fastesthr</string>
+</resources>

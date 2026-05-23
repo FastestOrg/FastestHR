@@ -11,3 +11,10 @@
 ## 2026-05-18 - [Add Password Visibility Toggles for Better UX]
 **Learning:** Blind-typing errors during password creation or reset cause significant user frustration. A consistent pattern of providing "Show/Hide" password visibility toggles using relative-positioned `Button` components with `Eye`/`EyeOff` icons over password `Input` fields significantly improves usability and accessibility.
 **Action:** When creating or modifying authentication forms, always incorporate password visibility toggles with proper `aria-label` attributes to allow users to verify their input.
+
+## 2026-05-13 - Password Visibility Toggles
+**Learning:** While primary password fields often get visibility toggles during initial development, 'Confirm Password' fields and secondary auth flows (like Reset Password) are frequently missed, leading to frustrating blind-typing errors and friction.
+**Action:** Always verify that *all* password input variants within a form or flow include a show/hide toggle, not just the primary input.
+## 2026-05-15 - Password visibility on 'Confirm Password' fields
+**Learning:** Found that while main password fields often have visibility toggles, 'Confirm Password' fields are frequently overlooked. This inconsistency causes UX friction as users can't verify what they typed in the confirmation field, leading to potential blind typing errors.
+**Action:** Ensure all password input fields, including confirmation fields, have a consistent 'show/hide' visibility toggle.

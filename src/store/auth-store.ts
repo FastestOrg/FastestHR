@@ -45,6 +45,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       supabase.auth.onAuthStateChange(async (event, session) => {
         set({ session, user: session?.user ?? null });
         
+        if (event === 'PASSWORD_RECOVERY') {
+          if (window.location.pathname !== '/reset-password') {
+            window.location.href = '/reset-password';
+            return;
+          }
+        }
+
         if (session?.user) {
           // Use setTimeout to avoid Supabase deadlock
           setTimeout(async () => {

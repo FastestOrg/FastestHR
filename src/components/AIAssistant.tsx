@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { MessageCircle, X, Send, Bot, User, Sparkles } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface Message {
   id: string;
@@ -60,6 +61,7 @@ function getResponse(input: string): string {
 }
 
 export function AIAssistant() {
+  const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([
@@ -94,7 +96,7 @@ export function AIAssistant() {
 
   if (!open) {
     return (
-      <div className="fixed bottom-6 right-6 z-50">
+      <div className={`fixed right-6 z-50 ${isMobile ? 'bottom-24' : 'bottom-6'}`}>
         <Button
           size="lg"
           onClick={() => setOpen(true)}
@@ -109,8 +111,8 @@ export function AIAssistant() {
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-4">
-      <Card className="w-80 sm:w-96 shadow-2xl border-primary/20">
+    <div className={`fixed z-50 animate-in fade-in slide-in-from-bottom-4 ${isMobile ? 'bottom-20 right-3 left-3' : 'bottom-6 right-6'}`}>
+      <Card className={`shadow-2xl border-primary/20 ${isMobile ? 'w-full' : 'w-80 sm:w-96'}`}>
         <CardHeader className="pb-3 flex flex-row items-center justify-between bg-primary/5 rounded-t-lg">
           <CardTitle className="text-sm flex items-center gap-2">
             <Bot className="w-5 h-5 text-primary" />

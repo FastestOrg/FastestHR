@@ -26,8 +26,9 @@ export function PublicRoute({ children }: PublicRouteProps) {
     );
   }
 
-  // If user is logged in, redirect to dashboard
-  if (user) {
+  // If user is logged in, redirect to dashboard (unless they are in password recovery flow)
+  const isRecovery = window.location.hash.includes('type=recovery') || window.location.href.includes('type=recovery');
+  if (user && !isRecovery) {
     return <Navigate to="/dashboard" replace />;
   }
 
