@@ -164,18 +164,18 @@ export function DailyReportForm() {
                 />
               </div>
 
-              <div className="space-y-4 bg-secondary/20 p-6 rounded-2xl border border-border/50">
+              <div className="space-y-4 bg-secondary/20 p-4 sm:p-6 rounded-2xl border border-border/50">
                 <label className="text-sm font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
                   <Sun className="h-4 w-4" />
                   Your energy level
                 </label>
-                <div className="flex justify-between sm:justify-start gap-4 sm:gap-6">
+                <div className="flex justify-between sm:justify-start gap-2 sm:gap-6 -mx-2 px-2 overflow-x-auto scrollbar-hide">
                   {['😊', '🚀', '🔥', '😅', '😴'].map((m) => (
                     <button
                       key={m}
                       type="button"
                       onClick={() => setMood(m)}
-                      className={`text-4xl p-3 rounded-2xl transition-all hover:scale-125 border-2 ${mood === m ? 'bg-primary/10 border-primary shadow-lg scale-110' : 'border-transparent grayscale hover:grayscale-0'}`}
+                      className={`text-3xl sm:text-4xl p-2.5 sm:p-3 rounded-xl sm:rounded-2xl transition-all hover:scale-125 border-2 shrink-0 ${mood === m ? 'bg-primary/10 border-primary shadow-lg scale-110' : 'border-transparent grayscale hover:grayscale-0'}`}
                     >
                       {m}
                     </button>

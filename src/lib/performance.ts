@@ -11,8 +11,23 @@ export const initPerformanceMonitoring = () => {
     // @ts-ignore
     const loafObserver = new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
-        if (entry.duration > 50) {
+        // Only warn for significant blocking frames (>150ms) that occur after the initial loading/hydration phase (first 3 seconds).
+        // During startup, a blocked thread is normal as the browser executes bundles and renders/hydrates the DOM.
+        const isPostLoad = entry.startTime > 3000;
+        if (entry.duration > 150 && isPostLoad) {
           console.warn('[Performance] Long Animation Frame detected:', {
+            duration: `${entry.duration.toFixed(2)}ms`,
+            startTime: entry.startTime,
+            // @ts-ignore
+            renderStart: entry.renderStart,
+            scripts: (entry as any).scripts?.map((s: any) => ({
+              duration: s.duration,
+              source: s.sourceLocation,
+              type: s.invokerType
+            }))
+          });
+        } else if (entry.duration > 50) {
+          console.debug('[Performance] Moderate or Startup Animation Frame detected:', {
             duration: `${entry.duration.toFixed(2)}ms`,
             startTime: entry.startTime,
             // @ts-ignore

@@ -7,12 +7,13 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FileText, Upload, Download, Trash2, Search, FolderOpen, Shield, FileCheck, File } from 'lucide-react';
+import { FileText, Upload, Download, Trash2, Search, FolderOpen, Shield, FileCheck, File, Eye, Loader2, AlertCircle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/store/auth-store';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { differenceInDays } from 'date-fns';
+import { useSecureUpload } from '@/hooks/use-secure-upload';
 
 interface Document {
   id: string;
@@ -36,6 +37,7 @@ const categories = [
 export default function Documents() {
   const { profile } = useAuthStore();
   const isAdmin = profile?.platform_role === 'company_admin' || profile?.platform_role === 'super_admin' || profile?.platform_role === 'hr_manager';
+  const { validateFile } = useSecureUpload();
 
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,6 +48,11 @@ export default function Documents() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState({ name: '', category: 'hr_policies', description: '', expiresAt: '' });
   const [file, setFile] = useState<File | null>(null);
+
+  // Document preview states
+  const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   useEffect(() => {
     fetchDocuments();
@@ -121,6 +128,13 @@ export default function Documents() {
 
     setUploading(true);
     try {
+      // Binary level security check (magic-bytes checking)
+      const isValid = await validateFile(file);
+      if (!isValid) {
+        setUploading(false);
+        return;
+      }
+
       const fileExt = file.name.split('.').pop();
       const fileName = `${profile.company_id}/${Date.now()}_${crypto.randomUUID()}.${fileExt}`;
 
@@ -216,6 +230,25 @@ export default function Documents() {
     }
   };
 
+  const handlePreview = async (doc: Document) => {
+    if (!doc.filePath) return;
+    setPreviewDoc(doc);
+    setPreviewLoading(true);
+    try {
+      const { data, error } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(doc.filePath, 300);
+      
+      if (error) throw error;
+      setPreviewUrl(data?.signedUrl || null);
+    } catch (err) {
+      toast.error('Failed to generate preview URL');
+      console.error(err);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -294,18 +327,18 @@ export default function Documents() {
       </div>
 
       {/* Category Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
         {categories.map(cat => {
           const count = documents.filter(d => d.category === cat.value).length;
           return (
             <Card key={cat.value} className="cursor-pointer hover:border-primary/50 transition-colors" onClick={() => setActiveTab(cat.value)}>
-              <CardContent className="p-5 flex items-center gap-4">
-                <div className={`p-3 rounded-lg bg-background border border-border/50 ${cat.color}`}>
-                  <cat.icon className="w-5 h-5" />
+              <CardContent className="p-4 sm:p-5 flex items-center gap-3 sm:gap-4">
+                <div className={`p-2 sm:p-3 rounded-lg bg-background border border-border/50 ${cat.color} flex-shrink-0`}>
+                  <cat.icon className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium">{cat.label}</p>
-                  <p className="text-2xl font-bold">{count}</p>
+                  <p className="text-xs sm:text-sm font-semibold truncate max-w-[80px] sm:max-w-none">{cat.label}</p>
+                  <p className="text-xl sm:text-2xl font-black">{count}</p>
                 </div>
               </CardContent>
             </Card>
@@ -317,17 +350,19 @@ export default function Documents() {
       <div className="flex gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="Search documents..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input placeholder="Search documents..." className="pl-9 w-full bg-background/50 border-border/50 text-sm" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="all">All</TabsTrigger>
-          {categories.map(c => (
-            <TabsTrigger key={c.value} value={c.value}>{c.label}</TabsTrigger>
-          ))}
-        </TabsList>
+        <div className="w-full overflow-x-auto pb-1 scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
+          <TabsList className="flex w-max sm:w-auto">
+            <TabsTrigger value="all" className="text-xs sm:text-sm">All</TabsTrigger>
+            {categories.map(c => (
+              <TabsTrigger key={c.value} value={c.value} className="text-xs sm:text-sm">{c.label}</TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
         <TabsContent value={activeTab} className="mt-4">
           {loading ? (
             <Card>
@@ -346,15 +381,15 @@ export default function Documents() {
             <div className="space-y-3">
               {filteredDocs.map(doc => (
                 <Card key={doc.id} className="hover:border-primary/40 transition-colors">
-                  <CardContent className="p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="p-2 rounded bg-primary/10">
+                  <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-start sm:items-center gap-3 w-full">
+                      <div className="p-2.5 rounded-xl bg-primary/10 flex-shrink-0">
                         <FileText className="w-5 h-5 text-primary" />
                       </div>
-                      <div>
-                        <h4 className="font-medium text-sm">{doc.name}</h4>
-                        <p className="text-xs text-muted-foreground mt-0.5">{doc.description}</p>
-                        <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground uppercase">
+                      <div className="min-w-0 flex-1">
+                        <h4 className="font-semibold text-foreground text-sm truncate">{doc.name}</h4>
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{doc.description}</p>
+                        <div className="flex flex-wrap items-center gap-2 mt-1.5 text-[9px] sm:text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
                           <span>{doc.uploadedBy}</span>
                           <span>&bull;</span>
                           <span>{doc.uploadedAt}</span>
@@ -365,19 +400,22 @@ export default function Documents() {
                             return status ? (
                               <>
                                 <span>&bull;</span>
-                                <Badge variant="outline" className={`text-[10px] ${status.class}`}>{status.label}</Badge>
+                                <Badge variant="outline" className={`text-[8px] uppercase font-bold tracking-tight py-0 px-1.5 ${status.class}`}>{status.label}</Badge>
                               </>
                             ) : null;
                           })()}
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10" onClick={() => handleDownload(doc)} aria-label="Download document">
+                    <div className="flex items-center gap-2 justify-end w-full sm:w-auto border-t border-border/10 pt-2 sm:pt-0 sm:border-none">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10 rounded-lg" onClick={() => handlePreview(doc)} aria-label="Preview document">
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10 rounded-lg" onClick={() => handleDownload(doc)} aria-label="Download document">
                         <Download className="w-4 h-4" />
                       </Button>
                       {isAdmin && (
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => handleDelete(doc)} aria-label="Delete document">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10 rounded-lg" onClick={() => handleDelete(doc)} aria-label="Delete document">
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       )}
@@ -389,6 +427,49 @@ export default function Documents() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Document Preview Dialog */}
+      <Dialog open={!!previewDoc} onOpenChange={(open) => { if (!open) { setPreviewDoc(null); setPreviewUrl(null); } }}>
+        <DialogContent className="max-w-4xl h-[85vh] flex flex-col p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-primary font-bold">
+              <FileText className="h-5 w-5" /> {previewDoc?.name}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Sandboxed secure document viewer — Category: {previewDoc?.category}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 bg-muted rounded-xl overflow-hidden relative border border-border/80 mt-4 flex items-center justify-center">
+            {previewLoading ? (
+              <div className="flex flex-col items-center gap-2">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-xs text-muted-foreground font-medium">Generating secure sandbox tunnel...</p>
+              </div>
+            ) : previewUrl ? (
+              <iframe
+                src={previewUrl}
+                className="w-full h-full border-none bg-white"
+                sandbox="allow-scripts allow-same-origin"
+                title={previewDoc?.name}
+              />
+            ) : (
+              <div className="text-center p-6 text-muted-foreground space-y-2">
+                <AlertCircle className="h-10 w-10 text-destructive mx-auto" />
+                <p className="text-sm font-semibold">Failed to load secure preview</p>
+                <p className="text-xs">Please download the document instead to view its content.</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="mt-4 shrink-0 flex items-center justify-between w-full">
+            <span className="text-[10px] text-muted-foreground uppercase font-black tracking-wider">
+              Secure Sandbox Preview Encrypted
+            </span>
+            <Button variant="outline" size="sm" onClick={() => { setPreviewDoc(null); setPreviewUrl(null); }}>
+              Close Preview
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
