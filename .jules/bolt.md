@@ -28,6 +28,9 @@
 ## 2024-05-18 - Unnecessary API calls due to missing input debouncing
 **Learning:** Raw input search values used directly inside React Query `queryKey` without debouncing can trigger excessive network and database calls (one per keystroke) leading to significant overhead.
 **Action:** Always wrap user text input state with `useDebounce` and use the debounced value in the query dependencies instead of the raw input.
+## 2025-05-18 - Optimize array filtering loops using Set.has() and hoisted functions
+**Learning:** Checking inclusion of IDs against another array (`array.includes()`) within a `.filter()` or `.map()` loop results in `O(N*M)` time complexity. In React rendering cycles, doing this repeatedly inside inline assignments without `useMemo` causes performance bottlenecks as dataset size increases. Repeatedly calling `.toLowerCase()` on the search string inside the loop is also inefficient.
+**Action:** Convert arrays used for lookups into `Set`s before the loop to reduce lookup complexity to `O(1)`, resulting in `O(N+M)` time complexity overall. Pre-compute constant string transformations (like `.toLowerCase()`) before the loop. Wrap the entire array mapping/filtering calculation inside `useMemo` with appropriate dependencies to skip redundant processing when state hasn't changed.
 ## 2024-12-05 - Optimize O(N) includes to O(1) Set in filters
 **Learning:** Using `Array.includes()` inside an `Array.filter()` callback creates an O(N*M) nested loop pattern, which becomes a performance bottleneck as the filtered array and the lookup array grow in size.
 **Action:** When filtering an array based on the absence or presence of items in another array, always convert the lookup array into a `Set` before the loop, and use `Set.has()` instead of `Array.includes()` for O(1) lookups.
