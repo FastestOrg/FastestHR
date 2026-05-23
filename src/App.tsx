@@ -53,6 +53,9 @@ import Companies from '@/pages/admin/Companies';
 import Subscriptions from '@/pages/admin/Subscriptions';
 import SystemSettings from '@/pages/admin/SystemSettings';
 import Roles from '@/pages/settings/Roles';
+import AttritionInsights from '@/pages/admin/AttritionInsights';
+import CultureHub from '@/pages/CultureHub';
+import KPI from '@/pages/KPI';
 
 // Sub-pages (lazy loaded for performance)
 const NewEmployee = lazy(() => import('@/pages/employees/NewEmployee'));
@@ -186,6 +189,8 @@ function AppRoutes() {
       <Route path="/payroll" element={withLayout(<Payroll />)} />
       <Route path="/performance" element={withLayout(<Performance />)} />
       <Route path="/recruitment" element={withLayout(<Recruitment />)} />
+      <Route path="/culture" element={withLayout(<CultureHub />)} />
+      <Route path="/kpi" element={withLayout(<KPI />)} />
       <Route path="/recruitment/new" element={withLayout(<NewJob />)} />
       <Route path="/recruitment/edit/:id" element={withLayout(<NewJob />)} />
       <Route path="/referrals" element={withLayout(<ReferralPortal />)} />
@@ -209,6 +214,7 @@ function AppRoutes() {
       <Route path="/admin/companies" element={withLayout(<Companies />, 'super_admin')} />
       <Route path="/admin/subscriptions" element={withLayout(<Subscriptions />, 'super_admin')} />
       <Route path="/admin/system" element={withLayout(<SystemSettings />, 'super_admin')} />
+      <Route path="/admin/attrition" element={withLayout(<AttritionInsights />, 'company_admin')} />
 
       {/* Footer Pages */}
       <Route path="/platform/core-engine" element={<CoreEngine />} />

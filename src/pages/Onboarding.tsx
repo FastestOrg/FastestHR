@@ -44,6 +44,8 @@ export default function Onboarding() {
   const [assignIdOpen, setAssignIdOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
+  const [rejectingDocId, setRejectingDocId] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
 
   // Fetch current employee context if user is an employee
   const { data: currentEmployee } = useQuery({
@@ -161,6 +163,25 @@ export default function Onboarding() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['onboarding-progress', selectedEmployee] });
     },
+  });
+
+  const verifyDocMutation = useMutation({
+    mutationFn: async ({ submissionId, status }: { submissionId: string, status: string }) => {
+      const { error } = await supabase
+        .from('onboarding_document_submissions')
+        .update({ status })
+        .eq('id', submissionId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['onboarding-doc-submissions', selectedEmployee] });
+      toast.success('Document updated successfully');
+      setRejectingDocId(null);
+      setRejectionReason('');
+    },
+    onError: (err: any) => {
+      toast.error('Failed to update status: ' + err.message);
+    }
   });
 
   // Helpers

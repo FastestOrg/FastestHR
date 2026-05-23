@@ -6,6 +6,7 @@ import { Footer } from '@/components/layout/Footer';
 import { SEO } from '@/components/seo/SEO';
 import { AUTHORS, Author } from '@/data/authors';
 import { BLOGS, BlogPost } from '@/data/blogs';
+import { isSafeUrl } from '@/lib/utils';
 
 const AuthorDetail = () => {
   const { slug } = useParams();
@@ -91,13 +92,13 @@ const AuthorDetail = () => {
                 </p>
                 
                 <div className="flex flex-wrap justify-center md:justify-start gap-6">
-                  {author.linkedin && (
+                  {author.linkedin && isSafeUrl(author.linkedin) && (
                     <a href={author.linkedin} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-zinc-500 hover:text-white transition-colors">
                       <Linkedin className="w-5 h-5" />
                       <span className="text-sm font-medium">LinkedIn</span>
                     </a>
                   )}
-                  {author.twitter && (
+                  {author.twitter && isSafeUrl(author.twitter) && (
                     <a href={author.twitter} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-zinc-500 hover:text-white transition-colors">
                       <Twitter className="w-5 h-5" />
                       <span className="text-sm font-medium">Twitter</span>

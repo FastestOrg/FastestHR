@@ -255,7 +255,8 @@ export function SendDeskGenerator() {
       await supabase
         .from('companies')
         .update({ senddesk_sequence_current: seqCurrent } as any)
-        .eq('id', profile!.company_id!);
+        .eq('id', profile!.company_id!)
+        .select('id');
 
       toast.success(`Generated ${selectedEmployees.length} document(s) successfully!`);
       queryClient.invalidateQueries({ queryKey: ['senddesk-documents'] });

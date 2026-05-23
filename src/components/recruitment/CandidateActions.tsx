@@ -85,6 +85,142 @@ export function CandidateActions({
 
       if (error || !job) return;
 
+      // Handle Automated Onboarding (Candidate -> Employee)
+      if (newStage === 'hired') {
+        toast.info('Transitioning candidate to employee profile...');
+        
+        // 1. Fetch candidate information
+        const { data: cand } = await supabase
+          .from('candidates')
+          .select('*')
+          .eq('id', candidateId)
+          .single();
+          
+        if (cand) {
+          // 2. Fetch the latest offer details
+          const { data: offer } = await supabase
+            .from('candidate_offers')
+            .select('*')
+            .eq('candidate_id', candidateId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          // 3. Fetch job details (to get designation/employment_type)
+          const { data: jobDetails } = await supabase
+            .from('jobs')
+            .select('*')
+            .eq('id', jobId)
+            .maybeSingle();
+
+          // 4. Check if employee already exists with personal_email
+          const { data: existingEmp } = await supabase
+            .from('employees')
+            .select('id')
+            .eq('personal_email', cand.email)
+            .is('deleted_at', null)
+            .maybeSingle();
+
+          let employeeId = existingEmp?.id;
+
+          if (!employeeId) {
+            // Split candidate full name into first and last name
+            const names = (cand.full_name || '').trim().split(/\s+/);
+            const firstName = names[0] || 'First';
+            const lastName = names.slice(1).join(' ') || 'Last';
+
+            // Generate employee code
+            const empCode = `EMP-${Math.floor(100000 + Math.random() * 900000)}`;
+
+            // Insert employee
+            const { data: newEmp, error: empErr } = await supabase
+              .from('employees')
+              .insert({
+                company_id: cand.company_id,
+                first_name: firstName,
+                last_name: lastName,
+                personal_email: cand.email,
+                phone: cand.phone,
+                date_of_joining: offer?.joining_date || new Date().toISOString().split('T')[0],
+                status: 'probation',
+                employee_code: empCode,
+                employment_type: (jobDetails?.employment_type as any) || 'full_time'
+              })
+              .select('id')
+              .single();
+
+            if (empErr) {
+              console.error('Error inserting employee:', empErr);
+              toast.error(`Employee profile creation failed: ${empErr.message}`);
+            } else {
+              employeeId = newEmp.id;
+              toast.success(`Created Employee profile for ${cand.full_name}`);
+            }
+          } else {
+            toast.info(`Employee profile already exists for ${cand.full_name}`);
+          }
+
+          // 5. If we have employeeId, ensure salary structure is created
+          if (employeeId) {
+            const { data: existingStructure } = await supabase
+              .from('salary_structures')
+              .select('id')
+              .eq('employee_id', employeeId)
+              .maybeSingle();
+
+            if (!existingStructure) {
+              // Fetch company details to get compensation_structure
+              const { data: comp } = await supabase
+                .from('companies')
+                .select('compensation_structure')
+                .eq('id', cand.company_id)
+                .single();
+
+              const compStructure = (comp?.compensation_structure as any) || {
+                basic_pay: 50,
+                dearness_allowance: 10,
+                house_rental: 20,
+                conveyance_allowance: 5,
+                special_allowance: 10,
+                medical_insurance: 5
+              };
+
+              const annualGross = offer?.payout || 500000; // default to a standard 5 LPA or offer payout
+
+              // Calculate individual component amounts based on percentage splits
+              const components = [
+                { name: 'Basic Pay', amount: Math.round((annualGross * (Number(compStructure.basic_pay) || 0)) / 100) },
+                { name: 'Dearness Allowance', amount: Math.round((annualGross * (Number(compStructure.dearness_allowance) || 0)) / 100) },
+                { name: 'House Rental Allowance', amount: Math.round((annualGross * (Number(compStructure.house_rental) || 0)) / 100) },
+                { name: 'Conveyance Allowance', amount: Math.round((annualGross * (Number(compStructure.conveyance_allowance) || 0)) / 100) },
+                { name: 'Special Allowance', amount: Math.round((annualGross * (Number(compStructure.special_allowance) || 0)) / 100) },
+                { name: 'Medical Insurance', amount: Math.round((annualGross * (Number(compStructure.medical_insurance) || 0)) / 100) }
+              ];
+
+              const { error: salErr } = await supabase
+                .from('salary_structures')
+                .insert({
+                  company_id: cand.company_id,
+                  employee_id: employeeId,
+                  gross_salary: annualGross,
+                  effective_from: offer?.joining_date || new Date().toISOString().split('T')[0],
+                  components: components as any
+                });
+
+              if (salErr) {
+                console.error('Error inserting salary structure:', salErr);
+                toast.error(`Salary structure creation failed: ${salErr.message}`);
+              } else {
+                toast.success('Generated salary structure matching negotiated CTC.');
+              }
+            }
+          }
+        }
+
+        queryClient.invalidateQueries({ queryKey: ['new-hires'] });
+        queryClient.invalidateQueries({ queryKey: ['employees'] });
+      }
+
       let automations = (job as any).stage_automations?.[newStage];
       
       // If moving to offer, we inherently need to send the offer
@@ -207,15 +343,6 @@ export function CandidateActions({
       if (automations.notify_team) {
         toast.info(`Automation: Notifying hiring team...`);
       }
-
-      // Handle Automated Onboarding (Candidate -> Employee)
-      if (newStage === 'hired') {
-        // The insertion is now handled by the database trigger 'on_candidate_hired'
-        // We just invalidate queries to refresh the Onboarding page data if it's open
-        queryClient.invalidateQueries({ queryKey: ['new-hires'] });
-        queryClient.invalidateQueries({ queryKey: ['employees'] });
-      }
-
     } catch (err) {
       console.error('Automation error:', err);
     }
@@ -412,7 +539,7 @@ export function CandidateActions({
       )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-6 w-6 -mr-2 -mt-2 text-muted-foreground">
+          <Button variant="ghost" size="icon" aria-label="Candidate actions" className="h-6 w-6 -mr-2 -mt-2 text-muted-foreground">
             <MoreHorizontal className="w-4 h-4" />
           </Button>
         </DropdownMenuTrigger>
