@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth-store';
@@ -112,10 +112,19 @@ export function RoleUsers({ roleId, companyId }: RoleUsersProps) {
   });
 
   // Filter profiles that are not already assigned to this role, and match search
-  const assignedUserIds = assignedUsers.map((u: any) => u.user_id);
-  const assignableProfiles = allProfiles
-    .filter((p: any) => !assignedUserIds.includes(p.id))
-    .filter((p: any) => p.full_name?.toLowerCase().includes(search.toLowerCase()));
+  const assignableProfiles = useMemo(() => {
+    // Optimization: Convert assigned users to a Set for O(1) lookups to avoid O(N*M) array.includes() calls
+    const assignedUserIds = new Set(assignedUsers.map((u: any) => u.user_id));
+
+    // Optimization: Calculate lowercase search term once outside the loop to prevent redundant string allocation
+    const lowerSearch = search.toLowerCase();
+
+    return allProfiles.filter((p: any) => {
+      if (assignedUserIds.has(p.id)) return false;
+      if (!lowerSearch) return true;
+      return p.full_name?.toLowerCase().includes(lowerSearch);
+    });
+  }, [allProfiles, assignedUsers, search]);
 
   return (
     <div className="space-y-6">
