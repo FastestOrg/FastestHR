@@ -28,3 +28,6 @@
 ## 2024-05-18 - Unnecessary API calls due to missing input debouncing
 **Learning:** Raw input search values used directly inside React Query `queryKey` without debouncing can trigger excessive network and database calls (one per keystroke) leading to significant overhead.
 **Action:** Always wrap user text input state with `useDebounce` and use the debounced value in the query dependencies instead of the raw input.
+## 2026-05-14 - Optimize Array Filtering in Render Paths
+**Learning:** In React components that filter arrays during render, chaining `.filter()` with `.includes()` on arrays (O(N*M)) and performing repeated string allocations (e.g., `.toLowerCase()`) inside the loop can cause significant performance bottlenecks as lists grow.
+**Action:** Always extract static values (like `search.toLowerCase()`) outside the filter loop, convert lookup arrays to `Set`s for O(1) membership checks, and wrap the entire operation in `useMemo` to prevent recalculation on every re-render.
