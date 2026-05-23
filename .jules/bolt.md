@@ -28,6 +28,10 @@
 ## 2024-05-18 - Unnecessary API calls due to missing input debouncing
 **Learning:** Raw input search values used directly inside React Query `queryKey` without debouncing can trigger excessive network and database calls (one per keystroke) leading to significant overhead.
 **Action:** Always wrap user text input state with `useDebounce` and use the debounced value in the query dependencies instead of the raw input.
+
+## 2024-12-05 - Batching sequential Database Queries inside mapping loops
+**Learning:** Resolving N+1 issues when inserting/syncing tasks requires extracting keys, issuing a single `.in()` query, then running local filters to identify missing rows, and finally issuing a single bulk `.insert(array)`. When comparing timestamps retrieved from Supabase with locally constructed ISO strings, direct string comparison can fail due to time zone representation differences (`+00:00` vs `Z`).
+**Action:** When migrating from individual `.select` loops to batched lookups, always convert date strings to numeric values using `new Date(...).getTime()` for reliable matching and idempotency.
 ## 2026-05-14 - Optimize Array Filtering in Render Paths
 **Learning:** In React components that filter arrays during render, chaining `.filter()` with `.includes()` on arrays (O(N*M)) and performing repeated string allocations (e.g., `.toLowerCase()`) inside the loop can cause significant performance bottlenecks as lists grow.
 **Action:** Always extract static values (like `search.toLowerCase()`) outside the filter loop, convert lookup arrays to `Set`s for O(1) membership checks, and wrap the entire operation in `useMemo` to prevent recalculation on every re-render.
