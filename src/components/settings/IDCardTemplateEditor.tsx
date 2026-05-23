@@ -11,7 +11,7 @@ import DOMPurify from 'dompurify';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Loader2, Eye, Code, Save, Info, Sparkles } from 'lucide-react';
-import { escapeHtml } from '@/lib/utils';
+import { substituteVariables } from '@/lib/template-utils';
 
 export function IDCardTemplateEditor() {
   const { profile } = useAuthStore();
@@ -48,7 +48,8 @@ export function IDCardTemplateEditor() {
           id_card_template: template,
           id_card_primary_color: primaryColor,
         } as any)
-        .eq('id', profile!.company_id!);
+        .eq('id', profile!.company_id!)
+        .select('id');
       if (error) throw error;
     },
     onSuccess: () => {
@@ -63,7 +64,6 @@ export function IDCardTemplateEditor() {
   const renderPreview = () => {
     if (!company) return '';
     
-    let html = template;
     const placeholders: Record<string, string> = {
       '{{company_name}}': company.name || 'FastestHR',
       '{{logo_url}}': company.logo_url || 'https://via.placeholder.com/150?text=Logo',
@@ -76,9 +76,7 @@ export function IDCardTemplateEditor() {
       '{{avatar_url}}': 'https://api.dicebear.com/7.x/avataaars/svg?seed=John',
     };
 
-    Object.entries(placeholders).forEach(([key, val]) => {
-      html = html.replace(new RegExp(key, 'g'), () => escapeHtml(String(val)));
-    });
+    const html = substituteVariables(template, placeholders);
 
     return DOMPurify.sanitize(html, { ADD_TAGS: ['style'], ADD_ATTR: ['style'], FORCE_BODY: true });
   };

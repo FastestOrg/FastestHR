@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Users, Clock, CalendarDays, DollarSign, BarChart3,
   Briefcase, GraduationCap, Headset, Megaphone, PieChart, Settings,
   Globe, Building2, CreditCard, Server, ChevronLeft, LogOut, Zap,
-  FileText, UserPlus, Network, UserMinus, CalendarCheck, ChevronRight, Send, Shield, Contact
+  FileText, UserPlus, Network, UserMinus, CalendarCheck, ChevronRight, Send, Shield, Contact, UserCircle2, ActivitySquare
 } from 'lucide-react';
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
@@ -36,6 +36,7 @@ const ADMIN_ONLY: Role[] = ['company_admin'];
 
 const fastBoardNav: NavItem[] = [
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard, roles: ALL_ROLES },
+  { title: 'My Profile', url: '/profile', icon: UserCircle2, roles: ALL_ROLES },
   { title: 'Announcements', url: '/announcements', icon: Megaphone, roles: ALL_ROLES },
   { title: 'Employee', url: '/employees', icon: Users, roles: ADMIN_HR },
   { title: 'Attendance', url: '/attendance', icon: Clock, roles: ALL_ROLES },
@@ -52,6 +53,7 @@ const managementNav: NavItem[] = [
   { title: 'Recruitment', url: '/recruitment', icon: Briefcase, roles: ['company_admin', 'hr_manager', 'recruiter'] },
   { title: 'Onboarding', url: '/onboarding', icon: UserPlus, roles: ADMIN_HR },
   { title: 'Performance', url: '/performance', icon: BarChart3, roles: ALL_ROLES },
+  { title: 'KPI Matrix', url: '/kpi', icon: ActivitySquare, roles: ALL_ROLES },
   { title: 'Help Desk', url: '/helpdesk', icon: Headset, roles: ALL_ROLES },
   { title: 'Reports', url: '/reports', icon: PieChart, roles: ADMIN_HR },
   { title: 'Payroll', url: '/payroll', icon: DollarSign, roles: [...ADMIN_HR, 'user', 'recruiter'] },

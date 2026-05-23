@@ -2,12 +2,15 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Loader2, Download, CheckCircle, XCircle, FileSignature, Mail } from 'lucide-react';
+import { Loader2, Download, CheckCircle, XCircle, FileSignature, Mail, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import { OfferLetterRenderer } from '@/components/recruitment/OfferLetterRenderer';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Info, MousePointer2 } from "lucide-react";
 import { SignaturePortal } from '@/components/recruitment/SignaturePortal';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 export default function OfferView() {
   const { token } = useParams<{ token: string }>();
@@ -21,6 +24,12 @@ export default function OfferView() {
   const [isPlacementMode, setIsPlacementMode] = useState(false);
   const [placedSignatures, setPlacedSignatures] = useState<any[]>([]);
   const [submitting, setSubmitting] = useState(false);
+
+  // OTP Verification state variables
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
+  const [generatedOtpMock, setGeneratedOtpMock] = useState('');
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -57,8 +66,12 @@ export default function OfferView() {
           setError('Offer not found or link has expired.');
         } else {
           setOffer(data);
-          if (data.signature_placement) {
+          // Ensure we load existing signatures if they exist
+          if (data.signature_placement && Array.isArray(data.signature_placement)) {
             setPlacedSignatures(data.signature_placement);
+            console.log('Loaded existing signatures:', data.signature_placement.length);
+          } else {
+            setPlacedSignatures([]);
           }
         }
       } catch (err: unknown) {
@@ -146,28 +159,69 @@ export default function OfferView() {
     toast.success("Signature placed! You can now submit the signed document.");
   };
 
-  const handleSubmitSignature = async () => {
+  const handleStartSignatureSigning = async () => {
     if (!offer || placedSignatures.length === 0) return;
     
     setSubmitting(true);
     try {
-      const { error: updateError } = await supabase
-        .from('candidate_offers')
-        .update({
-          status: 'signed',
-          signed_at: new Date().toISOString(),
-          signature_placement: placedSignatures
-        })
-        .eq('id', offer.id);
+      const cleanToken = token!.trim();
+      const { data: otp, error: otpErr } = await supabase
+        .rpc('generate_offer_otp_by_token', { p_token: cleanToken });
 
-      if (updateError) throw updateError;
-
-      toast.success("Document signed and submitted successfully!");
-      setOffer({ ...offer, status: 'signed' });
+      if (otpErr) throw otpErr;
+      
+      // Store generated OTP in local state for easy debugging / local testing
+      setGeneratedOtpMock(otp || '');
+      console.log('--- DIGITAL SIGNATURE EMAIL OTP ---');
+      console.log(`Generated OTP code for candidate signing: ${otp}`);
+      console.log('-----------------------------------');
+      
+      setShowOtpModal(true);
     } catch (err: any) {
-      toast.error("Failed to submit signature: " + err.message);
+      toast.error("Failed to generate signature verification code: " + err.message);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleConfirmOtpAndSign = async () => {
+    if (!otpCode || otpCode.length !== 6) {
+      toast.error('Please enter a valid 6-digit verification code.');
+      return;
+    }
+    
+    setVerifyingOtp(true);
+    try {
+      let clientIp = '127.0.0.1';
+      try {
+        const res = await fetch('https://api.ipify.org?format=json');
+        const json = await res.json();
+        clientIp = json.ip;
+      } catch (e) {
+        console.warn('Fallback to local IP:', e);
+      }
+
+      const cleanToken = token!.trim();
+      const { data: success, error: updateError } = await supabase
+        .rpc('verify_and_sign_offer_by_token', { 
+          p_token: cleanToken,
+          p_otp_code: otpCode,
+          p_signature_placement: placedSignatures,
+          p_ip: clientIp,
+          p_user_agent: navigator.userAgent
+        });
+
+      if (updateError) throw updateError;
+      if (!success) throw new Error("Verification failed or offer already signed.");
+
+      toast.success("Offer letter verified and digitally signed successfully!");
+      setOffer({ ...offer, status: 'signed' });
+      setShowOtpModal(false);
+      setOtpCode('');
+    } catch (err: any) {
+      toast.error(err.message || "Failed to verify signing OTP");
+    } finally {
+      setVerifyingOtp(false);
     }
   };
 
@@ -238,7 +292,7 @@ export default function OfferView() {
             {/* STEP 1: status=sent → Show "Sign the Offer Letter" */}
             {offer.status === 'sent' && (
               <>
-                {!isPlacementMode && placedSignatures.length === 0 && (
+                {!isPlacementMode && (placedSignatures.length === 0) && (
                   <Button variant="default" size="sm" onClick={() => setShowSignPortal(true)} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
                     <FileSignature className="h-4 w-4" />
                     Sign the Offer Letter
@@ -251,7 +305,7 @@ export default function OfferView() {
                   </div>
                 )}
                 {placedSignatures.length > 0 && !isPlacementMode && (
-                  <Button variant="default" size="sm" onClick={handleSubmitSignature} disabled={submitting} className="gap-2 bg-indigo-600 hover:bg-indigo-700">
+                  <Button variant="default" size="sm" onClick={handleStartSignatureSigning} disabled={submitting} className="gap-2 bg-indigo-600 hover:bg-indigo-700">
                     {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
                     Submit Signature
                   </Button>
@@ -379,6 +433,61 @@ export default function OfferView() {
             toast.info("Signature ready! Now click on the document to place it.");
           }}
         />
+
+        {/* OTP Verification Dialog */}
+        <Dialog open={showOtpModal} onOpenChange={setShowOtpModal}>
+          <DialogContent className="max-w-md p-6">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-primary font-bold">
+                <Shield className="h-5 w-5" /> Signature Verification Challenge
+              </DialogTitle>
+              <DialogDescription className="text-xs mt-1">
+                For legal compliance and security, a 6-digit security code has been sent to your registered email address <strong>{offer.candidates?.email ? offer.candidates.email.replace(/(.{2})(.*)(@.*)/, "$1***$3") : 'your email'}</strong>.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-6 space-y-4">
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                  Enter 6-Digit OTP Code
+                </Label>
+                <Input
+                  type="text"
+                  maxLength={6}
+                  placeholder="000000"
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
+                  className="h-12 text-center text-2xl font-mono tracking-[0.75em] bg-background border-border/80 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all rounded-xl"
+                />
+              </div>
+              
+              {generatedOtpMock && (
+                <div className="p-3 bg-muted/40 rounded-lg border border-dashed border-border/50 text-[10px] text-muted-foreground text-center">
+                  <span><strong>Developer Debug Mode:</strong> OTP sent is: <span className="font-mono text-primary font-bold text-xs select-all bg-background px-1.5 py-0.5 rounded border border-border/30">{generatedOtpMock}</span></span>
+                </div>
+              )}
+            </div>
+            <DialogFooter className="flex flex-col sm:flex-row gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { setShowOtpModal(false); setOtpCode(''); }}
+                disabled={verifyingOtp}
+                className="w-full sm:flex-1 h-9 font-semibold"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleConfirmOtpAndSign}
+                disabled={verifyingOtp || otpCode.length !== 6}
+                className="w-full sm:flex-1 h-9 bg-primary hover:bg-primary/90 font-semibold"
+              >
+                {verifyingOtp ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Verify & Digitally Sign'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Footer (Hidden on print) */}
         <div className="text-center pb-12 print:hidden">

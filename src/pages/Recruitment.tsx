@@ -26,6 +26,7 @@ import { RecruitmentTeam } from './recruitment/RecruitmentTeam';
 import { RecruitmentAnalytics } from './recruitment/RecruitmentAnalytics';
 import { JobSelectionView } from '@/components/recruitment/JobSelectionView';
 import { RecruiterCopilot } from '@/components/recruitment/RecruiterCopilot';
+import { ResumeScreener } from '@/components/recruitment/ResumeScreener';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -56,6 +57,7 @@ export default function Recruitment() {
   const [isScoreDialogOpen, setIsScoreDialogOpen] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<any>(null);
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
+  const [isScreenerOpen, setIsScreenerOpen] = useState(false);
   const [assignDialog, setAssignDialog] = useState<{
     open: boolean; candidateId: string; candidateName: string;
     currentAssignee: string | null; jobId: string;
@@ -140,7 +142,7 @@ export default function Recruitment() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center bg-background/50 backdrop-blur-md p-4 rounded-xl border border-border/50 shadow-sm">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between bg-background/50 backdrop-blur-md p-4 rounded-xl border border-border/50 shadow-sm">
         <div className="flex items-center gap-3">
           <div 
             className="p-2 bg-primary/10 rounded-lg cursor-pointer hover:bg-primary/20 transition-colors"
@@ -149,35 +151,35 @@ export default function Recruitment() {
             <Briefcase className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
+            <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground font-medium">
               <span className="hover:text-primary cursor-pointer transition-colors" onClick={() => setActiveJob(null)}>Recruitment</span>
               {activeJobData && (
                 <>
                   <span>/</span>
-                  <span className="text-foreground">{activeJobData.title}</span>
+                  <span className="text-foreground max-w-[120px] sm:max-w-none truncate">{activeJobData.title}</span>
                 </>
               )}
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground -mt-0.5">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground -mt-0.5">
               {activeJobData ? 'Talent Pipeline' : 'Recruitment Dashboard'}
             </h1>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-between lg:justify-end">
           {activeJobData && (
-            <div className="flex items-center gap-2 mr-4 border-r border-border/50 pr-4">
-              <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-primary" onClick={() => setActiveJob(null)}>
+            <div className="flex items-center gap-2 lg:mr-4 lg:border-r border-border/50 lg:pr-4">
+              <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-primary h-9 px-3" onClick={() => setActiveJob(null)}>
                 <Layers className="w-4 h-4" />
                 Switch Job
               </Button>
             </div>
           )}
           
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {activeJobData && (
               <>
-                <Button variant="outline" size="sm" className="rounded-full px-4" onClick={() => {
+                <Button variant="outline" size="sm" className="rounded-full px-3 h-8 sm:h-9 text-xs sm:text-sm" onClick={() => {
                   const c = (activeJobData as any).companies;
                   const slug = activeJobData.job_slug || activeJobData.id;
                   const url = c?.custom_domain
@@ -186,7 +188,7 @@ export default function Recruitment() {
                   navigator.clipboard.writeText(url);
                   toast.success('Job link copied');
                 }}>
-                  <Share2 className="w-4 h-4 mr-2" /> Share
+                  <Share2 className="w-3.5 h-3.5 mr-1" /> Share
                 </Button>
 
                 {canManageJobs && (
@@ -195,10 +197,10 @@ export default function Recruitment() {
                     size="sm"
                     disabled={isRankingAll}
                     onClick={handleRankAll}
-                    className="rounded-full px-4 gap-2 text-primary border-primary/30 hover:bg-primary/5 bg-primary/5 shadow-sm shadow-primary/10"
+                    className="rounded-full px-3 h-8 sm:h-9 text-xs sm:text-sm gap-1.5 text-primary border-primary/30 hover:bg-primary/5 bg-primary/5 shadow-sm shadow-primary/10"
                   >
-                    {isRankingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                    Rank with AI
+                    {isRankingAll ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                    Rank
                   </Button>
                 )}
 
@@ -206,14 +208,28 @@ export default function Recruitment() {
                   variant={isCopilotOpen ? "default" : "outline"}
                   size="sm"
                   onClick={() => setIsCopilotOpen(!isCopilotOpen)}
-                  className={`rounded-full px-4 gap-2 transition-all duration-300 ${
+                  className={`rounded-full px-3 h-8 sm:h-9 text-xs sm:text-sm gap-1.5 transition-all duration-300 ${
                     isCopilotOpen 
                       ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' 
                       : 'hover:bg-primary/5'
                   }`}
                 >
-                  <BrainCircuit className="w-4 h-4" />
-                  AI Copilot
+                  <BrainCircuit className="w-3.5 h-3.5" />
+                  Copilot
+                </Button>
+
+                <Button
+                  variant={isScreenerOpen ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setIsScreenerOpen(!isScreenerOpen)}
+                  className={`rounded-full px-3 h-8 sm:h-9 text-xs sm:text-sm gap-1.5 transition-all duration-300 ${
+                    isScreenerOpen 
+                      ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' 
+                      : 'hover:bg-primary/5'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  AI Screener
                 </Button>
 
                 <AddCandidateDialog jobId={activeJob!} />
@@ -221,8 +237,8 @@ export default function Recruitment() {
             )}
             
             {!activeJob && canManageJobs && (
-              <Button onClick={() => navigate('/recruitment/new')} className="rounded-full px-6 gap-2 shadow-lg shadow-primary/20">
-                <Plus className="w-4 h-4" />
+              <Button onClick={() => navigate('/recruitment/new')} className="rounded-full px-4 sm:px-6 h-8 sm:h-9 text-xs sm:text-sm gap-2 shadow-lg shadow-primary/20">
+                <Plus className="w-3.5 h-3.5" />
                 Post New Job
               </Button>
             )}
@@ -574,6 +590,13 @@ export default function Recruitment() {
       <RecruiterCopilot 
         isOpen={isCopilotOpen} 
         onClose={() => setIsCopilotOpen(false)}
+        activeJob={activeJobData || null}
+        candidates={candidates}
+      />
+
+      <ResumeScreener
+        isOpen={isScreenerOpen}
+        onClose={() => setIsScreenerOpen(false)}
         activeJob={activeJobData || null}
         candidates={candidates}
       />

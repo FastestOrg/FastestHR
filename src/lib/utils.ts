@@ -28,3 +28,33 @@ export function escapeHtml(unsafe: string): string {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 }
+
+export function getCurrencySymbol(currencyCode: string | null | undefined): string {
+  const code = currencyCode?.toUpperCase() || 'USD';
+  switch (code) {
+    case 'INR': return '₹';
+    case 'EUR': return '€';
+    case 'GBP': return '£';
+    case 'JPY': return '¥';
+    case 'AED': return 'د.إ';
+    case 'CAD': return 'C$';
+    case 'AUD': return 'A$';
+    case 'USD': return '$';
+    default: return '$';
+  }
+}
+
+export function formatAmount(amount: number, currencyCode: string | null | undefined): string {
+  const code = currencyCode?.toUpperCase() || 'USD';
+  const locale = code === 'INR' ? 'en-IN' : 'en-US';
+  return amount.toLocaleString(locale, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+}
+
+export function formatCurrency(amount: number, currencyCode: string | null | undefined): string {
+  const code = currencyCode?.toUpperCase() || 'USD';
+  return `${getCurrencySymbol(code)}${formatAmount(amount, code)}`;
+}
+

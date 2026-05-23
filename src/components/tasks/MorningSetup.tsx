@@ -67,39 +67,47 @@ export function MorningSetup() {
       if (reportError) throw reportError;
 
       // 2. Create/Sync tasks
-      // For simplicity, we'll create new tasks for slots that don't have matching tasks yet
-      // In a production app, we might want to reconcile them more intelligently.
-      const taskPromises = updatedSlots.map(async (slot) => {
-        if (!slot.focus) return;
+      // ⚡ Bolt: Batch database operations to avoid N+1 query scaling issues
+      const validSlots = updatedSlots.filter(s => s.focus.trim().length > 0);
+      if (validSlots.length === 0) return true;
 
-        // Check if task already exists for this slot today
-        const startTs = `${today}T${slot.startTime}:00Z`;
-        const endTs = `${today}T${slot.endTime}:00Z`;
-
-        const { data: existingTasks } = await supabase
-          .from('tasks')
-          .select('id')
-          .eq('assigned_to', profile!.id)
-          .eq('title', slot.focus)
-          .eq('scheduled_start', startTs)
-          .limit(1);
-
-        if (!existingTasks || existingTasks.length === 0) {
-          return supabase
-            .from('tasks')
-            .insert({
-              title: slot.focus,
-              company_id: profile!.company_id!,
-              assigned_to: profile!.id,
-              assigned_by: profile!.id,
-              type: 'self_managed',
-              scheduled_start: startTs,
-              scheduled_end: endTs,
-            });
-        }
+      const slotMap = validSlots.map(slot => {
+        return {
+          ...slot,
+          startTs: `${today}T${slot.startTime}:00Z`,
+          endTs: `${today}T${slot.endTime}:00Z`,
+        };
       });
 
-      await Promise.all(taskPromises);
+      const startTsList = slotMap.map(s => s.startTs);
+
+      const { data: existingTasks } = await supabase
+        .from('tasks')
+        .select('title, scheduled_start')
+        .eq('assigned_to', profile!.id)
+        .in('scheduled_start', startTsList);
+
+      const tasksToInsert = slotMap.filter(slot => {
+        const slotStartMs = new Date(slot.startTs).getTime();
+        const exists = existingTasks?.some(t => {
+          return t.title === slot.focus &&
+                 new Date(t.scheduled_start).getTime() === slotStartMs;
+        });
+        return !exists;
+      }).map(slot => ({
+        title: slot.focus,
+        company_id: profile!.company_id!,
+        assigned_to: profile!.id,
+        assigned_by: profile!.id,
+        type: 'self_managed',
+        scheduled_start: slot.startTs,
+        scheduled_end: slot.endTs,
+      }));
+
+      if (tasksToInsert.length > 0) {
+        await supabase.from('tasks').insert(tasksToInsert);
+      }
+
       return true;
     },
     onSuccess: () => {
@@ -169,38 +177,48 @@ export function MorningSetup() {
         <CardContent className="pt-8 space-y-8">
           <div className="space-y-4">
             {slots.map((slot, index) => (
-              <div key={index} className="flex flex-col sm:flex-row gap-4 items-start sm:items-center bg-secondary/20 p-4 rounded-xl border border-border/50 hover:border-primary/30 transition-all group animate-in slide-in-from-left duration-300" style={{ animationDelay: `${index * 50}ms` }}>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <Input 
-                    type="time" 
-                    value={slot.startTime} 
-                    onChange={(e) => updateSlot(index, 'startTime', e.target.value)} 
-                    className="w-28 bg-background border-border/50 rounded-lg h-11"
-                  />
-                  <span className="text-muted-foreground">-</span>
-                  <Input 
-                    type="time" 
-                    value={slot.endTime} 
-                    onChange={(e) => updateSlot(index, 'endTime', e.target.value)} 
-                    className="w-28 bg-background border-border/50 rounded-lg h-11"
-                  />
+              <div key={index} className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-start sm:items-center bg-secondary/20 p-3 sm:p-4 rounded-xl border border-border/50 hover:border-primary/30 transition-all group animate-in slide-in-from-left duration-300" style={{ animationDelay: `${index * 50}ms` }}>
+                <div className="flex items-center justify-between sm:justify-start gap-2 w-full sm:w-auto flex-shrink-0">
+                  <div className="flex items-center gap-2">
+                    <Input 
+                      type="time" 
+                      value={slot.startTime} 
+                      onChange={(e) => updateSlot(index, 'startTime', e.target.value)} 
+                      className="w-24 sm:w-28 bg-background border-border/50 rounded-lg h-11"
+                    />
+                    <span className="text-muted-foreground">-</span>
+                    <Input 
+                      type="time" 
+                      value={slot.endTime} 
+                      onChange={(e) => updateSlot(index, 'endTime', e.target.value)} 
+                      className="w-24 sm:w-28 bg-background border-border/50 rounded-lg h-11"
+                    />
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => removeSlot(index)}
+                    className="h-11 w-11 text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-lg sm:hidden transition-all"
+                  >
+                    <Trash2 className="h-5 w-5 text-destructive" />
+                  </Button>
                 </div>
-                <div className="flex-1 w-full">
+                <div className="flex-1 w-full flex items-center gap-2">
                   <Input 
                     placeholder="Focus: e.g. Design meeting, Deep work..."
                     className="h-11 bg-background border-border/50 focus:border-primary/50 transition-all"
                     value={slot.focus}
                     onChange={(e) => updateSlot(index, 'focus', e.target.value)}
                   />
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => removeSlot(index)}
+                    className="hidden sm:flex h-11 w-11 text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-lg opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
+                  >
+                    <Trash2 className="h-5 w-5" />
+                  </Button>
                 </div>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  onClick={() => removeSlot(index)}
-                  className="h-11 w-11 text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <Trash2 className="h-5 w-5" />
-                </Button>
               </div>
             ))}
             
