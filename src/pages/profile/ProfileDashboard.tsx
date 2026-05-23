@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -6,59 +6,64 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import {
   CalendarDays, Bell, ChevronRight, CalendarCheck, Send,
   Headset, Upload, FileText, Receipt, Clock, CheckCircle2,
-  AlertCircle, TrendingUp
+  AlertCircle, TrendingUp, CheckCircle, ArrowRight
 } from 'lucide-react';
 
 interface ProfileDashboardProps {
   employee: any;
+  onNavigateSection?: (section: any) => void;
 }
 
-function computeCompletion(employee: any): { percent: number; missing: string[] } {
-  const missing: string[] = [];
-  const checks: [boolean, string][] = [
+interface CompletionCheck {
+  ok: boolean;
+  label: string;
+  section: string;
+}
+
+function computeCompletionDetails(employee: any): { percent: number; checks: CompletionCheck[] } {
+  const checks: CompletionCheck[] = [
     // Personal (20%)
-    [!!employee.first_name && !!employee.last_name, 'Complete basic info'],
-    [!!employee.date_of_birth, 'Add date of birth'],
-    [!!employee.phone, 'Add phone number'],
-    [!!employee.personal_email, 'Add personal email'],
-    // Identity (10%)
-    [!!(employee.custom_fields?.identity_docs?.pan_number), 'Upload PAN Card'],
-    [!!(employee.custom_fields?.identity_docs?.aadhaar_number), 'Add Aadhaar/National ID'],
+    { ok: !!employee.first_name && !!employee.last_name, label: 'Basic Info', section: 'personal' },
+    { ok: !!employee.date_of_birth, label: 'Date of Birth', section: 'personal' },
+    { ok: !!employee.phone, label: 'Phone Number', section: 'personal' },
+    { ok: !!employee.personal_email, label: 'Personal Email', section: 'personal' },
+    // Identity & Tax (10%)
+    { ok: !!(employee.custom_fields?.identity_docs?.pan_number), label: 'PAN Card Details', section: 'tax' },
+    { ok: !!(employee.custom_fields?.identity_docs?.aadhaar_number), label: 'Aadhaar / National ID', section: 'tax' },
     // Address (10%)
-    [!!(employee.address?.line1), 'Add current address'],
+    { ok: !!(employee.address?.line1), label: 'Residential Address', section: 'personal' },
     // Emergency (10%)
-    [!!(employee.emergency_contact?.primary_name || employee.emergency_contact?.name), 'Add emergency contact'],
+    { ok: !!(employee.emergency_contact?.primary_name || employee.emergency_contact?.name), label: 'Emergency Contact', section: 'emergency' },
     // Bank (10%)
-    [!!(employee.bank_details?.account_number), 'Add bank details'],
+    { ok: !!(employee.bank_details?.account_number), label: 'Bank Details', section: 'bank' },
     // Education (10%)
-    [!!(employee.custom_fields?.education?.academics?.length), 'Add education'],
+    { ok: !!(employee.custom_fields?.education?.academics?.length), label: 'Educational Qualifications', section: 'education' },
     // Work Experience (10%)
-    [!!(employee.custom_fields?.work_experience?.companies?.length), 'Add work experience'],
+    { ok: !!(employee.custom_fields?.work_experience?.companies?.length), label: 'Work Experience History', section: 'experience' },
     // Skills (5%)
-    [!!(employee.custom_fields?.skills?.technical?.length), 'Add skills'],
+    { ok: !!(employee.custom_fields?.skills?.technical?.length), label: 'Technical/Soft Skills', section: 'skills' },
     // Family (5%)
-    [!!(employee.custom_fields?.family?.spouse?.name || employee.custom_fields?.family?.parents?.father_name), 'Add family info'],
+    { ok: !!(employee.custom_fields?.family?.spouse?.name || employee.custom_fields?.family?.parents?.father_name), label: 'Family & Dependents Details', section: 'family' },
     // Health (5%)
-    [!!(employee.custom_fields?.health?.blood_group || employee.blood_group), 'Add health info'],
+    { ok: !!(employee.custom_fields?.health?.blood_group || employee.blood_group), label: 'Blood Group & Health Info', section: 'health' },
     // Social (5%)
-    [!!(employee.custom_fields?.social_links?.linkedin), 'Add LinkedIn profile'],
+    { ok: !!(employee.custom_fields?.social_links?.linkedin), label: 'LinkedIn Profile Link', section: 'social' },
   ];
 
-  let filled = 0;
-  for (const [ok, label] of checks) {
-    if (ok) filled++;
-    else missing.push(label);
-  }
-
-  return { percent: Math.round((filled / checks.length) * 100), missing };
+  const filled = checks.filter(c => c.ok).length;
+  const percent = Math.round((filled / checks.length) * 100);
+  return { percent, checks };
 }
 
-export default function ProfileDashboard({ employee }: ProfileDashboardProps) {
+export default function ProfileDashboard({ employee, onNavigateSection }: ProfileDashboardProps) {
   const navigate = useNavigate();
-  const { percent, missing } = computeCompletion(employee);
+  const { percent, checks } = computeCompletionDetails(employee);
+  const missing = checks.filter(c => !c.ok);
+  const [auditOpen, setAuditOpen] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -149,6 +154,14 @@ export default function ProfileDashboard({ employee }: ProfileDashboardProps) {
                 <span className={`text-2xl font-bold tabular-nums ${
                   percent >= 80 ? 'text-emerald-500' : percent >= 50 ? 'text-amber-500' : 'text-destructive'
                 }`}>{percent}%</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setAuditOpen(true)}
+                  className="text-xs h-7 px-2 border border-border/40 hover:bg-primary/5 text-primary hover:text-primary gap-1"
+                >
+                  Audit Checklist <ChevronRight className="h-3 w-3" />
+                </Button>
               </div>
             </div>
             <Progress value={percent} className="h-2.5 mb-4" />
@@ -159,7 +172,7 @@ export default function ProfileDashboard({ employee }: ProfileDashboardProps) {
                   {missing.slice(0, 5).map((m, i) => (
                     <Badge key={i} variant="outline" className="text-[10px] font-medium border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/5">
                       <AlertCircle className="h-2.5 w-2.5 mr-1" />
-                      {m}
+                      {m.label}
                     </Badge>
                   ))}
                   {missing.length > 5 && (
@@ -299,6 +312,68 @@ export default function ProfileDashboard({ employee }: ProfileDashboardProps) {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={auditOpen} onOpenChange={setAuditOpen}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-primary" /> Profile Audit Checklist
+            </DialogTitle>
+            <DialogDescription>
+              Complete the missing categories below to achieve a 100% robust HRMS profile standing.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4 space-y-4">
+            <div className="flex items-center justify-between border border-border/40 rounded-xl p-4 bg-primary/5">
+              <div>
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Audit Standing</span>
+                <h4 className="text-2xl font-bold text-foreground mt-0.5">{percent}% Complete</h4>
+              </div>
+              <div className="h-10 w-24">
+                <Progress value={percent} className="h-2 w-full mt-2" />
+              </div>
+            </div>
+
+            <div className="max-h-[300px] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
+              {checks.map((check, i) => (
+                <div key={i} className="flex items-center justify-between p-2.5 rounded-lg border border-border/20 bg-background/50 hover:bg-background/80 transition-colors">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {check.ok ? (
+                      <CheckCircle className="h-4 w-4 text-emerald-500 shrink-0" />
+                    ) : (
+                      <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
+                    )}
+                    <span className={`text-xs font-medium truncate ${check.ok ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
+                      {check.label}
+                    </span>
+                  </div>
+
+                  {!check.ok && onNavigateSection && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-[10px] px-2 text-primary hover:text-primary hover:bg-primary/5 gap-1 shrink-0"
+                      onClick={() => {
+                        onNavigateSection(check.section);
+                        setAuditOpen(false);
+                      }}
+                    >
+                      Update <ArrowRight className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAuditOpen(false)} className="w-full text-xs h-9">
+              Close Audit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

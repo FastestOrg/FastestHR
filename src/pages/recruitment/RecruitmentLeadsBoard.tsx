@@ -162,13 +162,13 @@ export function RecruitmentLeadsBoard() {
     enabled: !!profile?.company_id,
   });
 
+  const searchLower = search ? search.toLowerCase() : '';
   const filtered = leads.filter((l: any) => {
-    if (!search) return true;
-    const s = search.toLowerCase();
+    if (!searchLower) return true;
     return (
-      l.full_name?.toLowerCase().includes(s) ||
-      l.email?.toLowerCase().includes(s) ||
-      l.jobs?.title?.toLowerCase().includes(s)
+      l.full_name?.toLowerCase().includes(searchLower) ||
+      l.email?.toLowerCase().includes(searchLower) ||
+      l.jobs?.title?.toLowerCase().includes(searchLower)
     );
   });
 

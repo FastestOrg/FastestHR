@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/store/auth-store';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,11 +6,15 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Users, Clock, CalendarDays, Briefcase, DollarSign, UserPlus,
-  Megaphone, TrendingUp, ArrowRight, BarChart3, PieChart, Cake, PartyPopper, TrendingDown, MessageSquare, Bot, Sparkles, BrainCircuit
+  Megaphone, TrendingUp, ArrowRight, BarChart3, PieChart, Cake, PartyPopper, TrendingDown, MessageSquare, Bot, Sparkles, BrainCircuit, Smile
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
 
 function MetricCard({ title, value, icon: Icon, trend, color }: {
   title: string; value: string | number; icon: any; trend?: string; color: string;
@@ -819,10 +823,141 @@ function HRManagerDashboard() {
 
 export default function Dashboard() {
   const { profile } = useAuthStore();
+  const queryClient = useQueryClient();
+  const [pulseDialogOpen, setPulseDialogOpen] = useState(false);
+  const [pulseScore, setPulseScore] = useState<number | null>(null);
+  const [pulseFeedback, setPulseFeedback] = useState('');
 
-  if (profile?.platform_role === 'super_admin') return <SuperAdminDashboard />;
-  if (profile?.platform_role === 'company_admin') return <CompanyAdminDashboard />;
-  if (profile?.platform_role === 'hr_manager') return <HRManagerDashboard />;
-  // recruiter and user both get employee dashboard
-  return <EmployeeDashboard />;
+  const { data: currentEmployee } = useQuery({
+    queryKey: ['my-employee-id-for-pulse', profile?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from('employees').select('id, department_id').eq('user_id', profile!.id).is('deleted_at', null).maybeSingle();
+      return data;
+    },
+    enabled: !!profile?.id && profile?.platform_role !== 'super_admin',
+  });
+
+  useEffect(() => {
+    if (!profile?.id || profile?.platform_role === 'super_admin') return;
+    
+    const lastPulseCheck = localStorage.getItem('last_pulse_check');
+    if (!lastPulseCheck) {
+      setPulseDialogOpen(true);
+    } else {
+      const lastCheckTime = parseInt(lastPulseCheck, 10);
+      const sevenDays = 7 * 24 * 60 * 60 * 1000;
+      if (Date.now() - lastCheckTime > sevenDays) {
+        setPulseDialogOpen(true);
+      }
+    }
+  }, [profile]);
+
+  const submitPulseMutation = useMutation({
+    mutationFn: async () => {
+      if (!pulseScore) throw new Error('Select a sentiment rating');
+      const { error } = await supabase.from('pulse_logs').insert({
+        company_id: profile!.company_id!,
+        score: pulseScore,
+        feedback_text: pulseFeedback,
+        department_id: currentEmployee?.department_id || null
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      localStorage.setItem('last_pulse_check', Date.now().toString());
+      toast.success('✦ Weekly Pulse recorded anonymously. Thank you!');
+      setPulseDialogOpen(false);
+      setPulseScore(null);
+      setPulseFeedback('');
+      queryClient.invalidateQueries({ queryKey: ['pulse-metrics'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.message || 'Failed to submit Pulse');
+    }
+  });
+
+  const handleDismiss = () => {
+    localStorage.setItem('last_pulse_check', Date.now().toString());
+    setPulseDialogOpen(false);
+  };
+
+  const getDashboard = () => {
+    if (profile?.platform_role === 'super_admin') return <SuperAdminDashboard />;
+    if (profile?.platform_role === 'company_admin') return <CompanyAdminDashboard />;
+    if (profile?.platform_role === 'hr_manager') return <HRManagerDashboard />;
+    return <EmployeeDashboard />;
+  };
+
+  const EMOJIS = [
+    { val: 1, char: '😞', label: 'Struggling' },
+    { val: 2, char: '😐', label: 'Neutral' },
+    { val: 3, char: '🙂', label: 'Satisfied' },
+    { val: 4, char: '😄', label: 'Fulfilling' },
+    { val: 5, char: '🚀', label: 'Exceptional' },
+  ];
+
+  return (
+    <>
+      {getDashboard()}
+
+      <Dialog open={pulseDialogOpen} onOpenChange={(open) => {
+        if (!open) handleDismiss();
+      }}>
+        <DialogContent className="bg-[#09090b]/95 border border-border/40 text-foreground max-w-md rounded-2xl backdrop-blur-xl">
+          <DialogHeader className="pb-4 border-b border-border/10">
+            <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
+              <Smile className="w-5 h-5 text-primary animate-pulse" />
+              Weekly Pulse Check-In
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+              How is your week going? Your feedback is completely anonymous and helps us improve the workplace culture.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4 space-y-4">
+            <div className="flex justify-between gap-2">
+              {EMOJIS.map((emoji) => (
+                <button
+                  key={emoji.val}
+                  type="button"
+                  onClick={() => setPulseScore(emoji.val)}
+                  className={`flex-1 aspect-square rounded-xl flex flex-col items-center justify-center border text-2xl transition-all ${
+                    pulseScore === emoji.val
+                      ? 'border-primary bg-primary/10 scale-105 shadow-sm shadow-primary/10'
+                      : 'border-border/30 hover:border-primary/20 bg-background/30 hover:scale-102'
+                  }`}
+                >
+                  <span>{emoji.char}</span>
+                  <span className="text-[8px] text-muted-foreground mt-1.5 uppercase font-bold tracking-tighter leading-none">{emoji.label}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-bold text-white uppercase tracking-wider">Additional details (Optional)</Label>
+              <Textarea
+                placeholder="Share any comments on workload, recognition, support..."
+                value={pulseFeedback}
+                onChange={(e) => setPulseFeedback(e.target.value)}
+                className="h-16 bg-background/50 border-border/50 text-white rounded-lg focus-visible:ring-primary text-xs"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="pt-4 border-t border-border/10">
+            <Button variant="outline" onClick={handleDismiss} className="h-9 px-4 rounded-xl text-xs font-bold">
+              Skip
+            </Button>
+            <Button
+              onClick={() => submitPulseMutation.mutate()}
+              disabled={submitPulseMutation.isPending || pulseScore === null}
+              className="bg-primary text-primary-foreground hover:bg-primary/95 h-9 px-4 rounded-xl text-xs font-black uppercase"
+            >
+              {submitPulseMutation.isPending ? 'Submitting...' : 'Submit Pulse'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }

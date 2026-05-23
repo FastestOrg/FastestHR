@@ -7,9 +7,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar, Building, Bell, Shield, KeyIcon, Users, Mail, Settings2, Loader2, Send, Plus, Trash2, Clock, DollarSign, Percent, Gift, Globe, Contact } from 'lucide-react';
+import { Calendar, Building, Bell, Shield, KeyIcon, Users, Mail, Settings2, Loader2, Send, Plus, Trash2, Clock, DollarSign, Percent, Gift, Globe, Contact, Laptop, GitBranch, MapPin } from 'lucide-react';
 import DomainSettings from '@/pages/settings/DomainSettings';
 import { IDCardTemplateEditor } from '@/components/settings/IDCardTemplateEditor';
+import AssetManagementTab from '@/components/settings/AssetManagementTab';
+import WorkflowBuilder from '@/components/settings/WorkflowBuilder';
 import { useAuthStore } from '@/store/auth-store';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -26,7 +28,7 @@ export default function Settings() {
     queryFn: async () => {
       if (!profile?.company_id) return null;
       const { data } = await supabase.from('companies')
-        .select('id, name, timezone, currency, country, about_company, company_culture, website, linkedin_url, offer_sequence_prefix, offer_sequence_current')
+        .select('id, name, timezone, currency, country, about_company, company_culture, website, linkedin_url, offer_sequence_prefix, offer_sequence_current, geofence_latitude, geofence_longitude, geofence_radius, ip_whitelist')
         .eq('id', profile.company_id)
         .maybeSingle();
       // SMTP columns are restricted; fetch them via secure RPC for admins
@@ -41,7 +43,8 @@ export default function Settings() {
     name: '', timezone: '', currency: '', country: '',
     about_company: '', company_culture: '', website: '', linkedin_url: '',
     smtp_host: '', smtp_port: '', smtp_user: '', smtp_pass: '', smtp_from_email: '', smtp_from_name: '',
-    offer_sequence_prefix: '', offer_sequence_current: '0'
+    offer_sequence_prefix: '', offer_sequence_current: '0',
+    geofence_latitude: '', geofence_longitude: '', geofence_radius: '200', ip_whitelist: ''
   });
 
   useEffect(() => {
@@ -53,6 +56,10 @@ export default function Settings() {
         smtp_host: c.smtp_host || '', smtp_port: c.smtp_port?.toString() || '', smtp_user: c.smtp_user || '', smtp_pass: c.smtp_pass || '',
         smtp_from_email: c.smtp_from_email || '', smtp_from_name: c.smtp_from_name || '',
         offer_sequence_prefix: c.offer_sequence_prefix || 'OFFER-', offer_sequence_current: c.offer_sequence_current?.toString() || '0',
+        geofence_latitude: c.geofence_latitude?.toString() || '',
+        geofence_longitude: c.geofence_longitude?.toString() || '',
+        geofence_radius: c.geofence_radius?.toString() || '200',
+        ip_whitelist: c.ip_whitelist || '',
       });
     }
   }, [company]);
@@ -69,7 +76,11 @@ export default function Settings() {
         smtp_from_email: form.smtp_from_email || null, smtp_from_name: form.smtp_from_name || null,
         offer_sequence_prefix: form.offer_sequence_prefix || null,
         offer_sequence_current: form.offer_sequence_current ? parseInt(form.offer_sequence_current) : 0,
-      }).eq('id', profile.company_id);
+        geofence_latitude: form.geofence_latitude ? parseFloat(form.geofence_latitude) : null,
+        geofence_longitude: form.geofence_longitude ? parseFloat(form.geofence_longitude) : null,
+        geofence_radius: form.geofence_radius ? parseInt(form.geofence_radius) : null,
+        ip_whitelist: form.ip_whitelist || null,
+      }).eq('id', profile.company_id).select('id');
       if (error) throw error;
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['my-company'] }); toast.success('Settings saved'); },
@@ -77,28 +88,101 @@ export default function Settings() {
   });
 
   const [isTestingSmtp, setIsTestingSmtp] = useState(false);
-  const handleTestSmtp = async () => {
-    if (!form.smtp_host || !form.smtp_user || !form.smtp_pass) { toast.error('Fill SMTP host, user, password first'); return; }
-    const email = prompt("Enter email to send test to:", "");
-    if (!email) return;
+  const [smtpDiagOpen, setSmtpDiagOpen] = useState(false);
+  const [smtpTestEmail, setSmtpTestEmail] = useState('');
+  const [smtpDiagLogs, setSmtpDiagLogs] = useState<string[]>([]);
+  const [smtpDiagError, setSmtpDiagError] = useState<string | null>(null);
+  const [smtpDiagAdvice, setSmtpDiagAdvice] = useState<string | null>(null);
+
+  const handleTestSmtp = () => {
+    if (!form.smtp_host || !form.smtp_user || !form.smtp_pass) {
+      toast.error('Please configure SMTP Host, Username, and Password first.');
+      return;
+    }
+    setSmtpTestEmail(profile?.email || '');
+    setSmtpDiagLogs([]);
+    setSmtpDiagError(null);
+    setSmtpDiagAdvice(null);
+    setSmtpDiagOpen(true);
+  };
+
+  const runSmtpDiagnostics = async () => {
+    if (!smtpTestEmail.trim()) {
+      toast.error('Please enter a valid test recipient email address.');
+      return;
+    }
+
     setIsTestingSmtp(true);
-    const toastId = toast.loading('Sending test email...');
+    setSmtpDiagLogs([]);
+    setSmtpDiagError(null);
+    setSmtpDiagAdvice(null);
+
+    const addLog = (msg: string) => setSmtpDiagLogs(prev => [...prev, msg]);
+
+    addLog('⚡ Initiating SMTP Diagnostic Checklist...');
+    addLog(`🔍 Hostname: "${form.smtp_host}" | Port: ${form.smtp_port || 587}`);
+    addLog(`📧 From: "${form.smtp_from_name || 'System'}" <${form.smtp_from_email || form.smtp_user}>`);
+    addLog(`🎯 Recipient: <${smtpTestEmail}>`);
+
+    const port = Number(form.smtp_port) || 587;
+    if (port === 25) {
+      addLog('⚠️ Warning: Port 25 detected. Most cloud hosting providers block Port 25 by default to prevent outbound spam.');
+    } else if (port === 465) {
+      addLog('ℹ️ Notice: Port 465 requires secure SSL/TLS connection protocol.');
+    } else if (port === 587) {
+      addLog('ℹ️ Notice: Port 587 requires STARTTLS connection upgrade.');
+    }
+
+    addLog('🚀 Invoking SMTP Test Edge Function...');
     try {
       const { data, error } = await supabase.functions.invoke('test-smtp', {
-        body: { smtp_host: form.smtp_host, smtp_port: form.smtp_port, smtp_user: form.smtp_user, smtp_pass: form.smtp_pass, smtp_from_email: form.smtp_from_email, smtp_from_name: form.smtp_from_name, test_email: email }
+        body: {
+          smtp_host: form.smtp_host,
+          smtp_port: form.smtp_port,
+          smtp_user: form.smtp_user,
+          smtp_pass: form.smtp_pass,
+          smtp_from_email: form.smtp_from_email,
+          smtp_from_name: form.smtp_from_name,
+          test_email: smtpTestEmail
+        }
       });
+
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      toast.success('Test email sent!', { id: toastId });
-    } catch (err: unknown) {
-      let msg = (err instanceof Error ? err.message : String(err)) || 'Unknown error';
-      if (err && typeof err === 'object' && 'context' in err && (err as any).context && typeof (err as any).context.json === 'function') { try { const b = await (err as any).context.json(); if (b.error) msg = b.error; } catch {} }
-      toast.error(`SMTP Test Failed: ${msg}`, { id: toastId });
-    } finally { setIsTestingSmtp(false); }
+
+      addLog('✅ Success: SMTP handshake completed, authentication succeeded, and mail queued successfully!');
+      toast.success('SMTP connection verified successfully!');
+    } catch (err: any) {
+      let msg = (err instanceof Error ? err.message : String(err)) || 'Unknown connection error';
+      if (err && typeof err === 'object' && 'context' in err && (err as any).context && typeof (err as any).context.json === 'function') {
+        try {
+          const b = await (err as any).context.json();
+          if (b.error) msg = b.error;
+        } catch {}
+      }
+
+      addLog('❌ Failed: Connection could not be completed.');
+      setSmtpDiagError(msg);
+
+      let advice = 'Check that your SMTP server host is accessible from external networks and that the port is correct.';
+      if (msg.includes('Authentication failed') || msg.includes('535') || msg.toLowerCase().includes('auth') || msg.toLowerCase().includes('password') || msg.toLowerCase().includes('credentials')) {
+        advice = 'Authentication failed. Please verify that your SMTP Username and Password are correct. Note: If using Gmail/Google Workspace, you must enable 2-Step Verification and generate a custom 16-character App Password (apppasswords) rather than your default password.';
+      } else if (msg.includes('timed out') || msg.includes('timeout') || msg.includes('ENOTFOUND') || msg.includes('ECONNREFUSED')) {
+        advice = `Connection timeout or refusal. The target host "${form.smtp_host}" is not responding on Port ${port}. ${port === 25 ? 'We highly recommend switching from Port 25 to Port 587 (with STARTTLS) or Port 465 (with SSL), as Port 25 is actively blocked on cloud provider firewalls.' : 'Ensure your SMTP server host allows outbound access from this system, and check that the server is currently online.'}`;
+      } else if (port === 25) {
+        advice = 'Port 25 is active but failed. This is typical for cloud edge environments (like Supabase Edge Functions) where Port 25 outbound sockets are blocked. Upgrade your SMTP port configuration to 587 (STARTTLS) or 465 (SSL/TLS) for compatibility.';
+      }
+      
+      setSmtpDiagAdvice(advice);
+      toast.error('SMTP Diagnostic Test Failed.');
+    } finally {
+      setIsTestingSmtp(false);
+    }
   };
 
   const menuItems = [
     { id: 'general', label: 'General Info', icon: Building },
+    { id: 'locations', label: 'Office Locations', icon: MapPin },
     { id: 'schedule', label: 'Work Schedule', icon: Clock },
     { id: 'payroll', label: 'Payroll Config', icon: DollarSign },
     { id: 'roles', label: 'Roles & Access', icon: Shield },
@@ -109,6 +193,8 @@ export default function Settings() {
     { id: 'integrations', label: 'Integrations', icon: Users },
     { id: 'domains', label: 'Domain', icon: Globe },
     { id: 'id_card', label: 'ID Card', icon: Contact },
+    { id: 'assets', label: 'Asset Management', icon: Laptop },
+    { id: 'workflows', label: 'Workflow Engine', icon: GitBranch },
   ];
 
   return (
@@ -165,6 +251,7 @@ export default function Settings() {
             </CardTitle>
             <CardDescription>
               {activeTab === 'general' && "Update your company details and global settings."}
+              {activeTab === 'locations' && "Define and geofence multiple branch offices with distinct physical boundaries."}
               {activeTab === 'schedule' && "Define work shifts and assign schedules to employees."}
               {activeTab === 'payroll' && "Configure tax slabs, salary components, and bonus types."}
               {activeTab === 'roles' && "Manage user roles and access permissions."}
@@ -175,6 +262,8 @@ export default function Settings() {
               {activeTab === 'integrations' && "Third-party integrations and API keys."}
               {activeTab === 'domains' && "Manage your workspace URL and custom domain."}
               {activeTab === 'id_card' && "Design and customize your company's virtual ID cards."}
+              {activeTab === 'assets' && "Track and manage hardware inventory assignments."}
+              {activeTab === 'workflows' && "Build trigger-based recipes to automate emails, notifications, and onboarding checklists."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -182,6 +271,8 @@ export default function Settings() {
               <div className="space-y-4">{[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-10 w-full" />)}</div>
             ) : activeTab === 'general' ? (
               <GeneralTab form={form} setForm={setForm} company={company} />
+            ) : activeTab === 'locations' ? (
+              <LocationsTab companyId={profile?.company_id} />
             ) : activeTab === 'schedule' ? (
               <ShiftTab companyId={profile?.company_id} />
             ) : activeTab === 'payroll' ? (
@@ -202,9 +293,96 @@ export default function Settings() {
               <DomainSettings />
             ) : activeTab === 'id_card' ? (
               <IDCardTemplateEditor />
+            ) : activeTab === 'assets' ? (
+              <AssetManagementTab companyId={profile?.company_id} />
+            ) : activeTab === 'workflows' ? (
+              <WorkflowBuilder companyId={profile?.company_id} />
             ) : null}
           </CardContent>
         </Card>
+
+        <Dialog open={smtpDiagOpen} onOpenChange={setSmtpDiagOpen}>
+          <DialogContent className="sm:max-w-md bg-background/95 backdrop-blur-xl border border-border shadow-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-xl font-bold text-foreground">
+                <Mail className="h-5 w-5 text-primary" />
+                SMTP Diagnostics Connection Test
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                Run automated tests on your outgoing SMTP server to check firewall blocks, invalid credentials, and email deliverability.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 my-2">
+              <div className="space-y-2">
+                <Label htmlFor="testEmailInput" className="text-xs font-semibold text-muted-foreground uppercase">Recipient Test Email Address</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="testEmailInput"
+                    type="email"
+                    placeholder="e.g. admin@company.com"
+                    value={smtpTestEmail}
+                    onChange={(e) => setSmtpTestEmail(e.target.value)}
+                    className="h-9 text-sm"
+                  />
+                  <Button
+                    onClick={runSmtpDiagnostics}
+                    disabled={isTestingSmtp}
+                    className="h-9 px-4 font-semibold shrink-0"
+                  >
+                    {isTestingSmtp ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                        Testing...
+                      </>
+                    ) : (
+                      'Run Diagnostic'
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {smtpDiagLogs.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold text-muted-foreground uppercase">Diagnostic Session Logs</Label>
+                  <div className="p-3 bg-slate-950 dark:bg-slate-900 rounded-lg border border-border/80 font-mono text-[10px] space-y-1 max-h-[160px] overflow-y-auto text-emerald-400">
+                    {smtpDiagLogs.map((log, idx) => (
+                      <div key={idx} className="whitespace-pre-wrap leading-relaxed">{log}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {smtpDiagError && (
+                <div className="p-3 bg-destructive/5 rounded-lg border border-destructive/20 space-y-1.5 animate-in fade-in slide-in-from-bottom-2">
+                  <h4 className="text-xs font-bold text-destructive uppercase tracking-wider flex items-center gap-1.5">
+                    ❌ Connection Block / Error Message
+                  </h4>
+                  <p className="text-[11px] text-muted-foreground font-mono bg-destructive/10 p-2 rounded border border-destructive/10 whitespace-pre-wrap">
+                    {smtpDiagError}
+                  </p>
+                </div>
+              )}
+
+              {smtpDiagAdvice && (
+                <div className="p-3 bg-warning/5 rounded-lg border border-warning/20 space-y-1 animate-in fade-in slide-in-from-bottom-2">
+                  <h4 className="text-xs font-bold text-warning uppercase tracking-wider flex items-center gap-1.5">
+                    💡 Expert Resolution Guidance
+                  </h4>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    {smtpDiagAdvice}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter className="sm:justify-end border-t border-border/50 pt-3">
+              <Button size="sm" variant="outline" onClick={() => setSmtpDiagOpen(false)}>
+                Close Diagnostics
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
@@ -248,7 +426,8 @@ function GeneralTab({ form, setForm, company }: any) {
       const { error: updateError } = await supabase
         .from('companies')
         .update({ logo_url: logoUrl })
-        .eq('id', profile?.company_id);
+        .eq('id', profile?.company_id)
+        .select('id');
       if (updateError) throw updateError;
 
       queryClient.invalidateQueries({ queryKey: ['my-company'] });
@@ -351,6 +530,56 @@ function GeneralTab({ form, setForm, company }: any) {
         </div>
       </div>
     </div>
+    <div className="pt-6 border-t border-border/50 space-y-4">
+      <div>
+        <h3 className="text-base font-semibold text-foreground flex items-center gap-2">📍 Geofencing & Network Restrictions</h3>
+        <p className="text-xs text-muted-foreground mt-0.5">Restrict office clock-ins by physical coordinates or IP networks. Leave coordinates empty to disable geofence checks.</p>
+      </div>
+      <div className="grid md:grid-cols-3 gap-6 pt-2">
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-muted-foreground uppercase">Office Latitude</label>
+          <Input 
+            type="number"
+            step="any"
+            placeholder="e.g. 37.7749"
+            value={form.geofence_latitude} 
+            onChange={(e: any) => setForm((f: any) => ({ ...f, geofence_latitude: e.target.value }))} 
+            className="bg-background/50 border-border/50 h-10" 
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-muted-foreground uppercase">Office Longitude</label>
+          <Input 
+            type="number"
+            step="any"
+            placeholder="e.g. -122.4194"
+            value={form.geofence_longitude} 
+            onChange={(e: any) => setForm((f: any) => ({ ...f, geofence_longitude: e.target.value }))} 
+            className="bg-background/50 border-border/50 h-10" 
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-muted-foreground uppercase">Allowed Radius (Meters)</label>
+          <Input 
+            type="number"
+            placeholder="e.g. 200"
+            value={form.geofence_radius} 
+            onChange={(e: any) => setForm((f: any) => ({ ...f, geofence_radius: e.target.value }))} 
+            className="bg-background/50 border-border/50 h-10" 
+          />
+        </div>
+        <div className="space-y-2 md:col-span-3">
+          <label className="text-xs font-medium text-muted-foreground uppercase">IP Whitelist (Comma Separated)</label>
+          <Input 
+            placeholder="e.g. 192.168.1.1, 203.0.113.50 (Leave empty to allow all IPs)"
+            value={form.ip_whitelist} 
+            onChange={(e: any) => setForm((f: any) => ({ ...f, ip_whitelist: e.target.value }))} 
+            className="bg-background/50 border-border/50 h-10" 
+          />
+          <p className="text-[10px] text-muted-foreground">If configured, employees checking in from these public IPs will bypass physical GPS checks.</p>
+        </div>
+      </div>
+    </div>
   </>);
 }
 
@@ -432,6 +661,7 @@ function ShiftTab({ companyId }: { companyId?: string | null }) {
 
 // ======== PAYROLL CONFIG TAB ========
 function PayrollConfigTab({ companyId }: { companyId?: string | null }) {
+  const queryClient = useQueryClient();
   const [taxSlabs, setTaxSlabs] = useState([
     { from: 0, to: 250000, rate: 0 },
     { from: 250001, to: 500000, rate: 5 },
@@ -445,6 +675,103 @@ function PayrollConfigTab({ companyId }: { companyId?: string | null }) {
   ]);
   const [newBonus, setNewBonus] = useState({ name: '', type: 'fixed', value: '' });
 
+  // Overtime & Penalty Settings state
+  const [overtimeMultiplier, setOvertimeMultiplier] = useState(1.5);
+  const [overtimeThresholdMins, setOvertimeThresholdMins] = useState(0);
+  const [lateGracePeriodMins, setLateGracePeriodMins] = useState(15);
+  const [lateTrigger, setLateTrigger] = useState(3);
+  const [deductionUnit, setDeductionUnit] = useState('half_day');
+
+  // Fetch persistent company payroll configuration
+  const { data: company, isLoading: loadingConfig } = useQuery({
+    queryKey: ['company-payroll-settings', companyId],
+    queryFn: async () => {
+      if (!companyId) return null;
+      const { data, error } = await supabase
+        .from('companies')
+        .select('compensation_structure, payroll_settings')
+        .eq('id', companyId)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!companyId,
+  });
+
+  // Load from database if exists
+  useEffect(() => {
+    if (company?.compensation_structure) {
+      const comp = company.compensation_structure as any;
+      if (Array.isArray(comp.tax_slabs)) {
+        setTaxSlabs(comp.tax_slabs);
+      }
+      if (Array.isArray(comp.bonus_types)) {
+        setBonusTypes(comp.bonus_types);
+      }
+    }
+    if (company?.payroll_settings) {
+      const ps = company.payroll_settings as any;
+      setOvertimeMultiplier(ps.overtime_multiplier ?? 1.5);
+      setOvertimeThresholdMins(ps.overtime_threshold_mins ?? 0);
+      setLateGracePeriodMins(ps.late_grace_period_mins ?? 15);
+      if (ps.late_penalty_rule) {
+        setLateTrigger(ps.late_penalty_rule.frequency_trigger ?? 3);
+        setDeductionUnit(ps.late_penalty_rule.deduction_unit ?? 'half_day');
+      }
+    }
+  }, [company]);
+
+  // Mutation to save settings
+  const saveMutation = useMutation({
+    mutationFn: async ({ updatedSlabs, updatedBonuses, updatedPayrollSettings }: { updatedSlabs?: typeof taxSlabs, updatedBonuses?: typeof bonusTypes, updatedPayrollSettings?: any }) => {
+      if (!companyId) throw new Error("No company ID provided.");
+      
+      const { data: current, error: fetchErr } = await supabase
+        .from('companies')
+        .select('compensation_structure, payroll_settings')
+        .eq('id', companyId)
+        .single();
+      
+      if (fetchErr) throw fetchErr;
+
+      const currentComp = (current?.compensation_structure || {}) as any;
+      
+      const newComp = {
+        ...currentComp,
+        tax_slabs: updatedSlabs !== undefined ? updatedSlabs : taxSlabs,
+        bonus_types: updatedBonuses !== undefined ? updatedBonuses : bonusTypes,
+      };
+
+      const newSettings = updatedPayrollSettings !== undefined ? updatedPayrollSettings : {
+        overtime_multiplier: overtimeMultiplier,
+        overtime_threshold_mins: overtimeThresholdMins,
+        late_grace_period_mins: lateGracePeriodMins,
+        late_penalty_rule: {
+          frequency_trigger: lateTrigger,
+          deduction_unit: deductionUnit
+        }
+      };
+
+      const { error } = await supabase
+        .from('companies')
+        .update({
+          compensation_structure: newComp as any,
+          payroll_settings: newSettings as any
+        })
+        .eq('id', companyId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['company-payroll-settings', companyId] });
+      queryClient.invalidateQueries({ queryKey: ['compensation-structure'] });
+      toast.success('Payroll configurations saved successfully');
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || 'Failed to save payroll configurations');
+    }
+  });
+
   const addSlab = () => {
     const last = taxSlabs[taxSlabs.length - 1];
     setTaxSlabs([...taxSlabs, { from: last.to + 1, to: last.to + 500000, rate: 0 }]);
@@ -452,10 +779,26 @@ function PayrollConfigTab({ companyId }: { companyId?: string | null }) {
 
   const addBonus = () => {
     if (!newBonus.name.trim()) { toast.error('Name required'); return; }
-    setBonusTypes([...bonusTypes, { name: newBonus.name, type: newBonus.type, value: parseFloat(newBonus.value as string) || 0 }]);
+    const updated = [...bonusTypes, { name: newBonus.name, type: newBonus.type, value: parseFloat(newBonus.value as string) || 0 }];
+    setBonusTypes(updated);
     setNewBonus({ name: '', type: 'fixed', value: '' });
-    toast.success('Bonus type added');
+    saveMutation.mutate({ updatedBonuses: updated });
   };
+
+  const deleteBonus = (index: number) => {
+    const updated = bonusTypes.filter((_, j) => j !== index);
+    setBonusTypes(updated);
+    saveMutation.mutate({ updatedBonuses: updated });
+  };
+
+  if (loadingConfig) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-32 w-full" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -481,7 +824,14 @@ function PayrollConfigTab({ companyId }: { companyId?: string | null }) {
             </div>
           ))}
         </div>
-        <Button size="sm" className="mt-3" onClick={() => toast.success('Tax slabs saved')}>Save Tax Config</Button>
+        <Button 
+          size="sm" 
+          className="mt-3" 
+          onClick={() => saveMutation.mutate({ updatedSlabs: taxSlabs })}
+          disabled={saveMutation.isPending}
+        >
+          {saveMutation.isPending ? 'Saving...' : 'Save Tax Config'}
+        </Button>
       </div>
 
       {/* Bonus / Incentive Types */}
@@ -501,7 +851,7 @@ function PayrollConfigTab({ companyId }: { companyId?: string | null }) {
               </div>
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className="text-[10px] capitalize">{b.type}</Badge>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive/50 hover:text-destructive" onClick={() => setBonusTypes(bonusTypes.filter((_, j) => j !== i))} aria-label="Delete bonus type"><Trash2 className="w-3 h-3" /></Button>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive/50 hover:text-destructive" onClick={() => deleteBonus(i)} aria-label="Delete bonus type"><Trash2 className="w-3 h-3" /></Button>
               </div>
             </div>
           ))}
@@ -521,8 +871,94 @@ function PayrollConfigTab({ companyId }: { companyId?: string | null }) {
             <Label className="text-xs">Value</Label>
             <Input type="number" placeholder="0" value={newBonus.value} onChange={(e) => setNewBonus(f => ({ ...f, value: e.target.value }))} className="h-9" />
           </div>
-          <Button size="sm" className="h-9" onClick={addBonus}><Plus className="w-3.5 h-3.5" /></Button>
+          <Button size="sm" className="h-9" onClick={addBonus} disabled={saveMutation.isPending}><Plus className="w-3.5 h-3.5" /></Button>
         </div>
+      </div>
+
+      {/* Overtime & Attendance Penalty Policy */}
+      <div className="border-t border-border/50 pt-6">
+        <h3 className="text-base font-semibold mb-2 flex items-center gap-2">
+          <Clock className="w-4 h-4 text-primary" /> Overtime & Penalty Policies
+        </h3>
+        <p className="text-xs text-muted-foreground mb-4">
+          Configure automated overtime multipliers and late clock-in penalty deductions.
+        </p>
+        <div className="grid gap-6 md:grid-cols-2 bg-muted/20 p-5 rounded-xl border border-border/50">
+          <div className="space-y-4">
+            <h4 className="text-sm font-bold text-foreground">Overtime Calculations</h4>
+            <div className="space-y-2">
+              <Label className="text-xs">Overtime Payout Multiplier</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={overtimeMultiplier}
+                  onChange={(e) => setOvertimeMultiplier(parseFloat(e.target.value) || 1.0)}
+                  className="h-9 w-24 bg-background"
+                />
+                <span className="text-xs text-muted-foreground">x of base hourly pay</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs">Overtime Threshold (Minutes)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  value={overtimeThresholdMins}
+                  onChange={(e) => setOvertimeThresholdMins(parseInt(e.target.value) || 0)}
+                  className="h-9 w-24 bg-background"
+                />
+                <span className="text-xs text-muted-foreground">mins grace before OT starts accruing</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h4 className="text-sm font-bold text-foreground">Late Clock-In Penalty</h4>
+            <div className="space-y-2">
+              <Label className="text-xs">Late Grace Period (Minutes)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  value={lateGracePeriodMins}
+                  onChange={(e) => setLateGracePeriodMins(parseInt(e.target.value) || 0)}
+                  className="h-9 w-24 bg-background"
+                />
+                <span className="text-xs text-muted-foreground">mins allowed late clock-in without penalty</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs">Deduction Penalty Rule</Label>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs">Deduct</span>
+                <select
+                  value={deductionUnit}
+                  onChange={(e) => setDeductionUnit(e.target.value)}
+                  className="h-9 rounded-md border border-border/50 bg-background px-2 py-1 text-sm w-32"
+                >
+                  <option value="half_day">Half Day Pay</option>
+                  <option value="full_day">Full Day Pay</option>
+                </select>
+                <span className="text-xs">for every</span>
+                <Input
+                  type="number"
+                  value={lateTrigger}
+                  onChange={(e) => setLateTrigger(parseInt(e.target.value) || 3)}
+                  className="h-9 w-16 text-center bg-background"
+                />
+                <span className="text-xs">Late Clock-Ins</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <Button
+          size="sm"
+          className="mt-4"
+          onClick={() => saveMutation.mutate({})}
+          disabled={saveMutation.isPending}
+        >
+          {saveMutation.isPending ? 'Saving...' : 'Save Overtime & Penalty Policies'}
+        </Button>
       </div>
 
       {/* Salary Components */}
@@ -929,6 +1365,236 @@ function IntegrationsTab() {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ======== OFFICE BRANCH LOCATIONS TAB ========
+function LocationsTab({ companyId }: { companyId?: string | null }) {
+  const queryClient = useQueryClient();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingLocation, setEditingLocation] = useState<any>(null);
+  const [isLocating, setIsLocating] = useState(false);
+
+  const [locForm, setLocForm] = useState({
+    name: '',
+    latitude: '',
+    longitude: '',
+    radius_meters: '200',
+    is_active: true,
+  });
+
+  const { data: locations = [], isLoading } = useQuery({
+    queryKey: ['company-locations-settings', companyId],
+    queryFn: async () => {
+      if (!companyId) return [];
+      const { data } = await supabase
+        .from('company_locations')
+        .select('*')
+        .eq('company_id', companyId)
+        .order('name');
+      return data || [];
+    },
+    enabled: !!companyId,
+  });
+
+  const getCoordinates = () => {
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocForm(f => ({
+          ...f,
+          latitude: position.coords.latitude.toFixed(6),
+          longitude: position.coords.longitude.toFixed(6),
+        }));
+        setIsLocating(false);
+        toast.success('Coordinates retrieved successfully!');
+      },
+      (error) => {
+        console.error(error);
+        setIsLocating(false);
+        toast.error('Failed to get coordinates. Please enter manually.');
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  const saveLocation = useMutation({
+    mutationFn: async () => {
+      if (!locForm.name.trim()) throw new Error('Location name is required');
+      const lat = parseFloat(locForm.latitude);
+      const lng = parseFloat(locForm.longitude);
+      const rad = parseInt(locForm.radius_meters);
+
+      if (isNaN(lat) || lat < -90 || lat > 90) throw new Error('Latitude must be between -90 and 90');
+      if (isNaN(lng) || lng < -180 || lng > 180) throw new Error('Longitude must be between -180 and 180');
+      if (isNaN(rad) || rad <= 0) throw new Error('Geofence radius must be greater than 0');
+
+      const payload = {
+        company_id: companyId!,
+        name: locForm.name.trim(),
+        latitude: lat,
+        longitude: lng,
+        radius_meters: rad,
+        is_active: locForm.is_active,
+      };
+
+      if (editingLocation) {
+        const { error } = await supabase
+          .from('company_locations')
+          .update(payload)
+          .eq('id', editingLocation.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('company_locations')
+          .insert([payload]);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['company-locations-settings'] });
+      toast.success(editingLocation ? 'Office location updated' : 'Office location added');
+      setDialogOpen(false);
+      setEditingLocation(null);
+      setLocForm({ name: '', latitude: '', longitude: '', radius_meters: '200', is_active: true });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Failed to save location'),
+  });
+
+  const deleteLocation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('company_locations')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['company-locations-settings'] });
+      toast.success('Office location deleted');
+    },
+    onError: (e: any) => toast.error(e?.message || 'Failed to delete location'),
+  });
+
+  const handleEdit = (loc: any) => {
+    setEditingLocation(loc);
+    setLocForm({
+      name: loc.name,
+      latitude: loc.latitude.toString(),
+      longitude: loc.longitude.toString(),
+      radius_meters: loc.radius_meters.toString(),
+      is_active: loc.is_active,
+    });
+    setDialogOpen(true);
+  };
+
+  const handleCreateNew = () => {
+    setEditingLocation(null);
+    setLocForm({ name: '', latitude: '', longitude: '', radius_meters: '200', is_active: true });
+    setDialogOpen(true);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-base font-semibold">Branch Geofencing</h3>
+          <p className="text-xs text-muted-foreground">Manage physical coordinates and geofences for different company offices and branches</p>
+        </div>
+        <Button onClick={handleCreateNew} size="sm" className="gap-1">
+          <Plus className="w-3.5 h-3.5" /> Add Location
+        </Button>
+      </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingLocation ? 'Edit Office Location' : 'Add Office Location'}</DialogTitle>
+            <DialogDescription>Define distinct geographical boundaries for attendance validation</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Location / Branch Name</Label>
+              <Input placeholder="e.g. Headquarters, London Branch" value={locForm.name} onChange={(e) => setLocForm(f => ({ ...f, name: e.target.value }))} />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Latitude</Label>
+                <Input placeholder="e.g. 51.5074" type="number" step="any" value={locForm.latitude} onChange={(e) => setLocForm(f => ({ ...f, latitude: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Longitude</Label>
+                <Input placeholder="e.g. -0.1278" type="number" step="any" value={locForm.longitude} onChange={(e) => setLocForm(f => ({ ...f, longitude: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <Button type="button" variant="secondary" size="sm" className="w-full gap-1.5" onClick={getCoordinates} disabled={isLocating}>
+                {isLocating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MapPin className="w-3.5 h-3.5" />}
+                Get Current Coordinates
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Geofence Radius (meters)</Label>
+              <Input type="number" value={locForm.radius_meters} onChange={(e) => setLocForm(f => ({ ...f, radius_meters: e.target.value }))} />
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <input
+                type="checkbox"
+                id="is_active"
+                checked={locForm.is_active}
+                onChange={(e) => setLocForm(f => ({ ...f, is_active: e.target.checked }))}
+                className="rounded border-border bg-background text-primary focus:ring-primary"
+              />
+              <Label htmlFor="is_active" className="cursor-pointer">Active and enforcing geofence</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button onClick={() => saveLocation.mutate()} disabled={saveLocation.isPending}>
+              {saveLocation.isPending ? 'Saving...' : editingLocation ? 'Update Location' : 'Create Location'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {isLoading ? (
+        <Skeleton className="h-32 w-full" />
+      ) : locations.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground text-sm">
+          <MapPin className="w-8 h-8 mx-auto mb-2 opacity-30" />
+          <p>No custom branch locations defined yet. Add your first location above.</p>
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {locations.map((loc: any) => (
+            <div key={loc.id} className="flex flex-col justify-between p-4 rounded-lg border border-border/50 bg-background/50 gap-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-sm">{loc.name}</p>
+                    {!loc.is_active && <Badge variant="secondary">Inactive</Badge>}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">Coordinates: {loc.latitude.toFixed(5)}, {loc.longitude.toFixed(5)}</p>
+                  <p className="text-xs text-muted-foreground">Radius: {loc.radius_meters} meters</p>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(loc)} aria-label="Edit location">
+                    <Settings2 className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive/50 hover:text-destructive" onClick={() => deleteLocation.mutate(loc.id)} aria-label="Delete location">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

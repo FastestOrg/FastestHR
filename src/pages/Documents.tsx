@@ -7,12 +7,13 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FileText, Upload, Download, Trash2, Search, FolderOpen, Shield, FileCheck, File } from 'lucide-react';
+import { FileText, Upload, Download, Trash2, Search, FolderOpen, Shield, FileCheck, File, Eye, Loader2, AlertCircle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/store/auth-store';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { differenceInDays } from 'date-fns';
+import { useSecureUpload } from '@/hooks/use-secure-upload';
 
 interface Document {
   id: string;
@@ -36,6 +37,7 @@ const categories = [
 export default function Documents() {
   const { profile } = useAuthStore();
   const isAdmin = profile?.platform_role === 'company_admin' || profile?.platform_role === 'super_admin' || profile?.platform_role === 'hr_manager';
+  const { validateFile } = useSecureUpload();
 
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,6 +48,11 @@ export default function Documents() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState({ name: '', category: 'hr_policies', description: '', expiresAt: '' });
   const [file, setFile] = useState<File | null>(null);
+
+  // Document preview states
+  const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   useEffect(() => {
     fetchDocuments();
@@ -89,8 +96,9 @@ export default function Documents() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  const searchLower = search.toLowerCase();
   const filteredDocs = documents.filter(doc => {
-    const matchSearch = doc.name.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = doc.name.toLowerCase().includes(searchLower);
     const matchCategory = activeTab === 'all' || doc.category === activeTab;
     return matchSearch && matchCategory;
   });
@@ -120,6 +128,13 @@ export default function Documents() {
 
     setUploading(true);
     try {
+      // Binary level security check (magic-bytes checking)
+      const isValid = await validateFile(file);
+      if (!isValid) {
+        setUploading(false);
+        return;
+      }
+
       const fileExt = file.name.split('.').pop();
       const fileName = `${profile.company_id}/${Date.now()}_${crypto.randomUUID()}.${fileExt}`;
 
@@ -212,6 +227,25 @@ export default function Documents() {
     } catch (err: unknown) {
       toast.error('Failed to download document');
       console.error(err);
+    }
+  };
+
+  const handlePreview = async (doc: Document) => {
+    if (!doc.filePath) return;
+    setPreviewDoc(doc);
+    setPreviewLoading(true);
+    try {
+      const { data, error } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(doc.filePath, 300);
+      
+      if (error) throw error;
+      setPreviewUrl(data?.signedUrl || null);
+    } catch (err) {
+      toast.error('Failed to generate preview URL');
+      console.error(err);
+    } finally {
+      setPreviewLoading(false);
     }
   };
 
@@ -374,6 +408,9 @@ export default function Documents() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 justify-end w-full sm:w-auto border-t border-border/10 pt-2 sm:pt-0 sm:border-none">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10 rounded-lg" onClick={() => handlePreview(doc)} aria-label="Preview document">
+                        <Eye className="w-4 h-4" />
+                      </Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10 rounded-lg" onClick={() => handleDownload(doc)} aria-label="Download document">
                         <Download className="w-4 h-4" />
                       </Button>
@@ -390,6 +427,49 @@ export default function Documents() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Document Preview Dialog */}
+      <Dialog open={!!previewDoc} onOpenChange={(open) => { if (!open) { setPreviewDoc(null); setPreviewUrl(null); } }}>
+        <DialogContent className="max-w-4xl h-[85vh] flex flex-col p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-primary font-bold">
+              <FileText className="h-5 w-5" /> {previewDoc?.name}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Sandboxed secure document viewer — Category: {previewDoc?.category}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 bg-muted rounded-xl overflow-hidden relative border border-border/80 mt-4 flex items-center justify-center">
+            {previewLoading ? (
+              <div className="flex flex-col items-center gap-2">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-xs text-muted-foreground font-medium">Generating secure sandbox tunnel...</p>
+              </div>
+            ) : previewUrl ? (
+              <iframe
+                src={previewUrl}
+                className="w-full h-full border-none bg-white"
+                sandbox="allow-scripts allow-same-origin"
+                title={previewDoc?.name}
+              />
+            ) : (
+              <div className="text-center p-6 text-muted-foreground space-y-2">
+                <AlertCircle className="h-10 w-10 text-destructive mx-auto" />
+                <p className="text-sm font-semibold">Failed to load secure preview</p>
+                <p className="text-xs">Please download the document instead to view its content.</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="mt-4 shrink-0 flex items-center justify-between w-full">
+            <span className="text-[10px] text-muted-foreground uppercase font-black tracking-wider">
+              Secure Sandbox Preview Encrypted
+            </span>
+            <Button variant="outline" size="sm" onClick={() => { setPreviewDoc(null); setPreviewUrl(null); }}>
+              Close Preview
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -26,6 +26,7 @@ import { RecruitmentTeam } from './recruitment/RecruitmentTeam';
 import { RecruitmentAnalytics } from './recruitment/RecruitmentAnalytics';
 import { JobSelectionView } from '@/components/recruitment/JobSelectionView';
 import { RecruiterCopilot } from '@/components/recruitment/RecruiterCopilot';
+import { ResumeScreener } from '@/components/recruitment/ResumeScreener';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -56,6 +57,7 @@ export default function Recruitment() {
   const [isScoreDialogOpen, setIsScoreDialogOpen] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<any>(null);
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
+  const [isScreenerOpen, setIsScreenerOpen] = useState(false);
   const [assignDialog, setAssignDialog] = useState<{
     open: boolean; candidateId: string; candidateName: string;
     currentAssignee: string | null; jobId: string;
@@ -214,6 +216,20 @@ export default function Recruitment() {
                 >
                   <BrainCircuit className="w-3.5 h-3.5" />
                   Copilot
+                </Button>
+
+                <Button
+                  variant={isScreenerOpen ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setIsScreenerOpen(!isScreenerOpen)}
+                  className={`rounded-full px-3 h-8 sm:h-9 text-xs sm:text-sm gap-1.5 transition-all duration-300 ${
+                    isScreenerOpen 
+                      ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' 
+                      : 'hover:bg-primary/5'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  AI Screener
                 </Button>
 
                 <AddCandidateDialog jobId={activeJob!} />
@@ -574,6 +590,13 @@ export default function Recruitment() {
       <RecruiterCopilot 
         isOpen={isCopilotOpen} 
         onClose={() => setIsCopilotOpen(false)}
+        activeJob={activeJobData || null}
+        candidates={candidates}
+      />
+
+      <ResumeScreener
+        isOpen={isScreenerOpen}
+        onClose={() => setIsScreenerOpen(false)}
         activeJob={activeJobData || null}
         candidates={candidates}
       />

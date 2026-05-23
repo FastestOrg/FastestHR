@@ -14,9 +14,10 @@ const BlogList = () => {
     // metadata handled by SEO component
   }, []);
 
+  const searchLower = searchTerm.toLowerCase();
   const filteredBlogs = BLOGS.filter(blog => 
-    blog.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    blog.category.toLowerCase().includes(searchTerm.toLowerCase())
+    blog.title.toLowerCase().includes(searchLower) ||
+    blog.category.toLowerCase().includes(searchLower)
   );
 
   return (

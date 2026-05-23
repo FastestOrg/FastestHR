@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import DOMPurify from 'dompurify';
 import { Loader2, CheckCircle2, ShieldCheck, Globe } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { escapeHtml } from '@/lib/utils';
+import { substituteVariables } from '@/lib/template-utils';
 
 export default function PublicIDCard() {
   const { publicId } = useParams<{ publicId: string }>();
@@ -25,7 +25,7 @@ export default function PublicIDCard() {
   const renderCard = () => {
     if (!employee || !employee.companies) return null;
     
-    let html = employee.companies.id_card_template || '';
+    const template = employee.companies.id_card_template || '';
     const placeholders: Record<string, string> = {
       '{{company_name}}': employee.companies.name || '',
       '{{logo_url}}': employee.companies.logo_url || '',
@@ -38,9 +38,7 @@ export default function PublicIDCard() {
       '{{avatar_url}}': employee.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + employee.first_name,
     };
 
-    Object.entries(placeholders).forEach(([key, val]) => {
-      html = html.replace(new RegExp(key, 'g'), () => escapeHtml(String(val)));
-    });
+    const html = substituteVariables(template, placeholders);
 
     return DOMPurify.sanitize(html, { ADD_TAGS: ['style'], ADD_ATTR: ['style'], FORCE_BODY: true });
   };
