@@ -62,22 +62,17 @@ Deno.serve(async (req) => {
     const company = offer.companies;
 
     // 2. Ensure user exists in auth.users
-    const { data: userData, error: userError } = await supabaseClient.auth.admin.getUserByEmail(candidate_email);
-    
-    let targetUser = userData?.user;
+    const { data: newUser, error: createError } = await supabaseClient.auth.admin.createUser({
+      email: candidate_email,
+      email_confirm: true,
+      user_metadata: { 
+        full_name: offer.candidates?.full_name,
+        platform_role: 'candidate'
+      }
+    });
 
-    if (!targetUser) {
-      // Create user if not exists
-      const { data: newUser, error: createError } = await supabaseClient.auth.admin.createUser({
-        email: candidate_email,
-        email_confirm: true,
-        user_metadata: { 
-          full_name: offer.candidates?.full_name,
-          platform_role: 'candidate'
-        }
-      });
-      if (createError) throw createError;
-      targetUser = newUser.user;
+    if (createError && !createError.message.includes('already registered')) {
+      throw createError;
     }
 
     // 3. Generate Magic Link

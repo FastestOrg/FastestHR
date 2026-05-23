@@ -15,6 +15,7 @@ import {
   ClipboardList
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useSecureUpload } from '@/hooks/use-secure-upload';
 
 interface EmployeeOnboardingViewProps {
   employeeId: string;
@@ -23,6 +24,7 @@ interface EmployeeOnboardingViewProps {
 
 export function EmployeeOnboardingView({ employeeId, companyId }: EmployeeOnboardingViewProps) {
   const queryClient = useQueryClient();
+  const { validateFile } = useSecureUpload();
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [textValues, setTextValues] = useState<Record<string, string>>({});
 
@@ -74,6 +76,13 @@ export function EmployeeOnboardingView({ employeeId, companyId }: EmployeeOnboar
       
       if (uploadError) throw uploadError;
 
+      // Clean up previous submission if any before inserting new one
+      await supabase
+        .from('onboarding_document_submissions')
+        .delete()
+        .eq('employee_id', employeeId)
+        .eq('requirement_id', requirementId);
+      
       const { error: dbError } = await supabase
         .from('onboarding_document_submissions')
         .insert({
@@ -98,6 +107,13 @@ export function EmployeeOnboardingView({ employeeId, companyId }: EmployeeOnboar
 
   const submitTextMutation = useMutation({
     mutationFn: async ({ requirementId, text }: { requirementId: string, text: string }) => {
+      // Clean up previous submission if any before inserting new one
+      await supabase
+        .from('onboarding_document_submissions')
+        .delete()
+        .eq('employee_id', employeeId)
+        .eq('requirement_id', requirementId);
+
       const { error } = await supabase
         .from('onboarding_document_submissions')
         .insert({
@@ -155,59 +171,111 @@ export function EmployeeOnboardingView({ employeeId, companyId }: EmployeeOnboar
             {docRequirements.map((req: any) => {
               const submission = docSubmissions.find((s: any) => s.requirement_id === req.id);
               const isUploading = uploadingId === req.id;
+              
+              const status = submission?.status || 'none';
+              const isApproved = status === 'approved';
+              const isPending = status === 'pending';
+              const isRejected = status.startsWith('rejected');
+              const rejectionReason = isRejected ? (status.split('rejected:')[1]?.trim() || 'Please re-upload a valid document.') : '';
+
+              let cardBg = 'bg-card border-border/50';
+              let badge = null;
+              let rightIcon = <Upload className="h-5 w-5 text-primary" />;
+
+              if (submission) {
+                if (isApproved) {
+                  cardBg = 'bg-success/5 border-success/20 hover:bg-success/10';
+                  badge = <Badge className="bg-success text-white text-[9px] h-4 font-mono font-semibold uppercase">APPROVED</Badge>;
+                  rightIcon = <CheckCircle2 className="h-5 w-5 text-success animate-in zoom-in duration-300" />;
+                } else if (isPending) {
+                  cardBg = 'bg-amber-500/5 border-amber-500/20 hover:bg-amber-500/10';
+                  badge = <Badge className="bg-amber-500 text-white text-[9px] h-4 font-mono font-semibold uppercase">PENDING REVIEW</Badge>;
+                  rightIcon = <Loader2 className="h-5 w-5 text-amber-500 animate-spin" />;
+                } else if (isRejected) {
+                  cardBg = 'bg-destructive/5 border-destructive/20';
+                  badge = <Badge className="bg-destructive text-white text-[9px] h-4 font-mono font-semibold uppercase">REJECTED</Badge>;
+                  rightIcon = <AlertCircle className="h-5 w-5 text-destructive animate-bounce" />;
+                }
+              } else if (req.is_mandatory) {
+                badge = <Badge variant="outline" className="text-[9px] h-4 border-amber-500/30 text-amber-600 bg-amber-500/5 font-mono uppercase">REQUIRED</Badge>;
+              }
 
               return (
-                <Card key={req.id} className={`transition-all ${submission ? 'bg-success/5 border-success/20' : 'bg-card'}`}>
-                  <CardContent className="p-4">
+                <Card key={req.id} className={`transition-all duration-300 shadow-sm hover:shadow-md border ${cardBg}`}>
+                  <CardContent className="p-5">
                     <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h4 className="font-bold text-sm">{req.title}</h4>
-                          {req.is_mandatory && !submission && <Badge variant="outline" className="text-[9px] h-4 border-amber-500/30 text-amber-600 bg-amber-500/5">REQUIRED</Badge>}
-                          {submission && <Badge className="bg-success text-white text-[9px] h-4">COMPLETED</Badge>}
+                      <div className="flex-1 space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="font-bold text-sm tracking-tight text-foreground">{req.title}</h4>
+                          {badge}
                         </div>
                         <p className="text-xs text-muted-foreground leading-relaxed">{req.description}</p>
                       </div>
-                      <div className="shrink-0 pt-1">
-                        {submission ? (
-                          <div className="h-10 w-10 rounded-full bg-success/20 flex items-center justify-center text-success">
-                            <CheckCircle2 className="h-5 w-5" />
-                          </div>
-                        ) : (
-                          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                            <Upload className="h-5 w-5" />
-                          </div>
-                        )}
+                      <div className="shrink-0 pt-0.5">
+                        <div className="h-10 w-10 rounded-full bg-muted/40 flex items-center justify-center border border-border/50">
+                          {rightIcon}
+                        </div>
                       </div>
                     </div>
 
-                    {!submission && (
-                      <div className="mt-4 pt-4 border-t border-dashed">
+                    {isRejected && (
+                      <div className="mt-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive flex gap-2 animate-in slide-in-from-top-2 duration-300">
+                        <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                        <div className="space-y-1">
+                          <p className="font-bold">Rejection Note from HR:</p>
+                          <p className="text-destructive/90">{rejectionReason}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {(!submission || isRejected) && (
+                      <div className="mt-4 pt-4 border-t border-dashed border-border/80">
                         {req.type === 'file' ? (
-                          <div className="flex items-center gap-3">
-                            <Input 
-                              type="file" 
-                              className="text-xs h-9 cursor-pointer" 
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                  uploadMutation.mutate({ requirementId: req.id, file });
-                                }
-                              }}
-                              disabled={isUploading}
-                            />
-                            {isUploading && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+                          <div className="space-y-2">
+                            <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
+                              {isRejected ? 'Upload corrected file' : 'Upload document file'}
+                            </Label>
+                            <div className="flex items-center gap-3">
+                              <Input 
+                                type="file" 
+                                className="text-xs h-9 cursor-pointer bg-background border-border/50 focus:border-primary transition-colors" 
+                                onChange={async (e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    const isValid = await validateFile(file);
+                                    if (isValid) {
+                                      uploadMutation.mutate({ requirementId: req.id, file });
+                                    }
+                                  }
+                                }}
+                                disabled={isUploading}
+                              />
+                              {isUploading && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+                            </div>
                           </div>
                         ) : (
                           <div className="space-y-3">
+                            <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
+                              {isRejected ? 'Enter corrected information' : 'Enter requested details'}
+                            </Label>
                             <Textarea 
-                                placeholder="Enter required info..." 
-                                className="text-xs min-h-[80px]"
-                                value={textValues[req.id] || ''}
-                                onChange={(e) => setTextValues(p=>({...p, [req.id]: e.target.value}))}
+                              placeholder="Type details here..." 
+                              className="text-xs min-h-[80px] bg-background border-border/50 focus:border-primary transition-colors"
+                              value={textValues[req.id] || ''}
+                              onChange={(e) => setTextValues(p=>({...p, [req.id]: e.target.value}))}
                             />
-                            <Button size="sm" className="w-full text-xs" onClick={() => submitTextMutation.mutate({ requirementId: req.id, text: textValues[req.id] })}>
-                                Submit Information
+                            <Button 
+                              size="sm" 
+                              className="w-full text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-md shadow-sm h-8"
+                              onClick={() => {
+                                if (!textValues[req.id]?.trim()) {
+                                  toast.error('Please enter details before submitting');
+                                  return;
+                                }
+                                submitTextMutation.mutate({ requirementId: req.id, text: textValues[req.id] });
+                              }}
+                            >
+                              Submit Details
                             </Button>
                           </div>
                         )}
