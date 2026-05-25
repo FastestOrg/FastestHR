@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MoreHorizontal, ArrowRight, XCircle, Trash2, Loader2, Send, Star, Sparkles, Bot, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { OfferDetailsDialog } from './OfferDetailsDialog';
-import { generateAndUploadOfferPDF, replaceHtmlVariables } from '@/lib/pdf-generator';
+import { generateAndUploadOfferPDF } from '@/lib/pdf-generator';
 import { EditScoreDialog } from './EditScoreDialog';
 import { SendAIInterviewDialog } from './SendAIInterviewDialog';
 
