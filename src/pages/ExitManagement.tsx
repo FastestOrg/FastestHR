@@ -355,17 +355,19 @@ export default function ExitManagement() {
       // 1. Zero out remaining leave balances
       const { data: activeBalances } = await supabase
         .from('leave_balances')
-        .select('id, total_days')
+        .select('*')
         .eq('employee_id', selectedRecord.employee_id)
         .eq('year', new Date().getFullYear());
 
       if (activeBalances && activeBalances.length > 0) {
-        for (const bal of activeBalances) {
-          await supabase
-            .from('leave_balances')
-            .update({ used_days: bal.total_days })
-            .eq('id', bal.id);
-        }
+        const upsertData = activeBalances.map(bal => ({
+          ...bal,
+          used_days: bal.total_days
+        }));
+
+        await supabase
+          .from('leave_balances')
+          .upsert(upsertData);
       }
 
       // 2. Create offboarding payroll run record
