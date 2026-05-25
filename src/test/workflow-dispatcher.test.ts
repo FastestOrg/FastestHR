@@ -82,9 +82,6 @@ describe('Workflow Dispatcher', () => {
     await dispatchWorkflowTrigger('candidate_stage_updated', 'test-company', { status: 'active' }, 'record-123');
     const end = performance.now();
 
-    console.log(`Execution time for ${numWorkflows} workflows: ${end - start} ms`);
-    console.log(`Insert calls: ${mockInsert.mock.calls.length}`);
-    console.log(`Update calls: ${mockUpdate.mock.calls.length}`);
     expect(mockInsert.mock.calls.length).toBeGreaterThan(0);
   });
 });
