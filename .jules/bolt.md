@@ -46,3 +46,7 @@
 ## 2026-05-14 - Optimize Array Filtering in Render Paths
 **Learning:** In React components that filter arrays during render, chaining `.filter()` with `.includes()` on arrays (O(N*M)) and performing repeated string allocations (e.g., `.toLowerCase()`) inside the loop can cause significant performance bottlenecks as lists grow.
 **Action:** Always extract static values (like `search.toLowerCase()`) outside the filter loop, convert lookup arrays to `Set`s for O(1) membership checks, and wrap the entire operation in `useMemo` to prevent recalculation on every re-render.
+
+## 2024-05-20 - Multi-Pass Array Filtering in Kanban Render Views
+**Learning:** In Kanban or category-based views (e.g., `RecruitmentLeadsBoard.tsx`), calling `.filter(item => item.stage === currentStage)` repeatedly inside a `.map(stage => ...)` loop scales poorly with large datasets, generating O(Stages * N) redundant passes over the entire array during every single render.
+**Action:** Pre-compute the groups using a single-pass iteration inside a `useMemo` block that aggregates items into a dictionary bucketed by category (e.g., `Record<string, Item[]>`). Then simply look up the pre-bucketed array during the `.map()` render loop.

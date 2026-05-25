@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -37,6 +37,8 @@ const STAGE_COLORS: Record<string, string> = {
 };
 
 type ViewMode = 'list' | 'kanban';
+
+const ALL_STAGES = ['applied', 'screening', 'interview', 'assessment', 'offer', 'hired', 'rejected'];
 
 export function RecruitmentLeadsBoard() {
   const { profile } = useAuthStore();
@@ -163,14 +165,35 @@ export function RecruitmentLeadsBoard() {
   });
 
   const searchLower = search ? search.toLowerCase() : '';
-  const filtered = leads.filter((l: any) => {
-    if (!searchLower) return true;
-    return (
-      l.full_name?.toLowerCase().includes(searchLower) ||
-      l.email?.toLowerCase().includes(searchLower) ||
-      l.jobs?.title?.toLowerCase().includes(searchLower)
-    );
-  });
+
+  // ⚡ Bolt: Memoize filtered list to avoid O(N) recalculations on every render
+  const filtered = useMemo(() => {
+    return leads.filter((l: any) => {
+      if (!searchLower) return true;
+      return (
+        l.full_name?.toLowerCase().includes(searchLower) ||
+        l.email?.toLowerCase().includes(searchLower) ||
+        l.jobs?.title?.toLowerCase().includes(searchLower)
+      );
+    });
+  }, [leads, searchLower]);
+
+  // ⚡ Bolt: Convert array to Set for O(1) membership lookups during render loops
+  const selectedLeadSet = useMemo(() => new Set(selectedLeadIds), [selectedLeadIds]);
+
+  // ⚡ Bolt: Single-pass iteration to bucket leads by stage instead of filtering N times
+  const leadsByStage = useMemo(() => {
+    const bucket: Record<string, any[]> = {};
+    for (const stage of ALL_STAGES) {
+      bucket[stage] = [];
+    }
+    for (const lead of filtered) {
+      if (bucket[lead.stage]) {
+        bucket[lead.stage].push(lead);
+      }
+    }
+    return bucket;
+  }, [filtered]);
 
   const getInitials = (name: string) =>
     name?.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) || '?';
@@ -189,7 +212,6 @@ export function RecruitmentLeadsBoard() {
     );
   };
 
-  const ALL_STAGES = ['applied', 'screening', 'interview', 'assessment', 'offer', 'hired', 'rejected'];
 
   return (
     <div className="space-y-4">
@@ -353,7 +375,7 @@ export function RecruitmentLeadsBoard() {
                   <div className="col-span-3 flex items-center gap-3 min-w-0">
                     {(isAdmin || isManager) && (
                       <Checkbox
-                        checked={selectedLeadIds.includes(lead.id)}
+                        checked={selectedLeadSet.has(lead.id)}
                         onCheckedChange={() => toggleSelectLead(lead.id)}
                         aria-label={`Select ${lead.full_name}`}
                         className="flex-shrink-0"
@@ -489,7 +511,7 @@ export function RecruitmentLeadsBoard() {
         /* KANBAN VIEW */
         <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
           {ALL_STAGES.filter((s) => stageFilter === 'all' || stageFilter === s).map((stage) => {
-            const stageLeads = filtered.filter((l: any) => l.stage === stage);
+            const stageLeads = leadsByStage[stage] || [];
             return (
               <div key={stage} className="flex-shrink-0 w-72 space-y-3">
                 <div className="flex items-center gap-2 px-1">
@@ -499,12 +521,12 @@ export function RecruitmentLeadsBoard() {
                 </div>
                 <div className="min-h-[200px] space-y-2 p-2 rounded-lg bg-muted/20 border border-dashed border-border/40">
                   {stageLeads.map((lead: any) => (
-                    <Card key={lead.id} className={`bg-background border-border/40 shadow-sm transition-all ${selectedLeadIds.includes(lead.id) ? 'ring-1 ring-primary' : ''}`}>
+                    <Card key={lead.id} className={`bg-background border-border/40 shadow-sm transition-all ${selectedLeadSet.has(lead.id) ? 'ring-1 ring-primary' : ''}`}>
                       <CardContent className="p-3 space-y-2">
                         <div className="flex items-start gap-2">
                           {(isAdmin || isManager) && (
                             <Checkbox
-                              checked={selectedLeadIds.includes(lead.id)}
+                              checked={selectedLeadSet.has(lead.id)}
                               onCheckedChange={() => toggleSelectLead(lead.id)}
                               aria-label={`Select ${lead.full_name}`}
                               className="mt-1"
@@ -628,7 +650,7 @@ export function RecruitmentLeadsBoard() {
           onOpenChange={setBulkAssignOpen}
           leadIds={selectedLeadIds}
           leadNames={filtered
-            .filter((l: any) => selectedLeadIds.includes(l.id))
+            .filter((l: any) => selectedLeadSet.has(l.id))
             .map((l: any) => l.full_name)}
           onSuccess={() => setSelectedLeadIds([])}
         />
