@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useAuthStore } from '@/store/auth-store';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ListTodo, Plus, Timer, Play, Square, CheckCircle, Clock, Calendar, AlertCircle } from 'lucide-react';
-import { format, isToday, parseISO, startOfToday, addHours } from 'date-fns';
+import { format, parseISO, addHours } from 'date-fns';
 
 export function TaskList() {
   const { profile } = useAuthStore();
