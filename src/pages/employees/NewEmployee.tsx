@@ -66,8 +66,10 @@ export default function NewEmployee() {
   const generateRandomPassword = () => {
     const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
     let password = '';
+    const array = new Uint32Array(12);
+    window.crypto.getRandomValues(array);
     for (let i = 0; i < 12; i++) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length));
+      password += chars.charAt(array[i] % chars.length);
     }
     return password;
   };
