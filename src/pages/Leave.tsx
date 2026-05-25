@@ -7,12 +7,18 @@ import { Calendar, Plus, CheckCircle, XCircle, Clock, BarChart3, PieChart, FileT
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Tables } from '@/integrations/supabase/types';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth-store';
 import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+
+type LeaveBalanceType = Tables<'leave_balances'> & {
+  leave_types: { name: string; color: string | null; code: string | null; } | null;
+};
 
 interface LeaveTiers {
   tiers: {
@@ -485,7 +491,7 @@ export default function Leave() {
             </CardContent>
           </Card>
         ) : (
-          leaveBalances.map((lb: any) => {
+          leaveBalances.map((lb: LeaveBalanceType) => {
             const remaining = (lb.total_days || 0) - (lb.used_days || 0) - (lb.pending_days || 0);
             const color = lb.leave_types?.color || '#4F46E5';
             return (
