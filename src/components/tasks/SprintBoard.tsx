@@ -7,7 +7,7 @@ import { useAuthStore } from '@/store/auth-store';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { LayoutGrid, Plus, Calendar, Settings2, Trash2, Loader2, ArrowRight } from 'lucide-react';
+import { LayoutGrid, Plus, Calendar, Settings2, Loader2, ArrowRight } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 
 export function SprintBoard() {
