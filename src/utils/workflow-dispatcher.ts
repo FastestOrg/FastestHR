@@ -69,31 +69,38 @@ export async function dispatchWorkflowTrigger(
 
     if (!workflows || workflows.length === 0) return;
 
-    for (const workflow of workflows) {
-      // 2. Evaluate all conditions (ALL conditions must match)
+    // 2. Evaluate conditions for all workflows and collect matching ones
+    const matchingWorkflows = workflows.filter(workflow => {
       const conditionsList = Array.isArray(workflow.conditions) ? workflow.conditions : [];
-      const conditionsMatch = conditionsList.every((cond: any) => evaluateCondition(record, cond));
+      return conditionsList.every((cond: any) => evaluateCondition(record, cond));
+    });
 
-      if (!conditionsMatch) {
-        continue; // Skip workflow run if conditions don't match
-      }
+    if (matchingWorkflows.length === 0) return;
 
-      // 3. Create workflow run in pending state
-      const { data: run, error: runCreateErr } = await supabase
-        .from('workflow_runs')
-        .insert([{
-          workflow_id: workflow.id,
-          record_id: recordId,
-          status: 'pending',
-          execution_log: []
-        }])
-        .select()
-        .single();
+    // Prepare batch insert data for pending workflow runs
+    const runsToInsert = matchingWorkflows.map(workflow => ({
+      workflow_id: workflow.id,
+      record_id: recordId,
+      status: 'pending',
+      execution_log: []
+    }));
 
-      if (runCreateErr) {
-        console.error('Error creating workflow run record:', runCreateErr);
-        continue;
-      }
+    // 3. Create workflow runs in pending state in a single batch
+    const { data: runs, error: runCreateErr } = await supabase
+      .from('workflow_runs')
+      .insert(runsToInsert)
+      .select();
+
+    if (runCreateErr || !runs) {
+      console.error('Error batch creating workflow run records:', runCreateErr);
+      return;
+    }
+
+    // 4. Execute actions for each pending workflow run
+    for (const run of runs) {
+      // Find the corresponding workflow config
+      const workflow = matchingWorkflows.find(w => w.id === run.workflow_id);
+      if (!workflow) continue;
 
       const executionLogs: any[] = [];
       let runStatus: 'success' | 'failed' = 'success';
@@ -106,7 +113,7 @@ export async function dispatchWorkflowTrigger(
           message: `Evaluation Succeeded. Conditions matched. Evaluating ${actionList.length} action steps.`
         });
 
-        // 4. Execute action items
+        // Execute action items
         for (let i = 0; i < actionList.length; i++) {
           const action = actionList[i];
           const stepName = action.template_name || `Step ${i + 1}`;
@@ -150,7 +157,7 @@ export async function dispatchWorkflowTrigger(
         });
       }
 
-      // 5. Update workflow run with outcome and execution audit logs
+      // 5. Update individual workflow run with outcome and execution audit logs
       await supabase
         .from('workflow_runs')
         .update({
