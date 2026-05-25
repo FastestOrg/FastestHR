@@ -710,11 +710,11 @@ export async function generateAndDownloadPayslipPDF(params: GeneratePayslipPDFPa
             </tr>
             <tr style="height: 20px;">
               <td style="color: #64748b; font-weight: 500;">Working Days:</td>
-              <td style="color: #0f172a;">${slip.working_days || 0}</td>
+              <td style="color: #0f172a;">${escapeHtml(String(slip.working_days || 0))}</td>
             </tr>
             <tr style="height: 20px;">
               <td style="color: #64748b; font-weight: 500;">Paid / LOP Days:</td>
-              <td style="color: #0f172a;"><span style="color: #10b981; font-weight: 600;">${slip.paid_days || 0} Paid</span> / <span style="color: #ef4444; font-weight: 600;">${slip.lop_days || 0} LOP</span></td>
+              <td style="color: #0f172a;"><span style="color: #10b981; font-weight: 600;">${escapeHtml(String(slip.paid_days || 0))} Paid</span> / <span style="color: #ef4444; font-weight: 600;">${escapeHtml(String(slip.lop_days || 0))} LOP</span></td>
             </tr>
           </table>
         </div>
@@ -731,12 +731,12 @@ export async function generateAndDownloadPayslipPDF(params: GeneratePayslipPDFPa
             ${earningsList.map(item => `
               <tr style="border-bottom: 1px solid #f1f5f9;">
                 <td style="padding: 8px 12px; color: #475569; font-weight: 500;">${escapeHtml(item.name)}</td>
-                <td style="padding: 8px 12px; text-align: right; color: #0f172a; font-weight: 600;">${formatCurrency(item.amount, currency)}</td>
+                <td style="padding: 8px 12px; text-align: right; color: #0f172a; font-weight: 600;">${escapeHtml(formatCurrency(item.amount, currency))}</td>
               </tr>
             `).join('')}
             <tr style="background-color: #f8fafc; font-weight: bold; border-top: 1px solid #e2e8f0;">
               <td style="padding: 10px 12px; color: #1e3a8a; font-weight: 700;">Total Earnings (A)</td>
-              <td style="padding: 10px 12px; text-align: right; color: #1e3a8a; font-weight: 700;">${formatCurrency(slip.gross_salary || 0, currency)}</td>
+              <td style="padding: 10px 12px; text-align: right; color: #1e3a8a; font-weight: 700;">${escapeHtml(formatCurrency(slip.gross_salary || 0, currency))}</td>
             </tr>
           </table>
         </div>
@@ -750,17 +750,17 @@ export async function generateAndDownloadPayslipPDF(params: GeneratePayslipPDFPa
             ${deductionsList.length === 0 ? `
               <tr style="border-bottom: 1px solid #f1f5f9;">
                 <td style="padding: 8px 12px; color: #94a3b8; font-style: italic;">No deductions</td>
-                <td style="padding: 8px 12px; text-align: right; color: #94a3b8; font-style: italic;">${formatCurrency(0, currency)}</td>
+                <td style="padding: 8px 12px; text-align: right; color: #94a3b8; font-style: italic;">${escapeHtml(formatCurrency(0, currency))}</td>
               </tr>
             ` : deductionsList.map(item => `
               <tr style="border-bottom: 1px solid #f1f5f9;">
                 <td style="padding: 8px 12px; color: #475569; font-weight: 500;">${escapeHtml(item.name)}</td>
-                <td style="padding: 8px 12px; text-align: right; color: #0f172a; font-weight: 600;">${formatCurrency(item.amount, currency)}</td>
+                <td style="padding: 8px 12px; text-align: right; color: #0f172a; font-weight: 600;">${escapeHtml(formatCurrency(item.amount, currency))}</td>
               </tr>
             `).join('')}
             <tr style="background-color: #f8fafc; font-weight: bold; border-top: 1px solid #e2e8f0;">
               <td style="padding: 10px 12px; color: #9f1239; font-weight: 700;">Total Deductions (B)</td>
-              <td style="padding: 10px 12px; text-align: right; color: #9f1239; font-weight: 700;">${formatCurrency(slip.total_deductions || 0, currency)}</td>
+              <td style="padding: 10px 12px; text-align: right; color: #9f1239; font-weight: 700;">${escapeHtml(formatCurrency(slip.total_deductions || 0, currency))}</td>
             </tr>
           </table>
         </div>
@@ -770,10 +770,10 @@ export async function generateAndDownloadPayslipPDF(params: GeneratePayslipPDFPa
       <div style="background-color: #f0fdf4; border: 1.5px solid #bbf7d0; border-radius: 6px; padding: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
         <div>
           <h3 style="margin: 0; font-size: 11px; font-weight: 700; color: #166534; text-transform: uppercase; letter-spacing: 0.05em;">Net Pay Take-Home (A - B)</h3>
-          <p style="margin: 3px 0 0 0; font-size: 10px; color: #15803d; font-style: italic; font-weight: 500;">Amount in words: ${amountInWords}</p>
+          <p style="margin: 3px 0 0 0; font-size: 10px; color: #15803d; font-style: italic; font-weight: 500;">Amount in words: ${escapeHtml(amountInWords)}</p>
         </div>
         <div style="font-size: 18px; font-weight: 800; color: #166534;">
-          ${formatCurrency(slip.net_salary || 0, currency)}
+          ${escapeHtml(formatCurrency(slip.net_salary || 0, currency))}
         </div>
       </div>
 
