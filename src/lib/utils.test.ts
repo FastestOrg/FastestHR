@@ -1,5 +1,39 @@
 import { describe, it, expect } from 'vitest';
-import { isSafeUrl } from './utils';
+import { isSafeUrl, formatAmount } from './utils';
+
+describe('formatAmount', () => {
+  it('should format amount correctly with USD as default', () => {
+    expect(formatAmount(1000, undefined)).toBe('1,000');
+    expect(formatAmount(1000.5, null)).toBe('1,000.5');
+    expect(formatAmount(1000.555, '')).toBe('1,000.56');
+  });
+
+  it('should format amount correctly with USD when specified', () => {
+    expect(formatAmount(1234.5, 'USD')).toBe('1,234.5');
+  });
+
+  it('should format amount correctly with INR (using en-IN locale)', () => {
+    // en-IN formats 1000000 as 10,00,000
+    expect(formatAmount(1000000, 'INR')).toBe('10,00,000');
+    expect(formatAmount(1000000.5, 'inr')).toBe('10,00,000.5');
+  });
+
+  it('should format other currencies with en-US locale as fallback', () => {
+    expect(formatAmount(1234.56, 'EUR')).toBe('1,234.56');
+    expect(formatAmount(1234.56, 'GBP')).toBe('1,234.56');
+    expect(formatAmount(1234.56, 'JPY')).toBe('1,234.56');
+  });
+
+  it('should handle zero amounts', () => {
+    expect(formatAmount(0, 'USD')).toBe('0');
+    expect(formatAmount(0, 'INR')).toBe('0');
+  });
+
+  it('should format negative amounts correctly', () => {
+    expect(formatAmount(-1000, 'USD')).toBe('-1,000');
+    expect(formatAmount(-1000000, 'INR')).toBe('-10,00,000');
+  });
+});
 
 describe('isSafeUrl', () => {
   it('should return true for valid http URLs', () => {
