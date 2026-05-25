@@ -81,7 +81,10 @@ ${colorConfig
 }
 `,
           )
-          .join("\n"),
+          .join("\n")
+          // Sanitize to prevent XSS via style tag injection
+          .replace(/</g, "")
+          .replace(/>/g, ""),
       }}
     />
   );
