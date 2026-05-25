@@ -46,3 +46,6 @@
 ## 2026-05-14 - Optimize Array Filtering in Render Paths
 **Learning:** In React components that filter arrays during render, chaining `.filter()` with `.includes()` on arrays (O(N*M)) and performing repeated string allocations (e.g., `.toLowerCase()`) inside the loop can cause significant performance bottlenecks as lists grow.
 **Action:** Always extract static values (like `search.toLowerCase()`) outside the filter loop, convert lookup arrays to `Set`s for O(1) membership checks, and wrap the entire operation in `useMemo` to prevent recalculation on every re-render.
+## 2024-12-05 - Combine O(N*M) Inline Mapping in Render to O(N) Memoization
+**Learning:** In list views (like `src/pages/Documents.tsx`), computing individual category counts using an inline `documents.filter(...).length` inside a `.map(categories)` function creates a hidden O(N*M) nested loop on every render. If accompanied by O(N) Date instantiations, it degrades performance heavily as the data scales.
+**Action:** Replace inline mapping `.filter()` operations with a single-pass iteration inside a `useMemo` block. Store counts in a dictionary or `Record<string, number>` and return the aggregated data. Update UI components to read from the cached object instead.

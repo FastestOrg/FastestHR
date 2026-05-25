@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FileText, Upload, Download, Trash2, Search, FolderOpen, Shield, FileCheck, File, Eye, Loader2, AlertCircle } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuthStore } from '@/store/auth-store';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -96,12 +96,14 @@ export default function Documents() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const searchLower = search.toLowerCase();
-  const filteredDocs = documents.filter(doc => {
-    const matchSearch = doc.name.toLowerCase().includes(searchLower);
-    const matchCategory = activeTab === 'all' || doc.category === activeTab;
-    return matchSearch && matchCategory;
-  });
+  const filteredDocs = useMemo(() => {
+    const searchLower = search.toLowerCase();
+    return documents.filter(doc => {
+      const matchSearch = doc.name.toLowerCase().includes(searchLower);
+      const matchCategory = activeTab === 'all' || doc.category === activeTab;
+      return matchSearch && matchCategory;
+    });
+  }, [documents, search, activeTab]);
 
   const getExpiryStatus = (expiresAt?: string) => {
     if (!expiresAt) return null;
@@ -113,13 +115,34 @@ export default function Documents() {
     return { label: `Expires: ${expiresAt}`, class: 'border-muted text-muted-foreground' };
   };
 
-  const now = new Date();
-  const expiringCount = documents.filter(d => {
-    if (!d.expiresAt) return false;
-    const exp = new Date(d.expiresAt);
-    const daysLeft = differenceInDays(exp, now);
-    return daysLeft <= 30;
-  }).length;
+  const { expiringCount, categoryCounts } = useMemo(() => {
+    const now = new Date();
+    let expiringCount = 0;
+    const counts: Record<string, number> = {};
+
+    // Initialize category counts
+    categories.forEach(cat => {
+      counts[cat.value] = 0;
+    });
+
+    documents.forEach(d => {
+      // Aggregate category counts
+      if (counts[d.category] !== undefined) {
+        counts[d.category]++;
+      }
+
+      // Calculate expiring count
+      if (d.expiresAt) {
+        const exp = new Date(d.expiresAt);
+        const daysLeft = differenceInDays(exp, now);
+        if (daysLeft <= 30) {
+          expiringCount++;
+        }
+      }
+    });
+
+    return { expiringCount, categoryCounts: counts };
+  }, [documents]);
 
   const handleCreate = async () => {
     if (!form.name.trim()) { toast.error('Document name is required'); return; }
@@ -329,7 +352,7 @@ export default function Documents() {
       {/* Category Cards */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
         {categories.map(cat => {
-          const count = documents.filter(d => d.category === cat.value).length;
+          const count = categoryCounts[cat.value] || 0;
           return (
             <Card key={cat.value} className="cursor-pointer hover:border-primary/50 transition-colors" onClick={() => setActiveTab(cat.value)}>
               <CardContent className="p-4 sm:p-5 flex items-center gap-3 sm:gap-4">
