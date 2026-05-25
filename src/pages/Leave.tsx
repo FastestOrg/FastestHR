@@ -102,6 +102,51 @@ export default function Leave() {
   const [ledgerOpen, setLedgerOpen] = useState(false);
   const [ledgerLeave, setLedgerLeave] = useState<any>(null);
 
+  // Analytics aggregated in a single pass to avoid O(N*M) redundant filtering
+  const leaveAnalytics = useMemo(() => {
+    if (leaveRequests.length === 0) return null;
+
+    const typeCounts: Record<string, number> = {};
+    const statusCounts = { approved: 0, pending: 0, rejected: 0 };
+    const empCounts: Record<string, { name: string; days: number }> = {};
+
+    leaveRequests.forEach((r: any) => {
+      // 1. Leave Type Distribution
+      const typeName = r.leave_types?.name || 'Other';
+      typeCounts[typeName] = (typeCounts[typeName] || 0) + 1;
+
+      // 2. Status Breakdown
+      if (r.status === 'approved') statusCounts.approved++;
+      else if (r.status === 'pending') statusCounts.pending++;
+      else if (r.status === 'rejected') statusCounts.rejected++;
+
+      // 3. Top Leave Takers
+      if (r.status === 'approved') {
+        const key = r.employee_id;
+        const name = r.employees ? `${r.employees.first_name} ${r.employees.last_name}` : 'Unknown';
+        if (!empCounts[key]) empCounts[key] = { name, days: 0 };
+        empCounts[key].days += r.total_days || 0;
+      }
+    });
+
+    const total = leaveRequests.length;
+    const colors = ['bg-primary', 'bg-info', 'bg-warning', 'bg-success', 'bg-destructive'];
+    const typeDistribution = Object.entries(typeCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count], i) => ({
+        name,
+        count,
+        pct: Math.round((count / total) * 100),
+        colorClass: colors[i % colors.length]
+      }));
+
+    const topTakers = Object.values(empCounts)
+      .sort((a, b) => b.days - a.days)
+      .slice(0, 5);
+
+    return { typeDistribution, statusCounts, topTakers };
+  }, [leaveRequests]);
+
   const ledgerItems = useMemo(() => {
     if (!ledgerLeave) return [];
     
@@ -769,7 +814,7 @@ export default function Leave() {
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
-              {leaveRequests.length === 0 ? (
+              {!leaveAnalytics ? (
                 <p className="text-sm text-muted-foreground text-center py-4">No leave data to analyze</p>
               ) : (
                 <div className="space-y-6">
@@ -777,29 +822,17 @@ export default function Leave() {
                   <div>
                     <h4 className="text-sm font-medium mb-3 flex items-center gap-1"><PieChart className="w-3.5 h-3.5" /> By Leave Type</h4>
                     <div className="space-y-2">
-                      {(() => {
-                        const typeCounts: Record<string, number> = {};
-                        leaveRequests.forEach((r: any) => {
-                          const name = r.leave_types?.name || 'Other';
-                          typeCounts[name] = (typeCounts[name] || 0) + 1;
-                        });
-                        const total = leaveRequests.length;
-                        const colors = ['bg-primary', 'bg-info', 'bg-warning', 'bg-success', 'bg-destructive'];
-                        return Object.entries(typeCounts).sort((a, b) => b[1] - a[1]).map(([name, count], i) => {
-                          const pct = Math.round((count / total) * 100);
-                          return (
-                            <div key={name} className="space-y-1">
-                              <div className="flex justify-between text-xs">
-                                <span>{name}</span>
-                                <span className="text-muted-foreground">{count} ({pct}%)</span>
-                              </div>
-                              <div className="h-1.5 w-full rounded-full bg-muted/30">
-                                <div className={`h-full rounded-full ${colors[i % colors.length]} transition-all`} style={{ width: `${pct}%` }} />
-                              </div>
-                            </div>
-                          );
-                        });
-                      })()}
+                      {leaveAnalytics.typeDistribution.map((type) => (
+                        <div key={type.name} className="space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span>{type.name}</span>
+                            <span className="text-muted-foreground">{type.count} ({type.pct}%)</span>
+                          </div>
+                          <div className="h-1.5 w-full rounded-full bg-muted/30">
+                            <div className={`h-full rounded-full ${type.colorClass} transition-all`} style={{ width: `${type.pct}%` }} />
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
 
@@ -808,9 +841,9 @@ export default function Leave() {
                     <h4 className="text-sm font-medium mb-3">By Status</h4>
                     <div className="grid grid-cols-3 gap-3">
                       {[
-                        { label: 'Approved', count: leaveRequests.filter((r: any) => r.status === 'approved').length, color: 'text-success bg-success/10 border-success/30' },
-                        { label: 'Pending', count: leaveRequests.filter((r: any) => r.status === 'pending').length, color: 'text-warning bg-warning/10 border-warning/30' },
-                        { label: 'Rejected', count: leaveRequests.filter((r: any) => r.status === 'rejected').length, color: 'text-destructive bg-destructive/10 border-destructive/30' },
+                        { label: 'Approved', count: leaveAnalytics.statusCounts.approved, color: 'text-success bg-success/10 border-success/30' },
+                        { label: 'Pending', count: leaveAnalytics.statusCounts.pending, color: 'text-warning bg-warning/10 border-warning/30' },
+                        { label: 'Rejected', count: leaveAnalytics.statusCounts.rejected, color: 'text-destructive bg-destructive/10 border-destructive/30' },
                       ].map(item => (
                         <div key={item.label} className={`text-center p-3 rounded border ${item.color}`}>
                           <p className="text-xs">{item.label}</p>
@@ -824,21 +857,12 @@ export default function Leave() {
                   <div>
                     <h4 className="text-sm font-medium mb-3">Top Leave Takers</h4>
                     <div className="space-y-2">
-                      {(() => {
-                        const empCounts: Record<string, { name: string; days: number }> = {};
-                        leaveRequests.filter((r: any) => r.status === 'approved').forEach((r: any) => {
-                          const key = r.employee_id;
-                          const name = r.employees ? `${r.employees.first_name} ${r.employees.last_name}` : 'Unknown';
-                          if (!empCounts[key]) empCounts[key] = { name, days: 0 };
-                          empCounts[key].days += r.total_days || 0;
-                        });
-                        return Object.values(empCounts).sort((a, b) => b.days - a.days).slice(0, 5).map((emp, i) => (
-                          <div key={i} className="flex items-center justify-between text-sm p-2 rounded border border-border/50 bg-background/50">
-                            <span>{emp.name}</span>
-                            <Badge variant="outline">{emp.days} days</Badge>
-                          </div>
-                        ));
-                      })()}
+                      {leaveAnalytics.topTakers.map((emp, i) => (
+                        <div key={i} className="flex items-center justify-between text-sm p-2 rounded border border-border/50 bg-background/50">
+                          <span>{emp.name}</span>
+                          <Badge variant="outline">{emp.days} days</Badge>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
