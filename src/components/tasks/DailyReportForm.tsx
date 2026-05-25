@@ -6,7 +6,7 @@ import { useAuthStore } from '@/store/auth-store';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FileText, CheckCircle2, Loader2, Send, Sun, Moon, Sparkles, Clock } from 'lucide-react';
+import { FileText, CheckCircle2, Loader2, Send, Sun, Moon, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface TimeSlot {
