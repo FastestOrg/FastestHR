@@ -65,15 +65,21 @@ export function ResumeScreener({ isOpen, onClose, activeJob, candidates }: Resum
         return;
       }
 
-      for (const cand of candidatesToEmbed) {
-        // Check if embedding exists
-        const { data: existing } = await supabase
-          .from('candidate_resume_embeddings')
-          .select('id')
-          .eq('candidate_id', cand.id)
-          .maybeSingle();
+      // 1. Fetch all existing embeddings for these candidates in a single query
+      const candidateIds = candidatesToEmbed.map(c => c.id);
+      const { data: existingEmbeddings, error: fetchError } = await supabase
+        .from('candidate_resume_embeddings')
+        .select('candidate_id')
+        .in('candidate_id', candidateIds);
 
-        if (!existing) {
+      if (fetchError) throw fetchError;
+
+      const existingCandidateIds = new Set(existingEmbeddings?.map(e => e.candidate_id) || []);
+      const newEmbeddings = [];
+
+      // 2. Prepare new embeddings for candidates that don't have one
+      for (const cand of candidatesToEmbed) {
+        if (!existingCandidateIds.has(cand.id)) {
           // Generate a synthetic vector (1536 float elements) based on candidate skills / summary
           const dummyVector = Array.from({ length: 1536 }, () => (Math.random() - 0.5) * 0.1);
           // Let's normalize it to unit length for cosine similarity
@@ -83,7 +89,7 @@ export function ResumeScreener({ isOpen, onClose, activeJob, candidates }: Resum
           const summary = `${cand.full_name} is a candidate with experience in software development, project management, and operational pipelines. Score: ${cand.score || 'N/A'}`;
           const skills = cand.parsed_data?.skills || ['Javascript', 'React', 'Git', 'HTML', 'CSS'];
 
-          await supabase.from('candidate_resume_embeddings').insert({
+          newEmbeddings.push({
             candidate_id: cand.id,
             company_id: profile!.company_id!,
             summary,
@@ -91,6 +97,15 @@ export function ResumeScreener({ isOpen, onClose, activeJob, candidates }: Resum
             embedding: normalizedVector
           });
         }
+      }
+
+      // 3. Batch insert all new embeddings in a single operation
+      if (newEmbeddings.length > 0) {
+        const { error: insertError } = await supabase
+          .from('candidate_resume_embeddings')
+          .insert(newEmbeddings);
+
+        if (insertError) throw insertError;
       }
 
       await checkIndexedStatus();
