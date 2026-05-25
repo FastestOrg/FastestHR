@@ -212,41 +212,62 @@ export function SendDeskGenerator() {
       const prefix = company?.senddesk_sequence_prefix || 'DOC-';
       const year = new Date().getFullYear();
 
-      for (const emp of selectedEmployees) {
+      const user = (await supabase.auth.getUser()).data.user;
+
+      // Pre-calculate document parameters sequentially to preserve sequence increments
+      const docConfigs = selectedEmployees.map(emp => {
         seqCurrent++;
         const docNumber = `${prefix}${year}-${String(seqCurrent).padStart(4, '0')}`;
         const vars = buildVariables(emp);
         const renderedHtml = replaceDocVariables(selectedTemplate.html_content, vars);
-
         const docId = crypto.randomUUID();
+
+        return {
+          emp,
+          docNumber,
+          vars,
+          renderedHtml,
+          docId,
+        };
+      });
+
+      // Generate all PDFs concurrently
+      const generationPromises = docConfigs.map(async (config) => {
         const { pdfPath } = await generateAndUploadSendDeskPDF({
-          htmlContent: renderedHtml,
+          htmlContent: config.renderedHtml,
           letterheadUrl: selectedTemplate.letterhead_url,
           companyId: profile!.company_id!,
-          documentId: docId,
+          documentId: config.docId,
           documentName: selectedTemplate.name,
           isPredefinedHtml: selectedTemplate.is_predefined_html,
         });
 
+        return {
+          id: config.docId,
+          company_id: profile!.company_id!,
+          template_id: selectedTemplate.id,
+          employee_id: config.emp.id,
+          document_number: config.docNumber,
+          name: `${selectedTemplate.name} — ${config.emp.first_name} ${config.emp.last_name}`,
+          category: selectedTemplate.category,
+          sub_category: selectedTemplate.sub_category,
+          html_content: config.renderedHtml,
+          pdf_url: pdfPath,
+          variable_values: config.vars,
+          status: 'generated',
+          is_predefined_html: selectedTemplate.is_predefined_html,
+          letterhead_url: selectedTemplate.letterhead_url,
+          created_by: user?.id,
+        };
+      });
+
+      const newDocuments = await Promise.all(generationPromises);
+
+      // Bulk insert all generated documents
+      if (newDocuments.length > 0) {
         const { error } = await supabase
           .from('senddesk_documents')
-          .insert({
-            id: docId,
-            company_id: profile!.company_id!,
-            template_id: selectedTemplate.id,
-            employee_id: emp.id,
-            document_number: docNumber,
-            name: `${selectedTemplate.name} — ${emp.first_name} ${emp.last_name}`,
-            category: selectedTemplate.category,
-            sub_category: selectedTemplate.sub_category,
-            html_content: renderedHtml,
-            pdf_url: pdfPath,
-            variable_values: vars,
-            status: 'generated',
-            is_predefined_html: selectedTemplate.is_predefined_html,
-            letterhead_url: selectedTemplate.letterhead_url,
-            created_by: (await supabase.auth.getUser()).data.user?.id,
-          } as any);
+          .insert(newDocuments as any);
 
         if (error) throw error;
       }
