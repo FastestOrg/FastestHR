@@ -46,3 +46,6 @@
 ## 2026-05-14 - Optimize Array Filtering in Render Paths
 **Learning:** In React components that filter arrays during render, chaining `.filter()` with `.includes()` on arrays (O(N*M)) and performing repeated string allocations (e.g., `.toLowerCase()`) inside the loop can cause significant performance bottlenecks as lists grow.
 **Action:** Always extract static values (like `search.toLowerCase()`) outside the filter loop, convert lookup arrays to `Set`s for O(1) membership checks, and wrap the entire operation in `useMemo` to prevent recalculation on every re-render.
+## 2024-12-05 - Optimize O(N*M) Aggregations in Render Paths
+**Learning:** In components like `Reports.tsx`, calculating aggregate metrics (like department headcount) by repeatedly filtering a main array (e.g. `employees.filter(e => e.department_id === dept.id).length`) for every item in a secondary array (e.g. `departments`) creates an O(N*M) performance bottleneck that blocks the main thread during render.
+**Action:** Always replace nested `.filter()` loop patterns with a single-pass frequency map reduction (e.g. `employees.reduce`) to tally counts into a hash map, transforming the time complexity from O(N*M) to O(N+M). Wrap the aggregation logic in `useMemo` to prevent recalculation on every re-render.
