@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -162,15 +162,24 @@ export function RecruitmentLeadsBoard() {
     enabled: !!profile?.company_id,
   });
 
-  const searchLower = search ? search.toLowerCase() : '';
-  const filtered = leads.filter((l: any) => {
-    if (!searchLower) return true;
-    return (
-      l.full_name?.toLowerCase().includes(searchLower) ||
-      l.email?.toLowerCase().includes(searchLower) ||
-      l.jobs?.title?.toLowerCase().includes(searchLower)
-    );
-  });
+  const filtered = useMemo(() => {
+    const searchLower = search ? search.toLowerCase() : '';
+    return leads.filter((l: any) => {
+      if (!searchLower) return true;
+      return (
+        l.full_name?.toLowerCase().includes(searchLower) ||
+        l.email?.toLowerCase().includes(searchLower) ||
+        l.jobs?.title?.toLowerCase().includes(searchLower)
+      );
+    });
+  }, [leads, search]);
+
+  const selectedLeadNames = useMemo(() => {
+    const selectedSet = new Set(selectedLeadIds);
+    return filtered
+      .filter((l: any) => selectedSet.has(l.id))
+      .map((l: any) => l.full_name);
+  }, [filtered, selectedLeadIds]);
 
   const getInitials = (name: string) =>
     name?.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) || '?';
@@ -627,9 +636,7 @@ export function RecruitmentLeadsBoard() {
           open={bulkAssignOpen}
           onOpenChange={setBulkAssignOpen}
           leadIds={selectedLeadIds}
-          leadNames={filtered
-            .filter((l: any) => selectedLeadIds.includes(l.id))
-            .map((l: any) => l.full_name)}
+          leadNames={selectedLeadNames}
           onSuccess={() => setSelectedLeadIds([])}
         />
       )}

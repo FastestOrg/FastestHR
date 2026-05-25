@@ -46,3 +46,6 @@
 ## 2026-05-14 - Optimize Array Filtering in Render Paths
 **Learning:** In React components that filter arrays during render, chaining `.filter()` with `.includes()` on arrays (O(N*M)) and performing repeated string allocations (e.g., `.toLowerCase()`) inside the loop can cause significant performance bottlenecks as lists grow.
 **Action:** Always extract static values (like `search.toLowerCase()`) outside the filter loop, convert lookup arrays to `Set`s for O(1) membership checks, and wrap the entire operation in `useMemo` to prevent recalculation on every re-render.
+## 2024-05-25 - React Render Loop Arrays
+**Learning:** Performing multiple `.toLowerCase()` string allocations and `Array.includes()` loops inside `filter()` directly in the React render scope causes massive multi-pass O(N*M) bottlenecks on every single render.
+**Action:** Extract array iteration and search-filter loops into `useMemo` hooks, convert ID arrays to `Set` structures for `O(1)` bounds checking, and use them inside conditional renders.
