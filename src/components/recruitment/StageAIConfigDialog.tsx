@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Save, Plus, Trash2, Bot, Sparkles, X } from 'lucide-react';
+import { Loader2, Save, Plus, Bot, Sparkles, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
