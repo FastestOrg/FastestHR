@@ -1,5 +1,46 @@
 import { describe, it, expect } from 'vitest';
-import { isSafeUrl } from './utils';
+import { isSafeUrl, escapeHtml } from './utils';
+
+describe('escapeHtml', () => {
+  it('should return strings without special characters unchanged', () => {
+    expect(escapeHtml('hello world')).toBe('hello world');
+    expect(escapeHtml('12345')).toBe('12345');
+    expect(escapeHtml('')).toBe('');
+  });
+
+  it('should escape & characters', () => {
+    expect(escapeHtml('salt & pepper')).toBe('salt &amp; pepper');
+  });
+
+  it('should escape < and > characters', () => {
+    expect(escapeHtml('<div>hello</div>')).toBe('&lt;div&gt;hello&lt;/div&gt;');
+  });
+
+  it('should escape " characters', () => {
+    expect(escapeHtml('hello "world"')).toBe('hello &quot;world&quot;');
+  });
+
+  it('should escape \' characters', () => {
+    expect(escapeHtml("hello 'world'")).toBe('hello &#039;world&#039;');
+  });
+
+  it('should escape multiple mixed special characters', () => {
+    const input = '<script>alert("XSS & \'attack\'")</script>';
+    const expected = '&lt;script&gt;alert(&quot;XSS &amp; &#039;attack&#039;&quot;)&lt;/script&gt;';
+    expect(escapeHtml(input)).toBe(expected);
+  });
+
+  it('should handle non-string inputs gracefully', () => {
+    // @ts-expect-error Testing invalid input type
+    expect(escapeHtml(null)).toBe(null);
+    // @ts-expect-error Testing invalid input type
+    expect(escapeHtml(undefined)).toBe(undefined);
+    // @ts-expect-error Testing invalid input type
+    expect(escapeHtml(123)).toBe(123);
+    // @ts-expect-error Testing invalid input type
+    expect(escapeHtml({})).toEqual({});
+  });
+});
 
 describe('isSafeUrl', () => {
   it('should return true for valid http URLs', () => {
