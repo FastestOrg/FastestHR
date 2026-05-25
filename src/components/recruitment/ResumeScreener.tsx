@@ -65,15 +65,20 @@ export function ResumeScreener({ isOpen, onClose, activeJob, candidates }: Resum
         return;
       }
 
-      for (const cand of candidatesToEmbed) {
-        // Check if embedding exists
-        const { data: existing } = await supabase
-          .from('candidate_resume_embeddings')
-          .select('id')
-          .eq('candidate_id', cand.id)
-          .maybeSingle();
+      // Fetch all existing embeddings for these candidates in a single batch query
+      const candidateIds = candidatesToEmbed.map(c => c.id);
+      const { data: existingEmbeddings, error: existingError } = await supabase
+        .from('candidate_resume_embeddings')
+        .select('candidate_id')
+        .in('candidate_id', candidateIds);
 
-        if (!existing) {
+      if (existingError) throw existingError;
+
+      const existingSet = new Set(existingEmbeddings?.map(e => e.candidate_id) || []);
+
+      for (const cand of candidatesToEmbed) {
+        // Check if embedding exists using the Set
+        if (!existingSet.has(cand.id)) {
           // Generate a synthetic vector (1536 float elements) based on candidate skills / summary
           const dummyVector = Array.from({ length: 1536 }, () => (Math.random() - 0.5) * 0.1);
           // Let's normalize it to unit length for cosine similarity
