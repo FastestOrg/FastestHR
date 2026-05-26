@@ -46,6 +46,9 @@
 ## 2026-05-14 - Optimize Array Filtering in Render Paths
 **Learning:** In React components that filter arrays during render, chaining `.filter()` with `.includes()` on arrays (O(N*M)) and performing repeated string allocations (e.g., `.toLowerCase()`) inside the loop can cause significant performance bottlenecks as lists grow.
 **Action:** Always extract static values (like `search.toLowerCase()`) outside the filter loop, convert lookup arrays to `Set`s for O(1) membership checks, and wrap the entire operation in `useMemo` to prevent recalculation on every re-render.
+## 2024-05-18 - Extract loop-invariant string operations from nested array callbacks
+**Learning:** Performing string manipulations like `.toLowerCase()` inside an inner `.some()` loop (that itself is inside a `.filter()`) forces the JavaScript engine to allocate and discard identical strings redundantly O(N*M) times, increasing garbage collection and CPU overhead.
+**Action:** Always extract invariant computations on outer-loop variables (e.g., `const lowerS = s.toLowerCase();`) to sit outside the inner array iteration method (like `.some()`).
 ## 2024-10-24 - Memoizing Array Filtering in Render
 **Learning:** Performing inline array `.filter()` inside the render body combined with invariant operations like `.toLowerCase()` on search terms leads to unnecessary O(N) operations on every re-render, degrading performance.
 **Action:** Always wrap expensive or data-transformation loops (like array filtering) in a `useMemo` block with appropriate dependencies (e.g., `[list, search]`). Hoist any single-run transformations (like converting the search string to lowercase) outside the filter loop but within the `useMemo` to minimize garbage collection overhead.

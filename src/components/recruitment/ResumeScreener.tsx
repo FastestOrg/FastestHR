@@ -153,9 +153,12 @@ export function ResumeScreener({ isOpen, onClose, activeJob, candidates }: Resum
 
         // Ensure score caps at 0.99
         const finalScore = Math.min(0.99, Math.max(0.40, keywordScore + (Math.random() - 0.5) * 0.05));
-        const matchedSkills = emb.skills.filter((s: string) => 
-          queryWords.some(w => s.toLowerCase().includes(w) || w.includes(s.toLowerCase()))
-        );
+        // ⚡ Bolt: Extracted `s.toLowerCase()` outside the `.some()` loop to prevent redundant
+        // O(N*M) string allocations during skill filtering.
+        const matchedSkills = emb.skills.filter((s: string) => {
+          const lowerS = s.toLowerCase();
+          return queryWords.some(w => lowerS.includes(w) || w.includes(lowerS));
+        });
 
         return {
           ...emb,
