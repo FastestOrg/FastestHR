@@ -7,12 +7,18 @@ import { Calendar, Plus, CheckCircle, XCircle, Clock, BarChart3, PieChart, FileT
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Tables } from '@/integrations/supabase/types';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth-store';
 import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+
+type LeaveBalanceType = Tables<'leave_balances'> & {
+  leave_types: { name: string; color: string | null; code: string | null; } | null;
+};
 
 interface LeaveTiers {
   tiers: {
@@ -452,6 +458,20 @@ export default function Leave() {
     }
   });
 
+
+  // ⚡ Bolt: Calculate leave analytics in a single pass instead of multiple inline filter loops
+  const leaveStats = useMemo(() => {
+    let approved = 0;
+    let pending = 0;
+    let rejected = 0;
+    for (const r of leaveRequests) {
+      if (r.status === 'approved') approved++;
+      else if (r.status === 'pending') pending++;
+      else if (r.status === 'rejected') rejected++;
+    }
+    return { approved, pending, rejected };
+  }, [leaveRequests]);
+
   const statusStyle: Record<string, { class: string; Icon: any }> = {
     approved: { class: 'border-success text-success bg-success/10', Icon: CheckCircle },
     rejected: { class: 'border-destructive text-destructive bg-destructive/10', Icon: XCircle },
@@ -485,7 +505,7 @@ export default function Leave() {
             </CardContent>
           </Card>
         ) : (
-          leaveBalances.map((lb: any) => {
+          leaveBalances.map((lb: LeaveBalanceType) => {
             const remaining = (lb.total_days || 0) - (lb.used_days || 0) - (lb.pending_days || 0);
             const color = lb.leave_types?.color || '#4F46E5';
             return (
@@ -808,9 +828,9 @@ export default function Leave() {
                     <h4 className="text-sm font-medium mb-3">By Status</h4>
                     <div className="grid grid-cols-3 gap-3">
                       {[
-                        { label: 'Approved', count: leaveRequests.filter((r: any) => r.status === 'approved').length, color: 'text-success bg-success/10 border-success/30' },
-                        { label: 'Pending', count: leaveRequests.filter((r: any) => r.status === 'pending').length, color: 'text-warning bg-warning/10 border-warning/30' },
-                        { label: 'Rejected', count: leaveRequests.filter((r: any) => r.status === 'rejected').length, color: 'text-destructive bg-destructive/10 border-destructive/30' },
+                        { label: 'Approved', count: leaveStats.approved, color: 'text-success bg-success/10 border-success/30' },
+                        { label: 'Pending', count: leaveStats.pending, color: 'text-warning bg-warning/10 border-warning/30' },
+                        { label: 'Rejected', count: leaveStats.rejected, color: 'text-destructive bg-destructive/10 border-destructive/30' },
                       ].map(item => (
                         <div key={item.label} className={`text-center p-3 rounded border ${item.color}`}>
                           <p className="text-xs">{item.label}</p>

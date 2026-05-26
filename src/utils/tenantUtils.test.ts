@@ -1,5 +1,68 @@
-import { describe, it, expect } from 'vitest';
-import { slugify } from './tenantUtils';
+import { describe, it, expect, afterEach } from 'vitest';
+import { slugify, getCompanySlugFromHost } from './tenantUtils';
+
+describe('getCompanySlugFromHost', () => {
+  const originalLocation = window.location;
+
+  afterEach(() => {
+    Object.defineProperty(window, 'location', {
+      value: originalLocation,
+      writable: true,
+    });
+  });
+
+  const setHostname = (hostname: string) => {
+    Object.defineProperty(window, 'location', {
+      value: { ...originalLocation, hostname },
+      writable: true,
+    });
+  };
+
+  it('returns null for localhost', () => {
+    setHostname('localhost');
+    expect(getCompanySlugFromHost()).toBe(null);
+  });
+
+  it('returns null for 127.0.0.1', () => {
+    setHostname('127.0.0.1');
+    expect(getCompanySlugFromHost()).toBe(null);
+  });
+
+  it('returns slug for valid fastesthr.com subdomains', () => {
+    setHostname('acme.fastesthr.com');
+    expect(getCompanySlugFromHost()).toBe('acme');
+
+    setHostname('my-company.fastesthr.com');
+    expect(getCompanySlugFromHost()).toBe('my-company');
+  });
+
+  it('returns null for reserved fastesthr.com subdomains', () => {
+    setHostname('www.fastesthr.com');
+    expect(getCompanySlugFromHost()).toBe(null);
+
+    setHostname('app.fastesthr.com');
+    expect(getCompanySlugFromHost()).toBe(null);
+  });
+
+  it('returns full hostname for custom domains', () => {
+    setHostname('careers.acme.com');
+    expect(getCompanySlugFromHost()).toBe('careers.acme.com');
+
+    setHostname('jobs.mycompany.io');
+    expect(getCompanySlugFromHost()).toBe('jobs.mycompany.io');
+
+    setHostname('acme-jobs.com');
+    expect(getCompanySlugFromHost()).toBe('acme-jobs.com');
+  });
+
+  it('returns null for Lovable preview domains', () => {
+    setHostname('preview.lovable.app');
+    expect(getCompanySlugFromHost()).toBe(null);
+
+    setHostname('test.lovableproject.com');
+    expect(getCompanySlugFromHost()).toBe(null);
+  });
+});
 
 describe('slugify', () => {
   it('converts basic text to a slug', () => {

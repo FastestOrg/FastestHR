@@ -49,3 +49,12 @@
 ## 2024-12-05 - Optimize O(N*M) Aggregations in Render Paths
 **Learning:** In components like `Reports.tsx`, calculating aggregate metrics (like department headcount) by repeatedly filtering a main array (e.g. `employees.filter(e => e.department_id === dept.id).length`) for every item in a secondary array (e.g. `departments`) creates an O(N*M) performance bottleneck that blocks the main thread during render.
 **Action:** Always replace nested `.filter()` loop patterns with a single-pass frequency map reduction (e.g. `employees.reduce`) to tally counts into a hash map, transforming the time complexity from O(N*M) to O(N+M). Wrap the aggregation logic in `useMemo` to prevent recalculation on every re-render.
+## 2024-05-18 - Extract loop-invariant string operations from nested array callbacks
+**Learning:** Performing string manipulations like `.toLowerCase()` inside an inner `.some()` loop (that itself is inside a `.filter()`) forces the JavaScript engine to allocate and discard identical strings redundantly O(N*M) times, increasing garbage collection and CPU overhead.
+**Action:** Always extract invariant computations on outer-loop variables (e.g., `const lowerS = s.toLowerCase();`) to sit outside the inner array iteration method (like `.some()`).
+## 2024-10-24 - Memoizing Array Filtering in Render
+**Learning:** Performing inline array `.filter()` inside the render body combined with invariant operations like `.toLowerCase()` on search terms leads to unnecessary O(N) operations on every re-render, degrading performance.
+**Action:** Always wrap expensive or data-transformation loops (like array filtering) in a `useMemo` block with appropriate dependencies (e.g., `[list, search]`). Hoist any single-run transformations (like converting the search string to lowercase) outside the filter loop but within the `useMemo` to minimize garbage collection overhead.
+## 2024-12-05 - Optimize inline filter array counting during React Renders
+**Learning:** Calling `.filter(condition).length` repeatedly inside React render templates (e.g. to display counts for various statuses) leads to O(N * M) redundant array iterations during every component re-render.
+**Action:** Extract the tallying logic into a single-pass `useMemo` block that aggregates all required states (e.g. via a single `for` loop or `reduce` over the array) and stores them in a memoized `stats` object, reducing computational overhead from O(N * M) to O(N).
