@@ -122,8 +122,6 @@ export function ResumeScreener({ isOpen, onClose, activeJob, candidates }: Resum
     if (!searchQuery.trim() || !activeJob) return;
 
     setIsSearching(true);
-    // Simulate slight loading latency for high-premium experience
-    await new Promise(r => setTimeout(r, 900));
 
     try {
       // Query candidate embeddings for this company
