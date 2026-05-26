@@ -69,7 +69,6 @@ export default function OfferView() {
           // Ensure we load existing signatures if they exist
           if (data.signature_placement && Array.isArray(data.signature_placement)) {
             setPlacedSignatures(data.signature_placement);
-            console.log('Loaded existing signatures:', data.signature_placement.length);
           } else {
             setPlacedSignatures([]);
           }

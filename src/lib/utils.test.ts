@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isSafeUrl } from './utils';
+import { isSafeUrl, getCurrencySymbol } from './utils';
 
 describe('isSafeUrl', () => {
   it('should return true for valid http URLs', () => {
@@ -36,5 +36,35 @@ describe('isSafeUrl', () => {
     expect(isSafeUrl('not-a-url')).toBe(false);
     expect(isSafeUrl('://missing-protocol')).toBe(false);
     expect(isSafeUrl('//protocol-relative.com')).toBe(false);
+  });
+});
+
+describe('getCurrencySymbol', () => {
+  it('should return the correct symbol for known currency codes', () => {
+    expect(getCurrencySymbol('INR')).toBe('₹');
+    expect(getCurrencySymbol('EUR')).toBe('€');
+    expect(getCurrencySymbol('GBP')).toBe('£');
+    expect(getCurrencySymbol('JPY')).toBe('¥');
+    expect(getCurrencySymbol('AED')).toBe('د.إ');
+    expect(getCurrencySymbol('CAD')).toBe('C$');
+    expect(getCurrencySymbol('AUD')).toBe('A$');
+    expect(getCurrencySymbol('USD')).toBe('$');
+  });
+
+  it('should handle case-insensitivity correctly', () => {
+    expect(getCurrencySymbol('inr')).toBe('₹');
+    expect(getCurrencySymbol('Eur')).toBe('€');
+    expect(getCurrencySymbol('gbp')).toBe('£');
+  });
+
+  it('should return default symbol "$" for unknown currency codes', () => {
+    expect(getCurrencySymbol('XYZ')).toBe('$');
+    expect(getCurrencySymbol('UNKNOWN')).toBe('$');
+  });
+
+  it('should return default symbol "$" for null, undefined, or empty strings', () => {
+    expect(getCurrencySymbol(null)).toBe('$');
+    expect(getCurrencySymbol(undefined)).toBe('$');
+    expect(getCurrencySymbol('')).toBe('$');
   });
 });

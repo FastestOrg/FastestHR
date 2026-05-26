@@ -9,7 +9,12 @@ export default function CandidateLogin() {
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [searchParams] = useSearchParams();
-  const returnTo = searchParams.get('returnTo') || '/candidate/portal';
+  let returnTo = searchParams.get('returnTo') || '/candidate/portal';
+
+  // Prevent open redirect: ensure it's a relative path and not a protocol-relative absolute URL
+  if (!returnTo.startsWith('/') || returnTo.startsWith('//')) {
+    returnTo = '/candidate/portal';
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

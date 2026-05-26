@@ -75,6 +75,7 @@ export function ResumeScreener({ isOpen, onClose, activeJob, candidates }: Resum
       if (existingError) throw existingError;
 
       const existingSet = new Set(existingEmbeddings?.map(e => e.candidate_id) || []);
+      const embeddingsToInsert = [];
 
       for (const cand of candidatesToEmbed) {
         // Check if embedding exists using the Set
@@ -88,7 +89,7 @@ export function ResumeScreener({ isOpen, onClose, activeJob, candidates }: Resum
           const summary = `${cand.full_name} is a candidate with experience in software development, project management, and operational pipelines. Score: ${cand.score || 'N/A'}`;
           const skills = cand.parsed_data?.skills || ['Javascript', 'React', 'Git', 'HTML', 'CSS'];
 
-          await supabase.from('candidate_resume_embeddings').insert({
+          embeddingsToInsert.push({
             candidate_id: cand.id,
             company_id: profile!.company_id!,
             summary,
@@ -96,6 +97,14 @@ export function ResumeScreener({ isOpen, onClose, activeJob, candidates }: Resum
             embedding: normalizedVector
           });
         }
+      }
+
+      if (embeddingsToInsert.length > 0) {
+        const { error: insertError } = await supabase
+          .from('candidate_resume_embeddings')
+          .insert(embeddingsToInsert);
+
+        if (insertError) throw insertError;
       }
 
       await checkIndexedStatus();
@@ -113,8 +122,6 @@ export function ResumeScreener({ isOpen, onClose, activeJob, candidates }: Resum
     if (!searchQuery.trim() || !activeJob) return;
 
     setIsSearching(true);
-    // Simulate slight loading latency for high-premium experience
-    await new Promise(r => setTimeout(r, 900));
 
     try {
       // Query candidate embeddings for this company
