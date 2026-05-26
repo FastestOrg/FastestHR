@@ -521,7 +521,6 @@ export default function Attendance() {
         if (company?.ip_whitelist && clientIP) {
           const whitelistedIPs = company.ip_whitelist.split(',').map((ip: string) => ip.trim());
           if (whitelistedIPs.includes(clientIP)) {
-            console.log('Bypassing geofencing: clocked in from office IP whitelist.');
             ipBypassed = true;
           }
         }
@@ -682,7 +681,6 @@ export default function Attendance() {
         if (company?.ip_whitelist && clientIP) {
           const whitelistedIPs = company.ip_whitelist.split(',').map((ip: string) => ip.trim());
           if (whitelistedIPs.includes(clientIP)) {
-            console.log('Bypassing geofencing: clocked out from office IP whitelist.');
             ipBypassed = true;
           }
         }
