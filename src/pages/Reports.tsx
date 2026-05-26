@@ -10,7 +10,7 @@ import { PieChart, BarChart3, Download, Filter, Users, Calendar, ShieldAlert, Se
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth-store';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { toast } from 'sonner';
 
 // Custom visual JSON diff viewer component for premium experience
@@ -134,35 +134,51 @@ export default function Reports() {
   });
 
   // Client-side search filters for instant responsive feedback
-  const filteredAuditLogs = auditLogs.filter((log: any) => {
-    const actorName = log.actor ? `${log.actor.first_name || ''} ${log.actor.last_name || ''}`.toLowerCase() : 'system';
-    const email = log.actor?.email?.toLowerCase() || '';
-    const action = log.action?.toLowerCase() || '';
-    const entity = log.entity_type?.toLowerCase() || '';
+  const filteredAuditLogs = useMemo(() => {
     const search = searchTerm.toLowerCase();
+    return auditLogs.filter((log: any) => {
+      const actorName = log.actor ? `${log.actor.first_name || ''} ${log.actor.last_name || ''}`.toLowerCase() : 'system';
+      const email = log.actor?.email?.toLowerCase() || '';
+      const action = log.action?.toLowerCase() || '';
+      const entity = log.entity_type?.toLowerCase() || '';
 
-    return (
-      actorName.includes(search) ||
-      email.includes(search) ||
-      action.includes(search) ||
-      entity.includes(search)
-    );
-  });
+      if (!search) return true;
+
+      return (
+        actorName.includes(search) ||
+        email.includes(search) ||
+        action.includes(search) ||
+        entity.includes(search)
+      );
+    });
+  }, [auditLogs, searchTerm]);
 
   // Compute department headcount
-  const deptHeadcount = departments.map((dept: any) => ({
-    name: dept.name,
-    count: employees.filter((e: any) => e.department_id === dept.id).length,
-  })).sort((a, b) => b.count - a.count);
+  const deptHeadcount = useMemo(() => {
+    // Single pass map of employee counts by department_id to prevent O(N*M) lookups
+    const empCountByDept = employees.reduce((acc: Record<string, number>, e: any) => {
+      if (e.department_id) {
+        acc[e.department_id] = (acc[e.department_id] || 0) + 1;
+      }
+      return acc;
+    }, {});
+
+    return departments.map((dept: any) => ({
+      name: dept.name,
+      count: empCountByDept[dept.id] || 0,
+    })).sort((a, b) => b.count - a.count);
+  }, [departments, employees]);
 
   const maxCount = Math.max(...deptHeadcount.map(d => d.count), 1);
 
   // Employment type breakdown
-  const empTypes = employees.reduce((acc: Record<string, number>, e: any) => {
-    const t = e.employment_type || 'unknown';
-    acc[t] = (acc[t] || 0) + 1;
-    return acc;
-  }, {});
+  const empTypes = useMemo(() => {
+    return employees.reduce((acc: Record<string, number>, e: any) => {
+      const t = e.employment_type || 'unknown';
+      acc[t] = (acc[t] || 0) + 1;
+      return acc;
+    }, {});
+  }, [employees]);
 
   const handleExport = () => {
     try {
