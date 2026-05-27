@@ -1,4 +1,4 @@
-import DOMPurify from 'dompurify';
+import { sanitizeHtml } from '@/lib/dompurify';
 import { useEffect, useState } from 'react';
 import { Footer } from '@/components/layout/Footer';
 import { useParams, Link } from 'react-router-dom';
@@ -134,7 +134,7 @@ const BlogPost = () => {
                        prose-a:text-cyan-400 prose-a:no-underline hover:prose-a:text-cyan-300 hover:prose-a:underline
                        prose-blockquote:border-cyan-500 prose-blockquote:bg-white/5 prose-blockquote:py-2 prose-blockquote:px-6 prose-blockquote:rounded-r-lg prose-blockquote:not-italic prose-blockquote:text-zinc-200
                        prose-strong:text-white"
-            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(blogData.content) }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(blogData.content) }}
           />
 
           {/* End of article marker */}

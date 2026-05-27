@@ -1,5 +1,5 @@
 import { useMemo, useRef } from 'react';
-import DOMPurify from 'dompurify';
+import { sanitizeHtml } from '@/lib/dompurify';
 import { substituteVariables } from '@/lib/template-utils';
 
 interface OfferLetterRendererProps {
@@ -23,7 +23,7 @@ export function OfferLetterRenderer({
   const finalHtml = useMemo(() => {
     let content = substituteVariables(htmlContent, variables);
     // Sanitize the HTML to prevent XSS vulnerabilities while allowing custom styles
-    return DOMPurify.sanitize(content, {
+    return sanitizeHtml(content, {
       ADD_TAGS: ['style'],
       ADD_ATTR: ['style'],
       FORCE_BODY: true
