@@ -58,3 +58,6 @@
 ## 2024-12-05 - Optimize inline filter array counting during React Renders
 **Learning:** Calling `.filter(condition).length` repeatedly inside React render templates (e.g. to display counts for various statuses) leads to O(N * M) redundant array iterations during every component re-render.
 **Action:** Extract the tallying logic into a single-pass `useMemo` block that aggregates all required states (e.g. via a single `for` loop or `reduce` over the array) and stores them in a memoized `stats` object, reducing computational overhead from O(N * M) to O(N).
+## 2024-12-05 - Optimize Grouping for Kanban Boards
+**Learning:** In React render functions, grouping or mapping over categories (e.g., Kanban stages) and inside the `.map` loop repeatedly calling `.filter()` on a main array to get items for that category causes an O(Categories * N) computational bottleneck. This forces redundant array iterations on every re-render.
+**Action:** Replace nested `.filter()` iterations within a map over categories with a single-pass `useMemo` iteration. Within the `useMemo`, reduce or loop over the main dataset once to populate a hash map (dictionary) keyed by category. Then, simply perform an O(1) lookup during the rendering mapping phase.
