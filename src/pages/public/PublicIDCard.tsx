@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import DOMPurify from 'dompurify';
+import { sanitizeHtml } from '@/lib/dompurify';
 import { Loader2, CheckCircle2, ShieldCheck, Globe } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { substituteVariables } from '@/lib/template-utils';
@@ -40,7 +40,7 @@ export default function PublicIDCard() {
 
     const html = substituteVariables(template, placeholders);
 
-    return DOMPurify.sanitize(html, { ADD_TAGS: ['style'], ADD_ATTR: ['style'], FORCE_BODY: true });
+    return sanitizeHtml(html, { ADD_TAGS: ['style'], ADD_ATTR: ['style'], FORCE_BODY: true });
   };
 
   if (isLoading) {
