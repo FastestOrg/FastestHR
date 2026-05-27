@@ -15,6 +15,7 @@ export interface BlogPost {
 import { BLOGS_NEW_PHASE_5 } from "./blogs_phase_5";
 import { BLOGS_NEW_PHASE_6 } from "./blogs_phase_6";
 import { BLOGS_NEW_PHASE_7 } from "./blogs_phase_7";
+import { BLOGS_SEO_100 } from "./blogs_seo_100";
 
 export const BLOGS_NEW_PHASE_4: BlogPost[] = [
   {
@@ -4032,6 +4033,7 @@ export const BLOGS_OLD_ORIGINAL = [
 ];
 
 export const BLOGS: BlogPost[] = [
+  ...BLOGS_SEO_100,
   ...BLOGS_NEW_PHASE_7,
   ...BLOGS_NEW_PHASE_6,
   ...BLOGS_NEW_PHASE_5,
