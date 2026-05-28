@@ -74,8 +74,6 @@ export const initPerformanceMonitoring = () => {
       }
     });
     clsObserver.observe({ type: 'layout-shift', buffered: true });
-
-    console.log('[Performance] FastestHR Monitoring Suite Initialized');
   } catch (e) {
     console.error('[Performance] Failed to initialize monitoring:', e);
   }
