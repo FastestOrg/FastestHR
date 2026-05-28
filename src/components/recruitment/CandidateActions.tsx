@@ -130,7 +130,10 @@ export function CandidateActions({
             const lastName = names.slice(1).join(' ') || 'Last';
 
             // Generate employee code
-            const empCode = `EMP-${Math.floor(100000 + Math.random() * 900000)}`;
+            const randomBuffer = new Uint32Array(1);
+            window.crypto.getRandomValues(randomBuffer);
+            const randomNum = randomBuffer[0] % 900000;
+            const empCode = `EMP-${100000 + randomNum}`;
 
             // Insert employee
             const { data: newEmp, error: empErr } = await supabase

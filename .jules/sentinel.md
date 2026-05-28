@@ -1,3 +1,7 @@
+## 2024-05-24 - [Fix Insecure Random Number Generation for Employee Code]
+**Vulnerability:** Used Math.random() to generate employee codes in src/components/recruitment/CandidateActions.tsx which is not cryptographically secure and could lead to predictable employee codes.
+**Learning:** Math.random() is predictable and should not be used for unique identifiers, especially for employee codes which can act as a partial key for system tracking.
+**Prevention:** Always use the Web Crypto API (window.crypto.getRandomValues()) when generating sensitive unique identifiers like employee codes to ensure they are cryptographically secure and unpredictable.
 ## 2023-10-27 - Fix XSS Vulnerability in External Links
 **Vulnerability:** User-supplied URLs rendered directly in `href` attributes without protocol validation could lead to Cross-Site Scripting (XSS) if they contain `javascript:` URIs.
 **Learning:** Found instances where meeting links (`interview.meeting_link`) and company external links (`website`, `linkedin_url`) were directly injected into `<a>` tags.
