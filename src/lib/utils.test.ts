@@ -78,6 +78,8 @@ describe('isSafeUrl', () => {
     expect(isSafeUrl('not-a-url')).toBe(false);
     expect(isSafeUrl('://missing-protocol')).toBe(false);
     expect(isSafeUrl('//protocol-relative.com')).toBe(false);
+    // Specifically test the catch block by providing a malformed URL
+    expect(isSafeUrl('http://[::1')).toBe(false);
   });
 });
 
