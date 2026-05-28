@@ -171,9 +171,6 @@ export default function OfferView() {
       
       // Store generated OTP in local state for easy debugging / local testing
       setGeneratedOtpMock(otp || '');
-      console.log('--- DIGITAL SIGNATURE EMAIL OTP ---');
-      console.log(`Generated OTP code for candidate signing: ${otp}`);
-      console.log('-----------------------------------');
       
       setShowOtpModal(true);
     } catch (err: any) {
