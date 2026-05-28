@@ -21,3 +21,6 @@
 ## 2026-05-15 - Password visibility on 'Confirm Password' fields
 **Learning:** Found that while main password fields often have visibility toggles, 'Confirm Password' fields are frequently overlooked. This inconsistency causes UX friction as users can't verify what they typed in the confirmation field, leading to potential blind typing errors.
 **Action:** Ensure all password input fields, including confirmation fields, have a consistent 'show/hide' visibility toggle.
+## 2024-05-28 - ARIA Labels for Emoji Arrays
+**Learning:** Raw emoji arrays rendered inside buttons are read literally by screen readers (e.g., "smiling face with smiling eyes"), stripping context.
+**Action:** When rendering mapping options that are purely visual or emoji-based, convert the array of strings to an array of objects `{ emoji: string, label: string }` to provide proper `aria-label` and native `title` tooltips.

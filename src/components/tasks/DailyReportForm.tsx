@@ -170,14 +170,22 @@ export function DailyReportForm() {
                   Your energy level
                 </label>
                 <div className="flex justify-between sm:justify-start gap-2 sm:gap-6 -mx-2 px-2 overflow-x-auto scrollbar-hide">
-                  {['😊', '🚀', '🔥', '😅', '😴'].map((m) => (
+                  {[
+                    { emoji: '😊', label: 'Good' },
+                    { emoji: '🚀', label: 'Productive' },
+                    { emoji: '🔥', label: 'On Fire' },
+                    { emoji: '😅', label: 'Stressed' },
+                    { emoji: '😴', label: 'Tired' }
+                  ].map((m) => (
                     <button
-                      key={m}
+                      key={m.emoji}
                       type="button"
-                      onClick={() => setMood(m)}
-                      className={`text-3xl sm:text-4xl p-2.5 sm:p-3 rounded-xl sm:rounded-2xl transition-all hover:scale-125 border-2 shrink-0 ${mood === m ? 'bg-primary/10 border-primary shadow-lg scale-110' : 'border-transparent grayscale hover:grayscale-0'}`}
+                      aria-label={`Energy level: ${m.label}`}
+                      title={m.label}
+                      onClick={() => setMood(m.emoji)}
+                      className={`text-3xl sm:text-4xl p-2.5 sm:p-3 rounded-xl sm:rounded-2xl transition-all hover:scale-125 border-2 shrink-0 ${mood === m.emoji ? 'bg-primary/10 border-primary shadow-lg scale-110' : 'border-transparent grayscale hover:grayscale-0'}`}
                     >
-                      {m}
+                      {m.emoji}
                     </button>
                   ))}
                 </div>
