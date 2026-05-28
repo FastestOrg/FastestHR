@@ -71,9 +71,12 @@ describe('Workflow Dispatcher', () => {
         mockInsert.mockImplementation(insertMock);
         mockUpdate.mockImplementation(updateMock);
 
+        const upsertMock = vi.fn().mockImplementation(() => new Promise(resolve => setTimeout(() => resolve({ error: null }), 2)));
+
         return {
           insert: mockInsert,
           update: mockUpdate,
+          upsert: upsertMock,
         };
       }
     });

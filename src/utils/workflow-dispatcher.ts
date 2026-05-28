@@ -97,6 +97,8 @@ export async function dispatchWorkflowTrigger(
     }
 
     // 4. Execute actions for each pending workflow run
+    const runsToUpdate: any[] = [];
+
     for (const run of runs) {
       // Find the corresponding workflow config
       const workflow = matchingWorkflows.find(w => w.id === run.workflow_id);
@@ -158,13 +160,21 @@ export async function dispatchWorkflowTrigger(
       }
 
       // 5. Update individual workflow run with outcome and execution audit logs
-      await supabase
+      runsToUpdate.push({
+        ...run,
+        status: runStatus,
+        execution_log: executionLogs
+      });
+    }
+
+    if (runsToUpdate.length > 0) {
+      const { error: updateErr } = await supabase
         .from('workflow_runs')
-        .update({
-          status: runStatus,
-          execution_log: executionLogs
-        })
-        .eq('id', run.id);
+        .upsert(runsToUpdate);
+
+      if (updateErr) {
+        console.error('Error batch updating workflow runs:', updateErr);
+      }
     }
 
   } catch (err) {
