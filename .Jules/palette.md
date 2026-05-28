@@ -24,3 +24,6 @@
 ## 2024-05-28 - ARIA Labels for Emoji Arrays
 **Learning:** Raw emoji arrays rendered inside buttons are read literally by screen readers (e.g., "smiling face with smiling eyes"), stripping context.
 **Action:** When rendering mapping options that are purely visual or emoji-based, convert the array of strings to an array of objects `{ emoji: string, label: string }` to provide proper `aria-label` and native `title` tooltips.
+## 2024-05-28 - ARIA Labels on Destructive Icon Buttons
+**Learning:** Found multiple instances where `Button` components using the `Trash2` icon for destructive actions (like removing conditions or deleting workflows) lacked text equivalents for screen readers. While `size="icon"` correctly styles them as circular buttons, it does not implicitly provide accessibility context.
+**Action:** Always verify that `Button` components acting as icon-only controls explicitly include `aria-label` attributes to ensure they remain accessible to users relying on assistive technologies.

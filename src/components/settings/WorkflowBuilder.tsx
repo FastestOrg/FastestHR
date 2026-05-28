@@ -252,7 +252,7 @@ export default function WorkflowBuilder({ companyId }: WorkflowBuilderProps) {
                         onChange={(e) => updateCondition(index, 'value', e.target.value)} 
                         className="flex-1 h-9 text-xs"
                       />
-                      <Button variant="ghost" size="icon" className="h-9 w-9 text-destructive" onClick={() => removeCondition(index)}>
+                      <Button variant="ghost" size="icon" aria-label="Remove condition" className="h-9 w-9 text-destructive" onClick={() => removeCondition(index)}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </div>
@@ -271,7 +271,7 @@ export default function WorkflowBuilder({ companyId }: WorkflowBuilderProps) {
                 <div className="space-y-4">
                   {actions.map((act, index) => (
                     <div key={index} className="p-4 border border-border/50 rounded-xl bg-muted/20 space-y-3 relative">
-                      <Button variant="ghost" size="icon" className="absolute right-2 top-2 h-7 w-7 text-destructive" onClick={() => removeAction(index)}>
+                      <Button variant="ghost" size="icon" aria-label="Remove action" className="absolute right-2 top-2 h-7 w-7 text-destructive" onClick={() => removeAction(index)}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                       <div className="grid sm:grid-cols-2 gap-3 pt-2">
@@ -375,6 +375,7 @@ export default function WorkflowBuilder({ companyId }: WorkflowBuilderProps) {
                     <Button 
                       variant="ghost" 
                       size="icon" 
+                      aria-label="Delete workflow"
                       className="h-8 w-8 text-destructive/50 hover:text-destructive hover:bg-destructive/10"
                       onClick={() => {
                         if (confirm('Delete this workflow automation?')) {
