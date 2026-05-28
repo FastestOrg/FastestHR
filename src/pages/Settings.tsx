@@ -1,3 +1,4 @@
+import { getErrorMessage } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -84,7 +85,7 @@ export default function Settings() {
       if (error) throw error;
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['my-company'] }); toast.success('Settings saved'); },
-    onError: (err: any) => toast.error(err?.message || 'Failed to save'),
+    onError: (error) => toast.error(getErrorMessage(error, 'Failed to save')),
   });
 
   const [isTestingSmtp, setIsTestingSmtp] = useState(false);
@@ -152,11 +153,11 @@ export default function Settings() {
 
       addLog('✅ Success: SMTP handshake completed, authentication succeeded, and mail queued successfully!');
       toast.success('SMTP connection verified successfully!');
-    } catch (err: any) {
-      let msg = (err instanceof Error ? err.message : String(err)) || 'Unknown connection error';
-      if (err && typeof err === 'object' && 'context' in err && (err as any).context && typeof (err as any).context.json === 'function') {
+    } catch (error) {
+      let msg = getErrorMessage(error, 'Unknown connection error');
+      if (error && typeof error === 'object' && 'context' in error && (error as any).context && typeof (error as any).context.json === 'function') {
         try {
-          const b = await (err as any).context.json();
+          const b = await (error as any).context.json();
           if (b.error) msg = b.error;
         } catch {}
       }
@@ -433,8 +434,8 @@ function GeneralTab({ form, setForm, company }: any) {
       queryClient.invalidateQueries({ queryKey: ['my-company'] });
       queryClient.invalidateQueries({ queryKey: ['company-branding'] });
       toast.success('Logo updated!');
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to upload logo');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to upload logo'));
     } finally {
       setUploading(false);
     }
@@ -602,13 +603,13 @@ function ShiftTab({ companyId }: { companyId?: string | null }) {
       if (error) throw error;
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['shifts'] }); toast.success('Shift created'); setDialogOpen(false); setShiftForm({ name: '', start_time: '09:00', end_time: '18:00', break_minutes: '60' }); },
-    onError: (e: any) => toast.error(e?.message || 'Failed'),
+    onError: (error) => toast.error(getErrorMessage(error, 'Failed')),
   });
 
   const deleteShift = useMutation({
     mutationFn: async (id: string) => { const { error } = await supabase.from('shifts').delete().eq('id', id); if (error) throw error; },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['shifts'] }); toast.success('Shift deleted'); },
-    onError: (e: any) => toast.error(e?.message || 'Failed'),
+    onError: (error) => toast.error(getErrorMessage(error, 'Failed')),
   });
 
   return (
@@ -767,8 +768,8 @@ function PayrollConfigTab({ companyId }: { companyId?: string | null }) {
       queryClient.invalidateQueries({ queryKey: ['compensation-structure'] });
       toast.success('Payroll configurations saved successfully');
     },
-    onError: (err: any) => {
-      toast.error(err?.message || 'Failed to save payroll configurations');
+    onError: (error) => {
+      toast.error(getErrorMessage(error, 'Failed to save payroll configurations'));
     }
   });
 
@@ -1105,7 +1106,7 @@ function LeaveTypesTab({ companyId }: { companyId?: string | null }) {
       setDialogOpen(false); 
       resetForm();
     },
-    onError: (e: any) => toast.error(e?.message || 'Failed'),
+    onError: (error) => toast.error(getErrorMessage(error, 'Failed')),
   });
 
   const deleteMutation = useMutation({
@@ -1117,7 +1118,7 @@ function LeaveTypesTab({ companyId }: { companyId?: string | null }) {
       queryClient.invalidateQueries({ queryKey: ['leave-types'] }); 
       toast.success('Leave type deleted'); 
     },
-    onError: (e: any) => toast.error(e?.message || 'Failed. It might be in use.'),
+    onError: (error) => toast.error(getErrorMessage(error, 'Failed. It might be in use.')),
   });
 
   const resetForm = () => {
@@ -1459,7 +1460,7 @@ function LocationsTab({ companyId }: { companyId?: string | null }) {
       setEditingLocation(null);
       setLocForm({ name: '', latitude: '', longitude: '', radius_meters: '200', is_active: true });
     },
-    onError: (e: any) => toast.error(e?.message || 'Failed to save location'),
+    onError: (error) => toast.error(getErrorMessage(error, 'Failed to save location')),
   });
 
   const deleteLocation = useMutation({
@@ -1474,7 +1475,7 @@ function LocationsTab({ companyId }: { companyId?: string | null }) {
       queryClient.invalidateQueries({ queryKey: ['company-locations-settings'] });
       toast.success('Office location deleted');
     },
-    onError: (e: any) => toast.error(e?.message || 'Failed to delete location'),
+    onError: (error) => toast.error(getErrorMessage(error, 'Failed to delete location')),
   });
 
   const handleEdit = (loc: any) => {
