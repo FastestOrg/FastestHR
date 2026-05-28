@@ -1,5 +1,47 @@
 import { describe, it, expect } from 'vitest';
-import { isSafeUrl, getCurrencySymbol } from './utils';
+import { isSafeUrl, getCurrencySymbol, escapeHtml } from './utils';
+
+describe('escapeHtml', () => {
+  it('should escape & to &amp;', () => {
+    expect(escapeHtml('foo & bar')).toBe('foo &amp; bar');
+  });
+
+  it('should escape < to &lt;', () => {
+    expect(escapeHtml('foo < bar')).toBe('foo &lt; bar');
+  });
+
+  it('should escape > to &gt;', () => {
+    expect(escapeHtml('foo > bar')).toBe('foo &gt; bar');
+  });
+
+  it('should escape " to &quot;', () => {
+    expect(escapeHtml('foo " bar')).toBe('foo &quot; bar');
+  });
+
+  it('should escape \' to &#039;', () => {
+    expect(escapeHtml("foo ' bar")).toBe('foo &#039; bar');
+  });
+
+  it('should escape multiple special characters', () => {
+    expect(escapeHtml('<script>alert("XSS & \'")</script>')).toBe('&lt;script&gt;alert(&quot;XSS &amp; &#039;&quot;)&lt;/script&gt;');
+  });
+
+  it('should not change strings without special characters', () => {
+    expect(escapeHtml('hello world 123')).toBe('hello world 123');
+  });
+
+  it('should return non-string inputs unchanged', () => {
+    // @ts-expect-error Testing invalid input types
+    expect(escapeHtml(null)).toBe(null);
+    // @ts-expect-error Testing invalid input types
+    expect(escapeHtml(undefined)).toBe(undefined);
+    // @ts-expect-error Testing invalid input types
+    expect(escapeHtml(123)).toBe(123);
+    const obj = { a: 1 };
+    // @ts-expect-error Testing invalid input types
+    expect(escapeHtml(obj)).toBe(obj);
+  });
+});
 
 describe('isSafeUrl', () => {
   it('should return true for valid http URLs', () => {
