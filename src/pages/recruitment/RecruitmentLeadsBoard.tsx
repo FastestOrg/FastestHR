@@ -193,6 +193,23 @@ export function RecruitmentLeadsBoard() {
 
   const ALL_STAGES = ['applied', 'screening', 'interview', 'assessment', 'offer', 'hired', 'rejected'];
 
+  // ⚡ BOLT OPTIMIZATION: O(N) grouping instead of O(Categories * N) filtering
+  // Calculate this once when 'filtered' changes, so rendering each Kanban stage
+  // is just a dictionary lookup rather than iterating through all leads again.
+  const leadsByStage = useMemo(() => {
+    const grouped: Record<string, any[]> = {};
+    ALL_STAGES.forEach(stage => grouped[stage] = []);
+    filtered.forEach((lead: any) => {
+      if (grouped[lead.stage]) {
+        grouped[lead.stage].push(lead);
+      } else {
+        grouped[lead.stage] = [lead];
+      }
+    });
+    return grouped;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered]);
+
   return (
     <div className="space-y-4">
       {/* Toolbar */}
@@ -491,7 +508,8 @@ export function RecruitmentLeadsBoard() {
         /* KANBAN VIEW */
         <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
           {ALL_STAGES.filter((s) => stageFilter === 'all' || stageFilter === s).map((stage) => {
-            const stageLeads = filtered.filter((l: any) => l.stage === stage);
+            // ⚡ BOLT OPTIMIZATION: O(1) lookup instead of O(N) filter
+            const stageLeads = leadsByStage[stage] || [];
             return (
               <div key={stage} className="flex-shrink-0 w-72 space-y-3">
                 <div className="flex items-center gap-2 px-1">
