@@ -46,8 +46,8 @@ describe('substituteVariables', () => {
 
   it('should escape HTML characters in the values', () => {
     const template = 'Content: {{code}}';
-    const variables = { code: '<script>alert("XSS") & \'hack\'</script>' };
-    const expected = 'Content: &lt;script&gt;alert(&quot;XSS&quot;) &amp; &#039;hack&#039;&lt;/script&gt;';
+    const variables = { code: '<script>alert("XSS") & \'test\'</script>' };
+    const expected = 'Content: &lt;script&gt;alert(&quot;XSS&quot;) &amp; &#039;test&#039;&lt;/script&gt;';
     expect(substituteVariables(template, variables)).toBe(expected);
   });
 
