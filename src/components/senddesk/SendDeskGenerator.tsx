@@ -231,37 +231,43 @@ export function SendDeskGenerator() {
         };
       });
 
-      // Generate all PDFs concurrently
-      const generationPromises = docConfigs.map(async (config) => {
-        const { pdfPath } = await generateAndUploadSendDeskPDF({
-          htmlContent: config.renderedHtml,
-          letterheadUrl: selectedTemplate.letterhead_url,
-          companyId: profile!.company_id!,
-          documentId: config.docId,
-          documentName: selectedTemplate.name,
-          isPredefinedHtml: selectedTemplate.is_predefined_html,
+      // Generate PDFs in batches to avoid overwhelming browser resources with concurrent DOM manipulation
+      const BATCH_SIZE = 3;
+      const newDocuments = [];
+
+      for (let i = 0; i < docConfigs.length; i += BATCH_SIZE) {
+        const batch = docConfigs.slice(i, i + BATCH_SIZE);
+        const batchPromises = batch.map(async (config) => {
+          const { pdfPath } = await generateAndUploadSendDeskPDF({
+            htmlContent: config.renderedHtml,
+            letterheadUrl: selectedTemplate.letterhead_url,
+            companyId: profile!.company_id!,
+            documentId: config.docId,
+            documentName: selectedTemplate.name,
+            isPredefinedHtml: selectedTemplate.is_predefined_html,
+          });
+
+          return {
+            id: config.docId,
+            company_id: profile!.company_id!,
+            template_id: selectedTemplate.id,
+            employee_id: config.emp.id,
+            document_number: config.docNumber,
+            name: `${selectedTemplate.name} — ${config.emp.first_name} ${config.emp.last_name}`,
+            category: selectedTemplate.category,
+            sub_category: selectedTemplate.sub_category,
+            html_content: config.renderedHtml,
+            pdf_url: pdfPath,
+            variable_values: config.vars,
+            status: 'generated',
+            is_predefined_html: selectedTemplate.is_predefined_html,
+            letterhead_url: selectedTemplate.letterhead_url,
+            created_by: user?.id,
+          };
         });
-
-        return {
-          id: config.docId,
-          company_id: profile!.company_id!,
-          template_id: selectedTemplate.id,
-          employee_id: config.emp.id,
-          document_number: config.docNumber,
-          name: `${selectedTemplate.name} — ${config.emp.first_name} ${config.emp.last_name}`,
-          category: selectedTemplate.category,
-          sub_category: selectedTemplate.sub_category,
-          html_content: config.renderedHtml,
-          pdf_url: pdfPath,
-          variable_values: config.vars,
-          status: 'generated',
-          is_predefined_html: selectedTemplate.is_predefined_html,
-          letterhead_url: selectedTemplate.letterhead_url,
-          created_by: user?.id,
-        };
-      });
-
-      const newDocuments = await Promise.all(generationPromises);
+        const batchResults = await Promise.all(batchPromises);
+        newDocuments.push(...batchResults);
+      }
 
       // Bulk insert all generated documents
       if (newDocuments.length > 0) {
