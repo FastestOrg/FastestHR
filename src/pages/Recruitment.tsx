@@ -11,7 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth-store';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { AddCandidateDialog } from '@/components/recruitment/AddCandidateDialog';
 import { CandidateActions } from '@/components/recruitment/CandidateActions';
 import { JobActions } from '@/components/recruitment/JobActions';
@@ -110,13 +110,6 @@ export default function Recruitment() {
       setIsRankingAll(false);
     }
   };
-
-  useEffect(() => {
-    // Removed auto-selection of first job to ensure HR starts with Job Selection
-    // if (jobs.length > 0 && !activeJob) {
-    //   setActiveJob(jobs[0].id);
-    // }
-  }, [jobs, activeJob]);
 
   const activeJobData = jobs.find(j => j.id === activeJob);
   const currentPipelineStages = (activeJobData as any)?.pipeline_stages || DEFAULT_STAGES;
