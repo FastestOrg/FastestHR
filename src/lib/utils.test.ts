@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isSafeUrl, getCurrencySymbol } from './utils';
+import { isSafeUrl, getCurrencySymbol, formatAmount } from './utils';
 
 describe('isSafeUrl', () => {
   it('should return true for valid http URLs', () => {
@@ -66,5 +66,36 @@ describe('getCurrencySymbol', () => {
     expect(getCurrencySymbol(null)).toBe('$');
     expect(getCurrencySymbol(undefined)).toBe('$');
     expect(getCurrencySymbol('')).toBe('$');
+  });
+});
+
+describe('formatAmount', () => {
+  it('should format regular amounts with USD locale by default', () => {
+    expect(formatAmount(1000, 'USD')).toBe('1,000');
+    expect(formatAmount(1234567, 'USD')).toBe('1,234,567');
+  });
+
+  it('should format amounts with INR locale correctly', () => {
+    expect(formatAmount(100000, 'INR')).toBe('1,00,000');
+    expect(formatAmount(12345678, 'inr')).toBe('1,23,45,678');
+  });
+
+  it('should handle null, undefined, or empty currency codes by defaulting to USD', () => {
+    expect(formatAmount(1000, null)).toBe('1,000');
+    expect(formatAmount(1000, undefined)).toBe('1,000');
+    expect(formatAmount(1000, '')).toBe('1,000');
+  });
+
+  it('should handle decimal limits (0-2 fraction digits)', () => {
+    expect(formatAmount(1000.5, 'USD')).toBe('1,000.5');
+    expect(formatAmount(1000.55, 'USD')).toBe('1,000.55');
+    expect(formatAmount(1000.555, 'USD')).toBe('1,000.56'); // Rounds up
+    expect(formatAmount(1000.00, 'USD')).toBe('1,000'); // No decimals if not needed
+  });
+
+  it('should handle negative numbers and zero', () => {
+    expect(formatAmount(0, 'USD')).toBe('0');
+    expect(formatAmount(-1000, 'USD')).toBe('-1,000');
+    expect(formatAmount(-1000.5, 'USD')).toBe('-1,000.5');
   });
 });
