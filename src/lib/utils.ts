@@ -58,3 +58,12 @@ export function formatCurrency(amount: number, currencyCode: string | null | und
   return `${getCurrencySymbol(code)}${formatAmount(amount, code)}`;
 }
 
+
+export function getErrorMessage(error: unknown, defaultMessage = 'An unexpected error occurred'): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    return String((error as Record<string, unknown>).message);
+  }
+  return defaultMessage;
+}
