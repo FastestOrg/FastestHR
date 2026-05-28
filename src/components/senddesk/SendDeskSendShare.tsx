@@ -121,15 +121,34 @@ export function SendDeskSendShare() {
     return filtered;
   }, [emails, searchTerm, statusFilter]);
 
-  const generatedDocs = documents.filter(d => d.status === 'generated' || d.status === 'sent');
+  const generatedDocs = useMemo(() => {
+    return documents.filter(d => d.status === 'generated' || d.status === 'sent');
+  }, [documents]);
 
-  const stats = useMemo(() => ({
-    total: emails.length,
-    sent: emails.filter(e => e.status === 'sent').length,
-    failed: emails.filter(e => e.status === 'failed').length,
-    scheduled: emails.filter(e => e.status === 'scheduled').length,
-    pending: generatedDocs.filter(d => d.status === 'generated').length,
-  }), [emails, generatedDocs]);
+  const stats = useMemo(() => {
+    let sent = 0;
+    let failed = 0;
+    let scheduled = 0;
+    let pending = 0;
+
+    for (const email of emails) {
+      if (email.status === 'sent') sent++;
+      else if (email.status === 'failed') failed++;
+      else if (email.status === 'scheduled') scheduled++;
+    }
+
+    for (const doc of generatedDocs) {
+      if (doc.status === 'generated') pending++;
+    }
+
+    return {
+      total: emails.length,
+      sent,
+      failed,
+      scheduled,
+      pending,
+    };
+  }, [emails, generatedDocs]);
 
   return (
     <div className="space-y-6">
@@ -162,7 +181,7 @@ export function SendDeskSendShare() {
             tab === 'send' ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-muted/30 text-muted-foreground hover:bg-muted/50'
           }`}
         >
-          <Send className="h-4 w-4" /> Send Documents ({generatedDocs.filter(d => d.status === 'generated').length})
+          <Send className="h-4 w-4" /> Send Documents ({stats.pending})
         </button>
         <button
           onClick={() => setTab('history')}
