@@ -5,7 +5,6 @@ import { ProfileSectionCard } from '../components/ProfileSectionCard';
 import { FileUploadField } from '../components/FileUploadField';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { isSafeUrl } from '@/lib/utils';
 
 interface SocialLinksProps {
   employee: any;
@@ -13,21 +12,14 @@ interface SocialLinksProps {
 }
 
 function FieldView({ label, value }: { label: string; value?: string | null }) {
-  const url = value ? (value.startsWith('http') ? value : `https://${value}`) : '';
-  const isSafe = isSafeUrl(url);
-
   return (
     <div className="space-y-1.5">
       <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</label>
       {value ? (
-        isSafe ? (
-          <a href={url} target="_blank" rel="noopener noreferrer"
-            className="text-sm font-medium text-primary hover:underline truncate block py-1">
-            {value}
-          </a>
-        ) : (
-          <p className="text-sm py-1"><span className="text-muted-foreground italic font-normal">{value} (Invalid URL)</span></p>
-        )
+        <a href={value.startsWith('http') ? value : `https://${value}`} target="_blank" rel="noopener noreferrer"
+          className="text-sm font-medium text-primary hover:underline truncate block py-1">
+          {value}
+        </a>
       ) : (
         <p className="text-sm py-1"><span className="text-muted-foreground italic font-normal">Not provided</span></p>
       )}
