@@ -416,14 +416,20 @@ export default function Payroll() {
                 ))}
               </div>
             ) : (() => {
+              // ⚡ BOLT OPTIMIZATION: Extract loop-invariant string operations outside the loop
+              // and use early returns to avoid expensive string interpolations.
+              const searchLower = auditSearch.toLowerCase();
               const filtered = auditEmployees.filter((emp: any) => {
+                if (auditFilter !== 'all') {
+                  const declStatus = emp.tax_declaration?.status || 'pending';
+                  if (declStatus !== auditFilter) return false;
+                  const hasDeclaration = Object.keys(emp.tax_declaration || {}).length > 0;
+                  if (!hasDeclaration) return false;
+                }
+
+                if (!searchLower) return true;
                 const fullName = `${emp.first_name || ''} ${emp.last_name || ''}`.toLowerCase();
-                const matchesSearch = fullName.includes(auditSearch.toLowerCase());
-                const declStatus = emp.tax_declaration?.status || 'pending';
-                const hasDeclaration = Object.keys(emp.tax_declaration || {}).length > 0;
-                
-                if (auditFilter === 'all') return matchesSearch;
-                return matchesSearch && declStatus === auditFilter && hasDeclaration;
+                return fullName.includes(searchLower);
               });
 
               if (filtered.length === 0) {
