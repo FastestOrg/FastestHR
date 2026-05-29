@@ -464,13 +464,47 @@ export default function Leave() {
     let approved = 0;
     let pending = 0;
     let rejected = 0;
+
+    // ⚡ Bolt: Calculate stats in a single O(N) pass
+    const typeCounts: Record<string, number> = {};
+    const empCounts: Record<string, { name: string; days: number }> = {};
+
     for (const r of leaveRequests) {
-      if (r.status === 'approved') approved++;
+      if (r.status === 'approved') {
+        approved++;
+
+        // Count for top takers (only approved)
+        const key = r.employee_id;
+        const name = r.employees ? `${r.employees.first_name} ${r.employees.last_name}` : 'Unknown';
+        if (!empCounts[key]) empCounts[key] = { name, days: 0 };
+        empCounts[key].days += r.total_days || 0;
+      }
       else if (r.status === 'pending') pending++;
       else if (r.status === 'rejected') rejected++;
+
+      // Count types (all requests)
+      const typeName = r.leave_types?.name || 'Other';
+      typeCounts[typeName] = (typeCounts[typeName] || 0) + 1;
     }
-    return { approved, pending, rejected };
+
+    const typeDistribution = Object.entries(typeCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => ({
+        name,
+        count,
+        pct: leaveRequests.length > 0 ? Math.round((count / leaveRequests.length) * 100) : 0
+      }));
+
+    const topTakers = Object.values(empCounts)
+      .sort((a, b) => b.days - a.days)
+      .slice(0, 5);
+
+    return { approved, pending, rejected, typeDistribution, topTakers };
   }, [leaveRequests]);
+
+  const pendingReporteeCount = useMemo(() => {
+    return reporteeLeaves.filter((r: any) => r.status === 'pending').length;
+  }, [reporteeLeaves]);
 
   const statusStyle: Record<string, { class: string; Icon: any }> = {
     approved: { class: 'border-success text-success bg-success/10', Icon: CheckCircle },
@@ -579,9 +613,9 @@ export default function Leave() {
             }`}
           >
             Team Requests
-            {reporteeLeaves.filter((r: any) => r.status === 'pending').length > 0 && (
+            {pendingReporteeCount > 0 && (
               <Badge variant="destructive" className="h-4 px-1.5 min-w-4 justify-center text-[9px] animate-pulse">
-                {reporteeLeaves.filter((r: any) => r.status === 'pending').length}
+                {pendingReporteeCount}
               </Badge>
             )}
           </button>
@@ -797,29 +831,20 @@ export default function Leave() {
                   <div>
                     <h4 className="text-sm font-medium mb-3 flex items-center gap-1"><PieChart className="w-3.5 h-3.5" /> By Leave Type</h4>
                     <div className="space-y-2">
-                      {(() => {
-                        const typeCounts: Record<string, number> = {};
-                        leaveRequests.forEach((r: any) => {
-                          const name = r.leave_types?.name || 'Other';
-                          typeCounts[name] = (typeCounts[name] || 0) + 1;
-                        });
-                        const total = leaveRequests.length;
+                      {leaveStats.typeDistribution.map((item, i) => {
                         const colors = ['bg-primary', 'bg-info', 'bg-warning', 'bg-success', 'bg-destructive'];
-                        return Object.entries(typeCounts).sort((a, b) => b[1] - a[1]).map(([name, count], i) => {
-                          const pct = Math.round((count / total) * 100);
-                          return (
-                            <div key={name} className="space-y-1">
-                              <div className="flex justify-between text-xs">
-                                <span>{name}</span>
-                                <span className="text-muted-foreground">{count} ({pct}%)</span>
-                              </div>
-                              <div className="h-1.5 w-full rounded-full bg-muted/30">
-                                <div className={`h-full rounded-full ${colors[i % colors.length]} transition-all`} style={{ width: `${pct}%` }} />
-                              </div>
+                        return (
+                          <div key={item.name} className="space-y-1">
+                            <div className="flex justify-between text-xs">
+                              <span>{item.name}</span>
+                              <span className="text-muted-foreground">{item.count} ({item.pct}%)</span>
                             </div>
-                          );
-                        });
-                      })()}
+                            <div className="h-1.5 w-full rounded-full bg-muted/30">
+                              <div className={`h-full rounded-full ${colors[i % colors.length]} transition-all`} style={{ width: `${item.pct}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -844,21 +869,12 @@ export default function Leave() {
                   <div>
                     <h4 className="text-sm font-medium mb-3">Top Leave Takers</h4>
                     <div className="space-y-2">
-                      {(() => {
-                        const empCounts: Record<string, { name: string; days: number }> = {};
-                        leaveRequests.filter((r: any) => r.status === 'approved').forEach((r: any) => {
-                          const key = r.employee_id;
-                          const name = r.employees ? `${r.employees.first_name} ${r.employees.last_name}` : 'Unknown';
-                          if (!empCounts[key]) empCounts[key] = { name, days: 0 };
-                          empCounts[key].days += r.total_days || 0;
-                        });
-                        return Object.values(empCounts).sort((a, b) => b.days - a.days).slice(0, 5).map((emp, i) => (
-                          <div key={i} className="flex items-center justify-between text-sm p-2 rounded border border-border/50 bg-background/50">
-                            <span>{emp.name}</span>
-                            <Badge variant="outline">{emp.days} days</Badge>
-                          </div>
-                        ));
-                      })()}
+                      {leaveStats.topTakers.map((emp, i) => (
+                        <div key={i} className="flex items-center justify-between text-sm p-2 rounded border border-border/50 bg-background/50">
+                          <span>{emp.name}</span>
+                          <Badge variant="outline">{emp.days} days</Badge>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>

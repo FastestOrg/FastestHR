@@ -73,3 +73,7 @@
 ## 2025-02-12 - Prevent O(N*M) lookups when rendering hierarchical relations
 **Learning:** Rendering hierarchical structures (like Managers to Reports) by doing `.filter` on a child array within a `.map` loop over a parent array results in unnecessary O(N*M) time complexity every re-render.
 **Action:** When grouping child entities by parent IDs, calculate the groupings in a single O(N) pass inside a `useMemo` block using an accumulator dictionary. Use O(1) dictionary lookups (`dict[parentId] || []`) inside the render block instead of inline filters.
+
+## 2024-11-21 - [React Rendering: O(N) Array Operations]
+**Learning:** Performing array aggregations, `.filter()`, and `.sort()` operations repeatedly inside a React component's return function creates significant O(N) or O(N log N) rendering bottlenecks.
+**Action:** Extract all inline list transformations and aggregations into a single-pass loop wrapped inside a `useMemo` block to memoize the final UI structure before rendering.
