@@ -77,3 +77,7 @@
 ## 2024-11-21 - [React Rendering: O(N) Array Operations]
 **Learning:** Performing array aggregations, `.filter()`, and `.sort()` operations repeatedly inside a React component's return function creates significant O(N) or O(N log N) rendering bottlenecks.
 **Action:** Extract all inline list transformations and aggregations into a single-pass loop wrapped inside a `useMemo` block to memoize the final UI structure before rendering.
+
+## 2024-05-29 - O(N*M) String Operation Extraction during Filtering
+**Learning:** Found an optimization opportunity where string conversions (e.g., `.toLowerCase()`) and object key generation (`Object.keys()`) were executed on every single iteration inside a React `.filter()` array method, leading to significant overhead on repetitive renders.
+**Action:** Extract loop-invariant string operations (like `search.toLowerCase()`) outside of nested `.filter()` scopes. Leverage short-circuiting to check less computationally heavy conditions first before running expensive transformations inside filter evaluations.
