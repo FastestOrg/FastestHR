@@ -19,7 +19,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth-store';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { OnboardingSettingsDialog } from '@/components/onboarding/OnboardingSettingsDialog';
 import { AssignIdDialog } from '@/components/onboarding/AssignIdDialog';
 import { InviteToPortalDialog } from '@/components/onboarding/InviteToPortalDialog';
@@ -61,20 +61,6 @@ export default function Onboarding() {
     },
     enabled: !!profile?.id && !isAdmin,
   });
-
-  if (!isAdmin && currentEmployee) {
-    return (
-      <div className="max-w-4xl mx-auto p-6">
-        <EmployeeOnboardingView 
-           employeeId={currentEmployee.id} 
-           companyId={currentEmployee.company_id} 
-        />
-      </div>
-    );
-  }
-
-  // Admin view (existing code)
-  // ...
 
   // Queries
   const { data: newHires = [], isLoading: isLoadingHires } = useQuery({
@@ -185,13 +171,43 @@ export default function Onboarding() {
   });
 
   // Helpers
-  const recentHires = newHires.filter((e: any) => {
-    if (!e.date_of_joining) return true;
-    const joinDate = new Date(e.date_of_joining);
-    const ninetyDaysAgo = new Date();
-    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-    return joinDate >= ninetyDaysAgo;
-  });
+  // ⚡ Bolt: Memoize recentHires calculation to prevent O(N) filtering on every render
+  const recentHires = useMemo(() => {
+    return newHires.filter((e: any) => {
+      if (!e.date_of_joining) return true;
+      const joinDate = new Date(e.date_of_joining);
+      const ninetyDaysAgo = new Date();
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+      return joinDate >= ninetyDaysAgo;
+    });
+  }, [newHires]);
+
+  // ⚡ Bolt: Calculate stats in a single O(N) pass using useMemo
+  // instead of multiple O(N) .filter(...).length calls in the render loop.
+  const hireStats = useMemo(() => {
+    let probationCount = 0;
+    let activeCount = 0;
+    let pendingCount = 0;
+
+    for (const emp of recentHires) {
+      if (emp.status === 'probation') probationCount++;
+      if (emp.status === 'active') activeCount++;
+      if (!emp.employee_code) pendingCount++;
+    }
+
+    return { probationCount, activeCount, pendingCount };
+  }, [recentHires]);
+
+  if (!isAdmin && currentEmployee) {
+    return (
+      <div className="max-w-4xl mx-auto p-6">
+        <EmployeeOnboardingView
+           employeeId={currentEmployee.id}
+           companyId={currentEmployee.company_id}
+        />
+      </div>
+    );
+  }
 
   const selectedEmpData = newHires.find((e: any) => e.id === selectedEmployee);
 
@@ -246,7 +262,7 @@ export default function Onboarding() {
             <UserPlus className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
             <div>
               <p className="text-[10px] sm:text-xs text-muted-foreground font-semibold uppercase tracking-wider">Active</p>
-              <p className="text-xl sm:text-3xl font-black">{recentHires.filter((e: any) => e.status === 'probation').length}</p>
+              <p className="text-xl sm:text-3xl font-black">{hireStats.probationCount}</p>
             </div>
           </CardContent>
         </Card>
@@ -255,7 +271,7 @@ export default function Onboarding() {
             <CheckCircle2 className="w-6 h-6 sm:w-8 sm:h-8 text-success" />
             <div>
               <p className="text-[10px] sm:text-xs text-muted-foreground font-semibold uppercase tracking-wider">Invited</p>
-              <p className="text-xl sm:text-3xl font-black text-success">{recentHires.filter((e: any) => e.status === 'active').length}</p>
+              <p className="text-xl sm:text-3xl font-black text-success">{hireStats.activeCount}</p>
             </div>
           </CardContent>
         </Card>
@@ -264,7 +280,7 @@ export default function Onboarding() {
             <Circle className="w-6 h-6 sm:w-8 sm:h-8 text-warning" />
             <div>
               <p className="text-[10px] sm:text-xs text-muted-foreground font-semibold uppercase tracking-wider">Pending</p>
-              <p className="text-xl sm:text-3xl font-black text-warning">{recentHires.filter((e: any) => !e.employee_code).length}</p>
+              <p className="text-xl sm:text-3xl font-black text-warning">{hireStats.pendingCount}</p>
             </div>
           </CardContent>
         </Card>
