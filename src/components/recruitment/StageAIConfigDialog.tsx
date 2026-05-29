@@ -232,6 +232,7 @@ export function StageAIConfigDialog({
                       type="button"
                       variant="ghost"
                       size="icon"
+                      aria-label="Remove expectation"
                       onClick={() => removeExpectation(index)}
                       className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-destructive transition-colors"
                     >

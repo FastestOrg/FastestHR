@@ -135,7 +135,7 @@ export function RecruiterCopilot({ candidates, activeJob, isOpen, onClose }: Rec
                   Real-time Strategy & Insights
                 </CardDescription>
               </div>
-              <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 rounded-full hover:bg-white/10">
+              <Button variant="ghost" size="icon" aria-label="Close copilot" onClick={onClose} className="h-8 w-8 rounded-full hover:bg-white/10">
                 <X className="h-4 w-4" />
               </Button>
             </CardHeader>
