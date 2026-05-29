@@ -88,3 +88,7 @@
 ## 2024-05-29 - O(N*M) Lookup Optimization in Export Loops
 **Learning:** Performing `Array.find()` lookups on external arrays (e.g. `departments.find(d => d.id === emp.department_id)`) inside mapping functions over large arrays (like generating CSV export lines for employees) leads to an O(N*M) performance bottleneck, causing significant main thread blockage.
 **Action:** Always refactor these O(N*M) nested lookups by building a lookup dictionary map first (e.g. `departments.reduce((acc, d) => { acc[d.id] = d.name; return acc; }, {})`) outside the map function. Then, perform a single O(1) dictionary lookup inside the loop, transforming time complexity from O(N*M) to O(N+M).
+
+## 2024-05-29 - O(N*M) Lookup in Render Loop
+**Learning:** Found an `O(N*M)` nested lookup bottleneck inside a `.map` loop in `src/components/onboarding/EmployeeOnboardingView.tsx` where `.find` was repeatedly called on an array of `docSubmissions` on every render cycle.
+**Action:** Replace `array.find()` inside `.map()` with a pre-computed dictionary mapping (using `Array.reduce()` inside a `useMemo()`) to reduce complexity to `O(N)`. This drastically reduces redundant operations and keeps rendering performant as the number of employees/documents grows.
