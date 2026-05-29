@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -61,6 +61,14 @@ export function EmployeeOnboardingView({ employeeId, companyId }: EmployeeOnboar
       return data || [];
     },
   });
+
+  // ⚡ Bolt: Convert O(N*M) lookup to O(1) by pre-computing submission map
+  const submissionMap = useMemo(() => {
+    return docSubmissions.reduce((acc: Record<string, any>, s: any) => {
+      acc[s.requirement_id] = s;
+      return acc;
+    }, {});
+  }, [docSubmissions]);
 
   // Mutations
   const uploadMutation = useMutation({
@@ -169,7 +177,7 @@ export function EmployeeOnboardingView({ employeeId, companyId }: EmployeeOnboar
           
           <div className="space-y-3">
             {docRequirements.map((req: any) => {
-              const submission = docSubmissions.find((s: any) => s.requirement_id === req.id);
+              const submission = submissionMap[req.id];
               const isUploading = uploadingId === req.id;
               
               const status = submission?.status || 'none';
