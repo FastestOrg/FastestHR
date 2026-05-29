@@ -197,10 +197,17 @@ export default function Reports() {
         'Date of Joining'
       ];
       
+      // ⚡ BOLT OPTIMIZATION: Convert O(N*M) lookup inside export loop to O(N+M)
+      // by building a dictionary map once before iterating through employees.
+      const deptMap = departments.reduce((acc: Record<string, string>, d: any) => {
+        acc[d.id] = d.name;
+        return acc;
+      }, {});
+
       const csvContent = [
         headers.join(','),
         ...employees.map((emp: any) => {
-          const deptName = departments.find((d: any) => d.id === emp.department_id)?.name || 'N/A';
+          const deptName = deptMap[emp.department_id] || 'N/A';
           return [
             emp.id,
             `"${emp.first_name || ''}"`,
@@ -505,7 +512,7 @@ export default function Reports() {
                         
                         // Action Badge styling
                         const act = (log.action || '').toLowerCase();
-                        let badgeVariant: 'default' | 'outline' | 'secondary' | 'destructive' = 'outline';
+                        const badgeVariant: 'default' | 'outline' | 'secondary' | 'destructive' = 'outline';
                         let actColor = 'border-border text-foreground/80';
                         if (act.includes('insert') || act.includes('create')) {
                           actColor = 'border-success/30 text-success bg-success/5';
