@@ -120,8 +120,20 @@ const BlogPost = () => {
           <div className="flex justify-between items-center py-6 border-y border-white/5 mb-12">
             <div className="text-zinc-500 text-sm">Published in Network</div>
             <div className="flex gap-4">
-              <button className="text-zinc-400 hover:text-cyan-400 transition-colors"><Bookmark className="w-5 h-5" /></button>
-              <button className="text-zinc-400 hover:text-cyan-400 transition-colors"><Share2 className="w-5 h-5" /></button>
+              <button
+                className="text-zinc-400 hover:text-cyan-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505] rounded-md"
+                aria-label="Bookmark post"
+                title="Bookmark post"
+              >
+                <Bookmark className="w-5 h-5" />
+              </button>
+              <button
+                className="text-zinc-400 hover:text-cyan-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505] rounded-md"
+                aria-label="Share post"
+                title="Share post"
+              >
+                <Share2 className="w-5 h-5" />
+              </button>
             </div>
           </div>
 
