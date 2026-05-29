@@ -324,6 +324,7 @@ export function TaskList() {
                          <Button 
                           variant="ghost" 
                           size="icon" 
+                          aria-label="Task alert"
                           className="h-11 w-11 rounded-xl text-muted-foreground opacity-50 group-hover:opacity-100 transition-opacity"
                         >
                           <AlertCircle className="h-5 w-5" />

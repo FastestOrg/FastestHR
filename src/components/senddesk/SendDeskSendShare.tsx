@@ -225,14 +225,14 @@ export function SendDeskSendShare() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {doc.status === 'sent' && (
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-400 hover:text-amber-500 hover:bg-amber-400/10"
+                        <Button variant="ghost" size="icon" aria-label="Resend document" className="h-8 w-8 text-amber-400 hover:text-amber-500 hover:bg-amber-400/10"
                           title="Resend Document"
                           onClick={() => setResendDoc(doc)}
                         >
                           <RotateCcw className="h-4 w-4" />
                         </Button>
                       )}
-                      <Button variant="ghost" size="icon" className="h-8 w-8"
+                      <Button variant="ghost" size="icon" aria-label="Preview document" className="h-8 w-8"
                         onClick={() => { setPreviewDoc(doc); setIsPreviewOpen(true); }}
                       >
                         <Eye className="h-4 w-4" />

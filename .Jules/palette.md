@@ -27,3 +27,6 @@
 ## 2024-05-28 - ARIA Labels on Destructive Icon Buttons
 **Learning:** Found multiple instances where `Button` components using the `Trash2` icon for destructive actions (like removing conditions or deleting workflows) lacked text equivalents for screen readers. While `size="icon"` correctly styles them as circular buttons, it does not implicitly provide accessibility context.
 **Action:** Always verify that `Button` components acting as icon-only controls explicitly include `aria-label` attributes to ensure they remain accessible to users relying on assistive technologies.
+## 2026-05-29 - Added missing ARIA labels to icon-only buttons
+**Learning:** Found multiple instances where icon-only custom Button components lacked `aria-label` attributes, affecting screen reader accessibility. Since the text is usually conveyed visually via icons (like 'X' for close, 'Trash' for delete), ensuring these components have proper labels is crucial for non-visual users.
+**Action:** Always verify that `<Button size="icon">` or buttons without inner text include a descriptive `aria-label` property.

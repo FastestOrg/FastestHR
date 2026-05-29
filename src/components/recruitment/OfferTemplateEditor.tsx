@@ -142,6 +142,7 @@ export function OfferTemplateList() {
                   <Button 
                     variant="ghost" 
                     size="icon" 
+                    aria-label="Edit template"
                     className="h-8 w-8"
                     onClick={() => { setEditingTemplate(template); setIsEditorOpen(true); }}
                   >
@@ -150,6 +151,7 @@ export function OfferTemplateList() {
                   <Button 
                     variant="ghost" 
                     size="icon" 
+                    aria-label="Delete template"
                     className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                     onClick={() => {
                       if (confirm('Are you sure you want to delete this template?')) {
@@ -506,6 +508,7 @@ function OfferTemplateEditor({ isOpen, onClose, template }: { isOpen: boolean, o
                   <Button
                     variant="ghost"
                     size="icon"
+                    aria-label="Remove custom variable"
                     className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 mt-5"
                     onClick={() => setCustomVariables(prev => prev.filter((_, i) => i !== idx))}
                   >

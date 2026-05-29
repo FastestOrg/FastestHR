@@ -223,13 +223,13 @@ export function SendDeskTemplates() {
                   </span>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Button 
-                      variant="ghost" size="icon" className="h-8 w-8"
+                      variant="ghost" size="icon" aria-label="Edit template" className="h-8 w-8"
                       onClick={() => { setEditingTemplate(template); setIsEditorOpen(true); }}
                     >
                       <Edit2 className="h-3.5 w-3.5" />
                     </Button>
                     <Button 
-                      variant="ghost" size="icon" 
+                      variant="ghost" size="icon" aria-label="Delete template"
                       className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                       onClick={() => {
                         if (confirm('Delete this template?')) deleteMutation.mutate(template.id);
@@ -735,7 +735,7 @@ function TemplateEditorDialog({ isOpen, onClose, template }: { isOpen: boolean, 
                       {cv.key && <span className="ml-auto text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded border border-primary/20">{`{{${cv.key}}}`}</span>}
                     </div>
                   </div>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 mt-5"
+                  <Button variant="ghost" size="icon" aria-label="Remove custom variable" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 mt-5"
                     onClick={() => setCustomVariables(prev => prev.filter((_, i) => i !== idx))}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
