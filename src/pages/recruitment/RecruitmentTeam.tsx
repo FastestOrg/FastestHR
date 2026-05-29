@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Users, UserPlus, Shield, UserCheck, Activity, Loader2,
@@ -135,6 +135,22 @@ export function RecruitmentTeam() {
   const managers = teamMembers.filter((m) => m.platform_role === 'hr_manager' && m.is_active);
   const recruiters = teamMembers.filter((m) => m.platform_role === 'recruiter' && m.is_active);
 
+  // ⚡ BOLT OPTIMIZATION: Calculate recruiter groupings in a single pass instead of O(N*M) filters in render
+  const { recruitersByManager, unassignedRecruiters } = useMemo(() => {
+    const byManager: Record<string, any[]> = {};
+    const unassigned: any[] = [];
+    for (const r of recruiters) {
+      if (r.manager_id) {
+        if (!byManager[r.manager_id]) byManager[r.manager_id] = [];
+        byManager[r.manager_id].push(r);
+      } else {
+        unassigned.push(r);
+      }
+    }
+    return { recruitersByManager: byManager, unassignedRecruiters: unassigned };
+  }, [recruiters]);
+
+
   const getInitials = (name: string) =>
     name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
 
@@ -216,7 +232,8 @@ export function RecruitmentTeam() {
           </h3>
           <div className="space-y-3">
             {managers.map((manager) => {
-              const reports = recruiters.filter((r) => r.manager_id === manager.id);
+              // ⚡ BOLT OPTIMIZATION: O(1) lookup instead of O(N) filter inside map
+              const reports = recruitersByManager[manager.id] || [];
               return (
                 <Card key={manager.id} className="bg-background/50 border-border/50">
                   <CardContent className="p-4">
@@ -312,13 +329,13 @@ export function RecruitmentTeam() {
       )}
 
       {/* Unassigned recruiters */}
-      {recruiters.filter((r) => !r.manager_id).length > 0 && (
+      {unassignedRecruiters.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             Unassigned Recruiters
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {recruiters.filter((r) => !r.manager_id).map((recruiter) => (
+            {unassignedRecruiters.map((recruiter) => (
               <Card key={recruiter.id} className="bg-background/50 border-border/50 border-dashed">
                 <CardContent className="p-4 flex items-center gap-3">
                   <Avatar className="h-8 w-8">
