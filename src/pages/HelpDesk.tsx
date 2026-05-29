@@ -12,7 +12,7 @@ import { Search, Plus, LifeBuoy, Clock, AlertCircle, Send, MessageSquare } from 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth-store';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useDebounce } from '@/hooks/use-debounce';
 import { toast } from 'sonner';
 
@@ -174,9 +174,16 @@ export default function HelpDesk() {
     }
   });
 
-  const openCount = tickets.filter((t) => t.status === 'open').length;
-  const inProgressCount = tickets.filter((t) => t.status === 'in_progress').length;
-  const resolvedCount = tickets.filter((t) => t.status === 'resolved' || t.status === 'closed').length;
+  // ⚡ Bolt Optimization: Replace multiple O(N) array traversals with a single O(N) pass to calculate ticket counts.
+  const { openCount, inProgressCount, resolvedCount } = useMemo(() => {
+    let open = 0, inProgress = 0, resolved = 0;
+    for (const t of tickets) {
+      if (t.status === 'open') open++;
+      else if (t.status === 'in_progress') inProgress++;
+      else if (t.status === 'resolved' || t.status === 'closed') resolved++;
+    }
+    return { openCount: open, inProgressCount: inProgress, resolvedCount: resolved };
+  }, [tickets]);
 
   const priorityStyle: Record<string, string> = {
     high: 'bg-destructive/10 text-destructive',
