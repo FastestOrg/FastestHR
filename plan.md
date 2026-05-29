@@ -1,22 +1,10 @@
-1. **Create `src/hooks/use-debounce.ts`**
-   - Implemented a `useDebounce` hook that takes a generic value and returns a debounced version of it. I've just created this file.
+1.  **Refactor Employee Stats Calculation in `src/pages/Dashboard.tsx`:**
+    *   Currently, the dashboard makes multiple O(N) passes over the `activeEmployees` array to compute: `deptMap`, `thisYearHires`, `attritionCount`, `upcomingBdays`, and `upcomingAnnis`.
+    *   There are multiple `.filter()` and `.forEach()` calls, and inside the sort functions for birthdays and anniversaries, new `Date` objects are instantiated repeatedly.
+    *   I will refactor this to process all these metrics in a single `for...of` pass, calculate time variables upfront to avoid repetitive `new Date()` calls, and push items to temporary lists which are then sorted once using the precalculated timestamps.
 
-2. **Update `src/pages/Employees.tsx`**
-   - Import `useDebounce` from `src/hooks/use-debounce`.
-   - Debounce the `search` state variable: `const debouncedSearch = useDebounce(search, 300);`
-   - Update the `useQuery` call in `src/pages/Employees.tsx` to use `debouncedSearch` instead of `search` for both `queryKey` and `queryFn`. This limits the number of Supabase network requests as the user types.
+2.  **Run Pre-commit Checks:**
+    *   Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.
 
-3. **Update `src/pages/HelpDesk.tsx`**
-   - Import `useDebounce` from `src/hooks/use-debounce`.
-   - Debounce the `search` state variable: `const debouncedSearch = useDebounce(search, 300);`
-   - Update the `useQuery` call in `src/pages/HelpDesk.tsx` to use `debouncedSearch` instead of `search` for both `queryKey` and `queryFn`. This limits the number of Supabase network requests as the user types.
-
-4. **Add entry to `.jules/bolt.md`**
-   - Log a critical learning about debouncing search inputs that are directly tied to API calls via React Query `useQuery` to reduce redundant network requests.
-
-5. **Pre-commit verification**
-   - Run formatting (`pnpm lint`), tests (`pnpm test`), and the build process (`pnpm build`).
-   - Call `pre_commit_instructions` and follow its instructions to ensure proper testing, verification, review, and reflection are done.
-
-6. **Submit PR**
-   - Submit the change with the PR title format '⚡ Bolt: [performance improvement]'.
+3.  **Submit Changes:**
+    *   Create a PR with title "⚡ Bolt: Refactor dashboard employee stats calculation to a single pass" and standard Bolt description formatting.

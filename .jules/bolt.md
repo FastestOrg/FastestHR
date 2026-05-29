@@ -81,3 +81,7 @@
 ## 2024-05-29 - O(N*M) String Operation Extraction during Filtering
 **Learning:** Found an optimization opportunity where string conversions (e.g., `.toLowerCase()`) and object key generation (`Object.keys()`) were executed on every single iteration inside a React `.filter()` array method, leading to significant overhead on repetitive renders.
 **Action:** Extract loop-invariant string operations (like `search.toLowerCase()`) outside of nested `.filter()` scopes. Leverage short-circuiting to check less computationally heavy conditions first before running expensive transformations inside filter evaluations.
+
+## 2024-05-29 - O(N) Single-pass Aggregations in React Queries
+**Learning:** Performing multiple array `.filter()` and `.forEach()` passes and re-instantiating `Date` objects within derived state calculations (e.g. employee metrics) creates O(N) and O(N log N) performance bottlenecks.
+**Action:** Always accumulate metrics and perform derived calculations inside a single loop iteration over the primary data array. Precalculate timestamps instead of instantiating new `Date` objects repeatedly inside `.sort()` callbacks.
