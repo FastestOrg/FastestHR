@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth-store';
@@ -142,6 +142,14 @@ export function SendDeskTemplates() {
     onError: () => toast.error('Failed to delete template'),
   });
 
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const t of templates) {
+      counts[t.category] = (counts[t.category] || 0) + 1;
+    }
+    return counts;
+  }, [templates]);
+
   const filtered = filterCategory 
     ? templates.filter(t => t.category === filterCategory) 
     : templates;
@@ -184,7 +192,7 @@ export function SendDeskTemplates() {
           <Filter className="h-3 w-3" /> All ({templates.length})
         </button>
         {CATEGORIES.map(cat => {
-          const count = templates.filter(t => t.category === cat.id).length;
+          const count = categoryCounts[cat.id] || 0;
           const Icon = cat.icon;
           return (
             <button

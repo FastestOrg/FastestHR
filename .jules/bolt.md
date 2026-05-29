@@ -66,3 +66,6 @@
 ## 2024-05-29 - Memoizing inline counts in Document list
 **Learning:** React render functions that rely on O(Categories * N) inline filtering (e.g., `categories.map(cat => documents.filter(d => d.category === cat).length)`) cause significant, measurable bottlenecks, especially when paired with additional inline filter iterations for aggregate counts (like `documents.filter(d => d.expiresAt).length`).
 **Action:** Replace multiple inline `.filter()` calls inside `.map()` loops with a single-pass `for...of` aggregate loop wrapped in `useMemo`. Store the results in a lookup dictionary (e.g., `categoryCounts[categoryName] = count`) to enable O(1) lookups during the render phase.
+## 2024-05-29 - Memoizing inline counts in Document list
+**Learning:** React render functions that rely on O(Categories * N) inline filtering (e.g., `categories.map(cat => documents.filter(d => d.category === cat).length)`) cause significant, measurable bottlenecks, especially when paired with additional inline filter iterations for aggregate counts (like `documents.filter(d => d.expiresAt).length`).
+**Action:** Replace multiple inline `.filter()` calls inside `.map()` loops with a single-pass `for...of` aggregate loop wrapped in `useMemo`. Store the results in a lookup dictionary (e.g., `categoryCounts[categoryName] = count`) to enable O(1) lookups during the render phase.
