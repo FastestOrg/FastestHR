@@ -187,6 +187,7 @@ export function OfferDetailsDialog({
                 <Button 
                   variant="ghost" 
                   size="icon" 
+                  aria-label="Remove manager signature"
                   className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                   onClick={() => setManagerSignature(null)}
                 >

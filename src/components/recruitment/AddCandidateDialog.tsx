@@ -131,6 +131,7 @@ export function AddCandidateDialog({ jobId, variant = 'full' }: AddCandidateDial
             <Button 
               variant="ghost" 
               size="icon"
+              aria-label="Add Applicant"
               className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/5 transition-all rounded-lg relative group/icon"
               title="Add Applicant"
             >
@@ -173,6 +174,7 @@ export function AddCandidateDialog({ jobId, variant = 'full' }: AddCandidateDial
             <Button
               variant="ghost"
               size="icon"
+              aria-label="Download sample CSV"
               className="ml-auto h-7 w-7 rounded-full opacity-0 group-hover/bulk:opacity-100 hover:bg-emerald-500/20 hover:text-emerald-500 transition-all"
               onClick={handleDownloadSample}
               title="Download sample CSV"
