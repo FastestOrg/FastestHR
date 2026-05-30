@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -176,7 +176,11 @@ export default function AttritionInsights() {
   };
 
   // Filters
-  const filteredPredictions = predictions.filter((p: any) => {
+  // ⚡ Bolt: Calculate high risks in a single O(N) pass using useMemo instead of in the render loop
+  const highRiskCount = useMemo(() => predictions.filter((p: any) => p.risk_score >= 70).length, [predictions]);
+
+  // ⚡ Bolt: Memoize filteredPredictions to prevent O(N) filtering on every render
+  const filteredPredictions = useMemo(() => predictions.filter((p: any) => {
     const matchesSearch = `${p.employee?.first_name} ${p.employee?.last_name} ${p.employee?.departments?.name || ''} ${p.employee?.designations?.title || ''}`
       .toLowerCase()
       .includes(searchTerm.toLowerCase());
@@ -189,7 +193,7 @@ export default function AttritionInsights() {
     if (riskFilter === 'medium') return matchesSearch && isMedium;
     if (riskFilter === 'low') return matchesSearch && isLow;
     return matchesSearch;
-  });
+  }), [predictions, searchTerm, riskFilter]);
 
   const averageCompanyRisk = predictions.length > 0
     ? predictions.reduce((sum: number, p: any) => sum + Number(p.risk_score), 0) / predictions.length
@@ -250,7 +254,7 @@ export default function AttritionInsights() {
                 <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Active High Risks</p>
                 <div className="flex items-baseline gap-2 mt-2">
                   <span className="text-3xl font-black text-destructive">
-                    {predictions.filter((p: any) => p.risk_score >= 70).length}
+                    {highRiskCount}
                   </span>
                   <span className="text-xs text-muted-foreground">employees</span>
                 </div>
