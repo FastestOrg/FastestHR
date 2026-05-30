@@ -106,6 +106,12 @@ function VariableButtons({ variables, onInsert }: { variables: string[], onInser
   );
 }
 
+// ⚡ Bolt Optimization: Use O(1) Map for categories to eliminate O(N) array finds in render loops
+const CATEGORIES_MAP = CATEGORIES.reduce((acc, cat) => {
+  acc[cat.id] = cat;
+  return acc;
+}, {} as Record<string, typeof CATEGORIES[0]>);
+
 export function SendDeskTemplates() {
   const { profile } = useAuthStore();
   const queryClient = useQueryClient();
@@ -154,11 +160,14 @@ export function SendDeskTemplates() {
     ? templates.filter(t => t.category === filterCategory) 
     : templates;
 
-  const getCategoryInfo = (catId: string) => CATEGORIES.find(c => c.id === catId);
+
+
+  const getCategoryInfo = (catId: string) => CATEGORIES_MAP[catId];
   const getSubCategoryLabel = (catId: string, subId: string | null) => {
     if (!subId) return null;
-    const cat = CATEGORIES.find(c => c.id === catId);
-    return cat?.subcategories.find(s => s.id === subId)?.label || subId;
+    const cat = CATEGORIES_MAP[catId];
+    if (!cat) return subId;
+    return cat.subcategories.find(s => s.id === subId)?.label || subId;
   };
 
   if (isLoading) {
@@ -385,9 +394,10 @@ function TemplateEditorDialog({ isOpen, onClose, template }: { isOpen: boolean, 
   const handleAIGenerate = async (type: 'template' | 'email' | 'improve') => {
     setIsGeneratingAI(true);
     try {
-      const subCatLabel = CATEGORIES
-        .find(c => c.id === category)
-        ?.subcategories.find(s => s.id === subCategory)?.label || subCategory || 'general document';
+      const cat = CATEGORIES_MAP[category];
+      const subCatLabel = cat
+        ? cat.subcategories.find(s => s.id === subCategory)?.label || subCategory || 'general document'
+        : subCategory || 'general document';
 
       const { data, error } = await supabase.functions.invoke('generate-ai-content', {
         body: {
@@ -419,7 +429,7 @@ function TemplateEditorDialog({ isOpen, onClose, template }: { isOpen: boolean, 
     }
   };
 
-  const currentSubcategories = CATEGORIES.find(c => c.id === category)?.subcategories || [];
+  const currentSubcategories = CATEGORIES_MAP[category]?.subcategories || [];
 
   const sampleVars: Record<string, string> = {
     'Name': 'John Doe',

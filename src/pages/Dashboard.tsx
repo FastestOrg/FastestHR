@@ -722,17 +722,28 @@ function HRManagerDashboard() {
       const activeEmployees = data || [];
       const employeeCount = activeEmployees.length;
 
+      // ⚡ Bolt Optimization: Avoid instantiating Date objects multiple times inside sort
       const now = new Date();
-      const birthdays = activeEmployees.filter((e: any) => {
-        if (!e.date_of_birth) return false;
-        const dob = new Date(e.date_of_birth);
-        const bday = new Date(now.getFullYear(), dob.getMonth(), dob.getDate());
-        const diff = (bday.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
-        return diff >= 0 && diff <= 30;
-      }).sort((a: any, b: any) => {
-        const da = new Date(a.date_of_birth), db = new Date(b.date_of_birth);
-        return new Date(now.getFullYear(), da.getMonth(), da.getDate()).getTime() - new Date(now.getFullYear(), db.getMonth(), db.getDate()).getTime();
-      }).slice(0, 5);
+      const currentYear = now.getFullYear();
+      const nowTime = now.getTime();
+
+      const birthdays = activeEmployees.reduce((acc: any[], e: any) => {
+        if (e.date_of_birth) {
+          const dob = new Date(e.date_of_birth);
+          const bdayTime = new Date(currentYear, dob.getMonth(), dob.getDate()).getTime();
+          const diff = (bdayTime - nowTime) / 86400000; // ms in a day
+          if (diff >= 0 && diff <= 30) {
+            acc.push({ ...e, __tempBdayTime: bdayTime });
+          }
+        }
+        return acc;
+      }, [])
+      .sort((a: any, b: any) => a.__tempBdayTime - b.__tempBdayTime)
+      .map((e: any) => {
+        const { __tempBdayTime, ...rest } = e;
+        return rest;
+      })
+      .slice(0, 5);
 
       return { employeeCount, birthdays };
     },

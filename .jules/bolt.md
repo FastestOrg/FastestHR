@@ -96,3 +96,7 @@
 ## 2024-05-29 - O(N*M) Lookup Optimization in Onboarding Progress
 **Learning:** Found an O(N*M) lookup bottleneck in `src/pages/Onboarding.tsx` where `docSubmissions.find(s => s.requirement_id === req.id)` was repeatedly called inside an O(N) map, which is inefficient.
 **Action:** Always refactor these O(N*M) nested lookups by building a lookup dictionary map first using `useMemo` and `Array.reduce` to enable O(1) lookups during the render phase.
+
+## $(date +%Y-%m-%d) - Prevent O(N log N) Date instantiation overhead inside array .sort()
+**Learning:** Instantiating `new Date()` directly inside array `.sort()` callbacks evaluates repetitively, introducing O(N log N) overhead. This causes performance spikes and unnecessary memory allocations when sorting large datasets.
+**Action:** Always pre-calculate dates or timestamps before sorting. Use a single `.reduce()` or `for` loop pass to attach the calculated timestamps to the objects as temporary properties (`__tempTime`), sort based on those primitive numbers, and `.map()` them out afterwards.

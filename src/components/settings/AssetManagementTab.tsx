@@ -157,6 +157,8 @@ export default function AssetManagementTab({ companyId }: AssetManagementTabProp
     onError: (e: any) => toast.error(e?.message || 'Failed to update status'),
   });
 
+  const selectedAssetObj = useMemo(() => assets.find((a: any) => a.id === selectedAssetId), [assets, selectedAssetId]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-border/50 pb-4">
@@ -376,9 +378,8 @@ export default function AssetManagementTab({ companyId }: AssetManagementTabProp
                 <Label>Operational Status Override</Label>
                 <div className="flex gap-2">
                   {['available', 'damaged', 'retired'].map((status) => {
-                    const assetObj = assets.find((a: any) => a.id === selectedAssetId);
-                    const isActive = assetObj?.status === status;
-                    return (
+                      const isActive = selectedAssetObj?.status === status;
+                      return (
                       <Button
                         key={status}
                         variant={isActive ? 'default' : 'outline'}

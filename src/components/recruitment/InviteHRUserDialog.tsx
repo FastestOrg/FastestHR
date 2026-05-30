@@ -207,7 +207,10 @@ export function InviteHRUserDialog({
                   disabled={mutation.isPending || licenceFull || loadingEmployees}
                 >
                   {formData.employeeId
-                    ? `${employees.find((e) => e.id === formData.employeeId)?.first_name} ${employees.find((e) => e.id === formData.employeeId)?.last_name}`
+                    ? (() => {
+                        const emp = employees.find((e) => e.id === formData.employeeId);
+                        return emp ? `${emp.first_name} ${emp.last_name}` : "Select employee...";
+                      })()
                     : "Select employee..."}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
