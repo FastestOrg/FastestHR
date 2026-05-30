@@ -256,7 +256,7 @@ export function RecruitmentTeam() {
                       {canManage && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Manager actions" title="Manager actions">
                               <MoreVertical className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
@@ -296,7 +296,7 @@ export function RecruitmentTeam() {
                             {canManage && (
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7">
+                                  <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Recruiter actions" title="Recruiter actions">
                                     <MoreVertical className="h-3 w-3" />
                                   </Button>
                                 </DropdownMenuTrigger>
