@@ -132,6 +132,14 @@ export default function Onboarding() {
     enabled: !!selectedEmployee,
   });
 
+  // ⚡ Bolt: Convert O(N*M) lookup to O(1) by pre-computing submission map
+  const submissionMap = useMemo(() => {
+    return (docSubmissions || []).reduce((acc: Record<string, any>, s: any) => {
+      acc[s.requirement_id] = s;
+      return acc;
+    }, {});
+  }, [docSubmissions]);
+
   // Mutations
   const toggleStepMutation = useMutation({
     mutationFn: async ({ stepId, completed }: { stepId: string, completed: boolean }) => {
@@ -221,8 +229,14 @@ export default function Onboarding() {
     if (empId !== selectedEmployee) return 0;
     const mandatory = docRequirements.filter((r: any) => r.is_mandatory);
     if (mandatory.length === 0) return 100;
-    const completed = docSubmissions.filter((s: any) => mandatory.some(m => m.id === s.requirement_id));
-    return Math.round((completed.length / mandatory.length) * 100);
+    // O(1) lookups using submissionMap instead of O(N*M) nested some/filter
+    let completedCount = 0;
+    for (const req of mandatory) {
+      if (submissionMap[req.id]) {
+        completedCount++;
+      }
+    }
+    return Math.round((completedCount / mandatory.length) * 100);
   };
 
   const handleDownload = async (submission: any) => {
@@ -439,7 +453,7 @@ export default function Onboarding() {
                         <CardContent className="p-0">
                             <div className="divide-y divide-border/50">
                                 {docRequirements.map((req: any) => {
-                                    const submission = (docSubmissions as any[]).find((s: any) => s.requirement_id === req.id);
+                                    const submission = submissionMap[req.id];
                                     return (
                                         <div key={req.id} className="p-4 flex items-center justify-between hover:bg-muted/20">
                                             <div className="flex items-center gap-3">
