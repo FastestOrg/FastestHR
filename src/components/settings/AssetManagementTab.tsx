@@ -371,28 +371,32 @@ export default function AssetManagementTab({ companyId }: AssetManagementTabProp
               </Select>
             </div>
             
-            {selectedAssetId && (
-              <div className="space-y-2">
-                <Label>Operational Status Override</Label>
-                <div className="flex gap-2">
-                  {['available', 'damaged', 'retired'].map((status) => {
-                    const assetObj = assets.find((a: any) => a.id === selectedAssetId);
-                    const isActive = assetObj?.status === status;
-                    return (
-                      <Button
-                        key={status}
-                        variant={isActive ? 'default' : 'outline'}
-                        size="sm"
-                        className="text-xs capitalize flex-1 h-9"
-                        onClick={() => updateStatus.mutate({ id: selectedAssetId, status })}
-                      >
-                        {status}
-                      </Button>
-                    );
-                  })}
+            {selectedAssetId && (() => {
+              // Extract O(N) lookup outside the .map loop so it executes only once per render
+              const assetObj = assets.find((a: any) => a.id === selectedAssetId);
+
+              return (
+                <div className="space-y-2">
+                  <Label>Operational Status Override</Label>
+                  <div className="flex gap-2">
+                    {['available', 'damaged', 'retired'].map((status) => {
+                      const isActive = assetObj?.status === status;
+                      return (
+                        <Button
+                          key={status}
+                          variant={isActive ? 'default' : 'outline'}
+                          size="sm"
+                          className="text-xs capitalize flex-1 h-9"
+                          onClick={() => updateStatus.mutate({ id: selectedAssetId, status })}
+                        >
+                          {status}
+                        </Button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAssignDialogOpen(false)}>Cancel</Button>
