@@ -2,6 +2,15 @@ import { supabase } from '@/integrations/supabase/client';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
 
+// Global serialized queue for DOM-heavy PDF operations to prevent concurrent reflows and flicker
+let pdfGenerationQueue: Promise<any> = Promise.resolve();
+
+async function enqueuePDFGeneration<T>(task: () => Promise<T>): Promise<T> {
+  const nextTask = pdfGenerationQueue.then(task);
+  pdfGenerationQueue = nextTask.catch(() => {});
+  return nextTask;
+}
+
 interface CompensationStructure {
   basic_pay: number;
   dearness_allowance: number;
@@ -318,58 +327,63 @@ async function generateAndUploadPDF(
 
   let pdfBlob: Blob;
   const originalOverflow = document.body.style.overflow;
-  try {
-    document.body.style.overflow = 'hidden';
-    pdfElement.style.position = 'absolute';
-    pdfElement.style.top = '-9999px';
-    pdfElement.style.left = '-9999px';
-    pdfElement.style.visibility = 'hidden';
-    document.body.appendChild(pdfElement);
 
-    const scripts = Array.from(pdfElement.querySelectorAll('script'));
-    for (const oldScript of scripts) {
-      const newScript = document.createElement('script');
-      newScript.textContent = oldScript.textContent || '';
-      Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
-      oldScript.parentNode?.replaceChild(newScript, oldScript);
+  const result = await enqueuePDFGeneration(async () => {
+    try {
+      document.body.style.overflow = 'hidden';
+      pdfElement.style.position = 'absolute';
+      pdfElement.style.top = '-9999px';
+      pdfElement.style.left = '-9999px';
+      pdfElement.style.visibility = 'hidden';
+      document.body.appendChild(pdfElement);
+
+      const scripts = Array.from(pdfElement.querySelectorAll('script'));
+      for (const oldScript of scripts) {
+        const newScript = document.createElement('script');
+        newScript.textContent = oldScript.textContent || '';
+        Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
+        oldScript.parentNode?.replaceChild(newScript, oldScript);
+      }
+
+      if (scripts.length > 0) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+
+      const manipulatedHtml = pdfElement.innerHTML;
+      
+      // Position off-screen and make visible so it can be cleanly captured,
+      // but KEEP it in the DOM so html2pdf can render it without appending a visible copy.
+      pdfElement.style.position = 'fixed';
+      pdfElement.style.top = '-9999px';
+      pdfElement.style.left = '-9999px';
+      pdfElement.style.visibility = 'visible';
+
+      const blob = await html2pdf().set(opt).from(pdfElement).output('blob');
+      return { blob, manipulatedHtml };
+    } finally {
+      document.body.style.overflow = originalOverflow;
+      if (document.body.contains(pdfElement)) {
+        document.body.removeChild(pdfElement);
+      }
     }
+  });
 
-    if (scripts.length > 0) {
-      await new Promise(resolve => setTimeout(resolve, 50));
-    }
+  pdfBlob = result.blob;
+  const manipulatedHtml = result.manipulatedHtml;
 
-    const manipulatedHtml = pdfElement.innerHTML;
-    pdfElement.style.position = '';
-    pdfElement.style.top = '';
-    pdfElement.style.left = '';
-    pdfElement.style.visibility = '';
-    
-    if (document.body.contains(pdfElement)) {
-      document.body.removeChild(pdfElement);
-    }
+  const fileName = `${companyId}/${fileNamePrefix}_${Date.now()}.pdf`;
+  const { data: uploadData, error: uploadError } = await supabase.storage
+    .from(bucketName)
+    .upload(fileName, pdfBlob, {
+      contentType: 'application/pdf',
+      upsert: true,
+    });
 
-    pdfBlob = await html2pdf().set(opt).from(pdfElement).output('blob');
-
-    const fileName = `${companyId}/${fileNamePrefix}_${Date.now()}.pdf`;
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from(bucketName)
-      .upload(fileName, pdfBlob, {
-        contentType: 'application/pdf',
-        upsert: true,
-      });
-
-    if (uploadError) {
-      throw new Error(`Failed to upload PDF: ${uploadError.message}`);
-    }
-
-    return { pdfPath: uploadData.path, manipulatedHtml };
-
-  } finally {
-    document.body.style.overflow = originalOverflow;
-    if (document.body.contains(pdfElement)) {
-      document.body.removeChild(pdfElement);
-    }
+  if (uploadError) {
+    throw new Error(`Failed to upload PDF: ${uploadError.message}`);
   }
+
+  return { pdfPath: uploadData.path, manipulatedHtml };
 }
 
 /**
@@ -799,21 +813,27 @@ export async function generateAndDownloadPayslipPDF(params: GeneratePayslipPDFPa
 
   const originalOverflow = document.body.style.overflow;
   let pdfBlob: Blob | null = null;
-  try {
-    document.body.style.overflow = 'hidden';
-    container.style.position = 'absolute';
-    container.style.top = '-9999px';
-    container.style.left = '-9999px';
-    container.style.visibility = 'hidden';
-    document.body.appendChild(container);
+  
+  pdfBlob = await enqueuePDFGeneration(async () => {
+    try {
+      document.body.style.overflow = 'hidden';
+      
+      // Position off-screen and make visible so it can be cleanly captured,
+      // but KEEP it in the DOM so html2pdf can render it without appending a visible copy.
+      container.style.position = 'fixed';
+      container.style.top = '-9999px';
+      container.style.left = '-9999px';
+      container.style.visibility = 'visible';
+      document.body.appendChild(container);
 
-    pdfBlob = await html2pdf().set(opt).from(container).output('blob');
-  } finally {
-    document.body.style.overflow = originalOverflow;
-    if (document.body.contains(container)) {
-      document.body.removeChild(container);
+      return await html2pdf().set(opt).from(container).output('blob');
+    } finally {
+      document.body.style.overflow = originalOverflow;
+      if (document.body.contains(container)) {
+        document.body.removeChild(container);
+      }
     }
-  }
+  });
 
   if (!pdfBlob) {
     throw new Error("Failed to generate PDF Blob");

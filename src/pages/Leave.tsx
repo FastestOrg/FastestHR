@@ -108,40 +108,6 @@ export default function Leave() {
   const [ledgerOpen, setLedgerOpen] = useState(false);
   const [ledgerLeave, setLedgerLeave] = useState<any>(null);
 
-  const ledgerItems = useMemo(() => {
-    if (!ledgerLeave) return [];
-    
-    const items = [];
-    
-    // 1. Initial allotment
-    items.push({
-      date: new Date(ledgerLeave.created_at).toISOString().split('T')[0],
-      timestamp: new Date(ledgerLeave.created_at).getTime(),
-      description: 'Annual Leave Allotment (Prorated Initial Quota)',
-      type: 'addition',
-      amount: parseFloat(ledgerLeave.total_days || 0)
-    });
-    
-    // 2. Filter approved requests matching this type
-    const matchingRequests = leaveRequests.filter((r: any) => 
-      r.leave_type_id === ledgerLeave.leave_type_id && 
-      r.status === 'approved' &&
-      r.employee_id === employee?.id
-    );
-    
-    matchingRequests.forEach((req: any) => {
-      items.push({
-        date: req.start_date,
-        timestamp: new Date(req.start_date).getTime(),
-        description: `Approved Leave: ${req.start_date} to ${req.end_date} ("${req.reason || 'No reason provided'}")`,
-        type: 'deduction',
-        amount: parseFloat(req.total_days || 0)
-      });
-    });
-    
-    return items.sort((a, b) => a.timestamp - b.timestamp);
-  }, [ledgerLeave, leaveRequests, employee?.id]);
-
   const { data: allEmployees = [] } = useQuery({
     queryKey: ['admin-all-employees', profile?.company_id],
     queryFn: async () => {
@@ -329,6 +295,40 @@ export default function Leave() {
     },
     enabled: !!profile,
   });
+
+  const ledgerItems = useMemo(() => {
+    if (!ledgerLeave) return [];
+    
+    const items = [];
+    
+    // 1. Initial allotment
+    items.push({
+      date: new Date(ledgerLeave.created_at).toISOString().split('T')[0],
+      timestamp: new Date(ledgerLeave.created_at).getTime(),
+      description: 'Annual Leave Allotment (Prorated Initial Quota)',
+      type: 'addition',
+      amount: parseFloat(ledgerLeave.total_days || 0)
+    });
+    
+    // 2. Filter approved requests matching this type
+    const matchingRequests = leaveRequests.filter((r: any) => 
+      r.leave_type_id === ledgerLeave.leave_type_id && 
+      r.status === 'approved' &&
+      r.employee_id === employee?.id
+    );
+    
+    matchingRequests.forEach((req: any) => {
+      items.push({
+        date: req.start_date,
+        timestamp: new Date(req.start_date).getTime(),
+        description: `Approved Leave: ${req.start_date} to ${req.end_date} ("${req.reason || 'No reason provided'}")`,
+        type: 'deduction',
+        amount: parseFloat(req.total_days || 0)
+      });
+    });
+    
+    return items.sort((a, b) => a.timestamp - b.timestamp);
+  }, [ledgerLeave, leaveRequests, employee?.id]);
 
   const actionMutation = useMutation({
     mutationFn: async ({ id, status, comment }: { id: string; status: 'approved' | 'rejected'; comment?: string }) => {

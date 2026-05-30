@@ -111,6 +111,8 @@ export default function Attendance() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [workType, setWorkType] = useState<'office' | 'remote' | 'hybrid'>('office');
   const [showRegularizePromptToday, setShowRegularizePromptToday] = useState<boolean>(false);
+  const [geoStatus, setGeoStatus] = useState<string | null>(null);
+  const [showGpsTroubleshooting, setShowGpsTroubleshooting] = useState<boolean>(false);
 
   const fetchPublicIP = async (): Promise<string | null> => {
     try {
@@ -663,6 +665,7 @@ export default function Attendance() {
       const { shiftEnd } = resolveShiftTimes(clockInTime, shiftStartStr, shiftEndStr);
       const isEarlyLeave = clockOutTime.getTime() < shiftEnd.getTime();
 
+      let gpsFailed = false;
       let gpsCoords: { latitude: number; longitude: number; accuracy: number; verified: boolean } | null = null;
       let clientIP: string | null = null;
       clientIP = await fetchPublicIP();
@@ -762,8 +765,16 @@ export default function Attendance() {
               location_id: matchedLocationId || undefined
             } as any;
           } catch (e: any) {
-            console.error('Failed to capture GPS coordinates on clock out:', e);
-            throw new Error(e.message || 'GPS verification failed on clock-out. Please ensure location services are active.');
+            console.warn('Failed to capture GPS coordinates on clock out, proceeding with unverified status:', e);
+            gpsFailed = true;
+            gpsCoords = {
+              latitude: 0,
+              longitude: 0,
+              accuracy: 0,
+              verified: false,
+              location_id: todayRecord.location_id || undefined,
+              error: e.message || 'GPS verification failed on clock-out'
+            } as any;
           }
         }
       }
@@ -785,14 +796,19 @@ export default function Attendance() {
 
       if (error) throw error;
       if (isEarlyLeave) toast.info(`Early leave recorded. Shift ends at ${shiftEndStr.substring(0, 5)}.`);
+      return { gpsFailed };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       setGeoStatus(null);
       setShowGpsTroubleshooting(false);
       setShowRegularizePromptToday(false);
       queryClient.invalidateQueries({ queryKey: ['attendance-today'] });
       queryClient.invalidateQueries({ queryKey: ['attendance'] });
-      toast.success('Clocked out successfully');
+      if (data?.gpsFailed) {
+        toast.warning('Clocked out successfully, but location verification failed. You may need to submit a correction request.');
+      } else {
+        toast.success('Clocked out successfully');
+      }
     },
     onError: (err: any) => {
       setGeoStatus(null);

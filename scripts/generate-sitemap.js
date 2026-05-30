@@ -44,9 +44,11 @@ const staticRoutes = [
   { url: '/platform/core-engine', priority: '0.9' },
   { url: '/platform/payroll-os', priority: '0.9' },
   { url: '/platform/talent-pipeline', priority: '0.9' },
-  { url: '/platform/api-docs', priority: '0.8' }
+  { url: '/platform/api-docs', priority: '0.8' },
+  { url: '/llms.txt', priority: '0.9' },
+  { url: '/llms-full.txt', priority: '0.9' },
+  { url: '/.well-known/ai-plugin.json', priority: '0.7' }
 ];
-
 let sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
 
 staticRoutes.forEach(route => {

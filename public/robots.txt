@@ -1,8 +1,11 @@
 # FastestHR Robots Configuration
-# Optimized for Googlebot and AI Search Engines
+# Optimized for Googlebot, AI Search Engines, and Answer Engines
 
 User-agent: *
 Allow: /
+Allow: /llms.txt
+Allow: /llms-full.txt
+Allow: /.well-known/
 Disallow: /dashboard
 Disallow: /admin
 Disallow: /settings
@@ -11,28 +14,79 @@ Disallow: /api/
 # Sitemap location
 Sitemap: https://fastesthr.com/sitemap.xml
 
-# AI Context Files
-Sitemap: https://fastesthr.com/llms.txt
-Sitemap: https://fastesthr.com/llms-full.txt
+# AI Context Files (LLM Discovery)
+# llms.txt: https://fastesthr.com/llms.txt
+# llms-full.txt: https://fastesthr.com/llms-full.txt
 
-# AI Agent & Search Bot Access
+# ── Google AI & Search ──
+User-agent: Googlebot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+# ── OpenAI / ChatGPT ──
 User-agent: GPTBot
 Allow: /
+
 User-agent: OAI-SearchBot
 Allow: /
+
 User-agent: ChatGPT-User
 Allow: /
+
+# ── Anthropic / Claude ──
 User-agent: ClaudeBot
 Allow: /
-User-agent: PerplexityBot
-Allow: /
+
 User-agent: anthropic-ai
 Allow: /
+
+# ── Perplexity ──
+User-agent: PerplexityBot
+Allow: /
+
+# ── Microsoft / Copilot / Bing ──
+User-agent: Bingbot
+Allow: /
+
+User-agent: MicrosoftPreview
+Allow: /
+
+# ── Apple Intelligence ──
+User-agent: Applebot
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+# ── Meta AI ──
+User-agent: Meta-ExternalAgent
+Allow: /
+
+User-agent: FacebookBot
+Allow: /
+
+# ── Amazon / Alexa ──
+User-agent: Amazonbot
+Allow: /
+
+# ── ByteDance / TikTok ──
 User-agent: Bytespider
 Allow: /
+
+# ── Cohere AI ──
 User-agent: cohere-ai
 Allow: /
 
-# Block generic training crawlers if desired
+# ── You.com ──
+User-agent: YouBot
+Allow: /
+
+# ── Google Gemini ──
+User-agent: Google-InspectionTool
+Allow: /
+
+# Block generic training crawlers
 User-agent: CCBot
 Disallow: /

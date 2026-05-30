@@ -12,7 +12,7 @@ import {
 import {
   Loader2, Send, Search, FileText, Clock, CheckCircle2, XCircle,
   CalendarClock, Eye, Mail, Filter, ArrowUpDown, MailOpen, Ban,
-  RotateCcw
+  RotateCcw, Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DocumentRenderer } from './DocumentRenderer';
@@ -76,6 +76,45 @@ export function SendDeskSendShare() {
   const [resendDoc, setResendDoc] = useState<Document | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [docToDelete, setDocToDelete] = useState<Document | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDeleteDoc = async (docId: string, pdfUrl: string | null) => {
+    setIsDeleting(true);
+    try {
+      // 1. Unlink from any senddesk_emails (set document_id to null) to avoid foreign key violations
+      const { error: unlinkError } = await supabase
+        .from('senddesk_emails')
+        .update({ document_id: null })
+        .eq('document_id', docId);
+
+      if (unlinkError) throw unlinkError;
+
+      // 2. Delete the document row
+      const { error: deleteError } = await supabase
+        .from('senddesk_documents')
+        .delete()
+        .eq('id', docId);
+
+      if (deleteError) throw deleteError;
+
+      // 3. Delete from storage if pdfUrl exists
+      if (pdfUrl) {
+        await supabase.storage
+          .from('senddesk-documents')
+          .remove([pdfUrl]);
+      }
+
+      toast.success('Document deleted successfully');
+      queryClient.invalidateQueries({ queryKey: ['senddesk-documents'] });
+      queryClient.invalidateQueries({ queryKey: ['senddesk-emails'] });
+    } catch (err: any) {
+      toast.error(`Error deleting document: ${err.message}`);
+    } finally {
+      setIsDeleting(false);
+      setDocToDelete(null);
+    }
+  };
 
   // ── Queries ──
   const { data: documents = [], isLoading: loadingDocs } = useQuery({
@@ -244,6 +283,13 @@ export function SendDeskSendShare() {
                           <Send className="h-3.5 w-3.5" /> Send
                         </Button>
                       )}
+                      <Button variant="ghost" size="icon" aria-label="Delete document" className="h-8 w-8 text-destructive hover:text-red-500 hover:bg-destructive/10"
+                        title="Delete Document"
+                        disabled={isDeleting}
+                        onClick={() => setDocToDelete(doc)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -381,6 +427,35 @@ export function SendDeskSendShare() {
               setResendDoc(null);
             }}>
               Confirm Resend
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!docToDelete} onOpenChange={(open) => !open && setDocToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive flex items-center gap-2">
+              <Trash2 className="h-5 w-5" /> Delete Document?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>{docToDelete?.name}</strong>? This action cannot be undone.
+              {docToDelete?.status === 'sent' && " This document has already been sent, deleting it will remove it from the send desk (communication history will be preserved)."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              disabled={isDeleting}
+              onClick={() => {
+                if (docToDelete) {
+                  handleDeleteDoc(docToDelete.id, docToDelete.pdf_url);
+                }
+              }}
+            >
+              Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

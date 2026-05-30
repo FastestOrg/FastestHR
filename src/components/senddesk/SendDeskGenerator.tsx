@@ -89,6 +89,7 @@ export function SendDeskGenerator() {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewEmployee, setPreviewEmployee] = useState<Employee | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generatingProgress, setGeneratingProgress] = useState<{ current: number; total: number } | null>(null);
 
   const { data: templates = [], isLoading: loadingTemplates } = useQuery({
     queryKey: ['senddesk-templates', profile?.company_id],
@@ -231,42 +232,40 @@ export function SendDeskGenerator() {
         };
       });
 
-      // Generate PDFs in batches to avoid overwhelming browser resources with concurrent DOM manipulation
-      const BATCH_SIZE = 3;
+      // Generate all PDFs sequentially to prevent browser layout thrashing and white flash
       const newDocuments = [];
+      setGeneratingProgress({ current: 0, total: selectedEmployees.length });
 
-      for (let i = 0; i < docConfigs.length; i += BATCH_SIZE) {
-        const batch = docConfigs.slice(i, i + BATCH_SIZE);
-        const batchPromises = batch.map(async (config) => {
-          const { pdfPath } = await generateAndUploadSendDeskPDF({
-            htmlContent: config.renderedHtml,
-            letterheadUrl: selectedTemplate.letterhead_url,
-            companyId: profile!.company_id!,
-            documentId: config.docId,
-            documentName: selectedTemplate.name,
-            isPredefinedHtml: selectedTemplate.is_predefined_html,
-          });
+      for (let i = 0; i < docConfigs.length; i++) {
+        const config = docConfigs[i];
+        setGeneratingProgress({ current: i + 1, total: selectedEmployees.length });
 
-          return {
-            id: config.docId,
-            company_id: profile!.company_id!,
-            template_id: selectedTemplate.id,
-            employee_id: config.emp.id,
-            document_number: config.docNumber,
-            name: `${selectedTemplate.name} — ${config.emp.first_name} ${config.emp.last_name}`,
-            category: selectedTemplate.category,
-            sub_category: selectedTemplate.sub_category,
-            html_content: config.renderedHtml,
-            pdf_url: pdfPath,
-            variable_values: config.vars,
-            status: 'generated',
-            is_predefined_html: selectedTemplate.is_predefined_html,
-            letterhead_url: selectedTemplate.letterhead_url,
-            created_by: user?.id,
-          };
+        const { pdfPath } = await generateAndUploadSendDeskPDF({
+          htmlContent: config.renderedHtml,
+          letterheadUrl: selectedTemplate.letterhead_url,
+          companyId: profile!.company_id!,
+          documentId: config.docId,
+          documentName: selectedTemplate.name,
+          isPredefinedHtml: selectedTemplate.is_predefined_html,
         });
-        const batchResults = await Promise.all(batchPromises);
-        newDocuments.push(...batchResults);
+
+        newDocuments.push({
+          id: config.docId,
+          company_id: profile!.company_id!,
+          template_id: selectedTemplate.id,
+          employee_id: config.emp.id,
+          document_number: config.docNumber,
+          name: `${selectedTemplate.name} — ${config.emp.first_name} ${config.emp.last_name}`,
+          category: selectedTemplate.category,
+          sub_category: selectedTemplate.sub_category,
+          html_content: config.renderedHtml,
+          pdf_url: pdfPath,
+          variable_values: config.vars,
+          status: 'generated',
+          is_predefined_html: selectedTemplate.is_predefined_html,
+          letterhead_url: selectedTemplate.letterhead_url,
+          created_by: user?.id,
+        });
       }
 
       // Bulk insert all generated documents
@@ -297,6 +296,7 @@ export function SendDeskGenerator() {
       toast.error(`Error: ${err.message}`);
     } finally {
       setIsGenerating(false);
+      setGeneratingProgress(null);
     }
   };
 
@@ -529,8 +529,19 @@ export function SendDeskGenerator() {
           <div className="flex justify-between">
             <Button variant="outline" onClick={() => setStep(2)}>← Back</Button>
             <Button onClick={handleGenerate} disabled={isGenerating} className="gap-2">
-              {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-              Generate {selectedEmployees.length} Document(s)
+              {isGenerating ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {generatingProgress 
+                    ? `Generating ${generatingProgress.current} of ${generatingProgress.total}...` 
+                    : 'Generating...'}
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4" />
+                  Generate {selectedEmployees.length} Document(s)
+                </>
+              )}
             </Button>
           </div>
         </div>

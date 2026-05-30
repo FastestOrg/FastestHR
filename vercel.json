@@ -1,4 +1,28 @@
 {
+    "headers": [
+        {
+            "source": "/llms.txt",
+            "headers": [
+                { "key": "Content-Type", "value": "text/plain; charset=utf-8" },
+                { "key": "X-Robots-Tag", "value": "all" }
+            ]
+        },
+        {
+            "source": "/llms-full.txt",
+            "headers": [
+                { "key": "Content-Type", "value": "text/plain; charset=utf-8" },
+                { "key": "X-Robots-Tag", "value": "all" }
+            ]
+        },
+        {
+            "source": "/.well-known/ai-plugin.json",
+            "headers": [
+                { "key": "Content-Type", "value": "application/json; charset=utf-8" },
+                { "key": "Access-Control-Allow-Origin", "value": "*" },
+                { "key": "X-Robots-Tag", "value": "all" }
+            ]
+        }
+    ],
     "rewrites": [
         {
             "source": "/(.*)",
