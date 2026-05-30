@@ -30,8 +30,11 @@ describe('CandidateLogin', () => {
     const emailInput = screen.getByPlaceholderText('your@email.com');
     await user.type(emailInput, 'test@example.com');
 
-    const submitButton = screen.getByRole('button', { name: /send magic link/i });
+        const submitButton = screen.getByRole('button', { name: /send magic link/i });
     await user.click(submitButton);
+
+    // Properly await the async state transition to success to avoid overlapping test runs
+    expect(await screen.findByText(/check your inbox/i)).toBeInTheDocument();
 
     expect(supabase.auth.signInWithOtp).toHaveBeenCalledWith({
       email: 'test@example.com',
@@ -55,6 +58,9 @@ describe('CandidateLogin', () => {
 
     const submitButton = screen.getByRole('button', { name: /send magic link/i });
     await user.click(submitButton);
+
+    // Properly await the async state transition to success to avoid overlapping test runs
+    expect(await screen.findByText(/check your inbox/i)).toBeInTheDocument();
 
     expect(supabase.auth.signInWithOtp).toHaveBeenCalledWith({
       email: 'test@example.com',
