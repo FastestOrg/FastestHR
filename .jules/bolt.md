@@ -100,3 +100,6 @@
 ## 2024-05-30 - Refactoring inline filter lengths in React components
 **Learning:** Found multiple instances where components map over arrays or calculate statistics inline using `.filter(...).length` directly inside the render logic (e.g., in `AttritionInsights.tsx` with `predictions.filter(p => p.risk_score >= 70).length`). Because these operations take O(N) time and are placed outside `useMemo`, they execute unconditionally on every single component re-render, severely degrading performance for components with large data sets or frequent state updates (like inputs triggering `onChange`).
 **Action:** When calculating derived state or aggregating statistics from arrays (like counting items that meet a specific condition), extract the calculation into a `useMemo` hook with a proper dependency array. This guarantees that O(N) operations only execute when the source data actually changes, freeing the main thread during routine UI interactions.
+## 2026-05-30 - O(N*M) Lookup Optimization in Map Loops
+**Learning:** Performing Array.find() inside a map loop over status arrays causes O(N*M) performance bottleneck, as the find operation evaluates array values redundantly.
+**Action:** Always extract invariant computations on outer-loop variables outside the map loop to reduce time complexity to O(N).
