@@ -723,16 +723,25 @@ function HRManagerDashboard() {
       const employeeCount = activeEmployees.length;
 
       const now = new Date();
-      const birthdays = activeEmployees.filter((e: any) => {
-        if (!e.date_of_birth) return false;
-        const dob = new Date(e.date_of_birth);
-        const bday = new Date(now.getFullYear(), dob.getMonth(), dob.getDate());
-        const diff = (bday.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
-        return diff >= 0 && diff <= 30;
-      }).sort((a: any, b: any) => {
-        const da = new Date(a.date_of_birth), db = new Date(b.date_of_birth);
-        return new Date(now.getFullYear(), da.getMonth(), da.getDate()).getTime() - new Date(now.getFullYear(), db.getMonth(), db.getDate()).getTime();
-      }).slice(0, 5);
+      // ⚡ Bolt: Calculate the next birthday time once per employee to prevent
+      // repeated O(N log N) `new Date()` instantiations during array `.sort()`.
+      // Using a Schwartzian transform (map -> sort -> un-map) to preserve original
+      // object references and eliminate redundant computations.
+      // Expected impact: Eliminates up to 4x `new Date()` calls per sort comparison.
+      const birthdays = activeEmployees
+        .reduce((acc: any[], e: any) => {
+          if (!e.date_of_birth) return acc;
+          const dob = new Date(e.date_of_birth);
+          const bday = new Date(now.getFullYear(), dob.getMonth(), dob.getDate());
+          const diff = (bday.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+          if (diff >= 0 && diff <= 30) {
+            acc.push({ employee: e, nextBirthdayTime: bday.getTime() });
+          }
+          return acc;
+        }, [])
+        .sort((a: any, b: any) => a.nextBirthdayTime - b.nextBirthdayTime)
+        .slice(0, 5)
+        .map((item: any) => item.employee);
 
       return { employeeCount, birthdays };
     },

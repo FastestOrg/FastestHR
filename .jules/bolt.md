@@ -103,3 +103,7 @@
 ## 2026-05-30 - O(N*M) Lookup Optimization in Map Loops
 **Learning:** Performing Array.find() inside a map loop over status arrays causes O(N*M) performance bottleneck, as the find operation evaluates array values redundantly.
 **Action:** Always extract invariant computations on outer-loop variables outside the map loop to reduce time complexity to O(N).
+
+## 2024-05-18 - Avoid mutating objects during array sorts
+**Learning:** Adding temporary properties (like `_nextBirthdayTime`) to cloned objects to optimize `sort()` calculations leaves technical debt, alters original references, and breaks strict type boundaries.
+**Action:** Always use a Schwartzian transform (`map` -> `sort` -> `map` back to original) for O(N log N) optimizations to pre-calculate sort keys without modifying the underlying objects.
