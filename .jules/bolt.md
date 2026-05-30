@@ -96,3 +96,7 @@
 ## 2024-05-29 - O(N*M) Lookup Optimization in Onboarding Progress
 **Learning:** Found an O(N*M) lookup bottleneck in `src/pages/Onboarding.tsx` where `docSubmissions.find(s => s.requirement_id === req.id)` was repeatedly called inside an O(N) map, which is inefficient.
 **Action:** Always refactor these O(N*M) nested lookups by building a lookup dictionary map first using `useMemo` and `Array.reduce` to enable O(1) lookups during the render phase.
+
+## 2024-05-30 - Refactoring inline filter lengths in React components
+**Learning:** Found multiple instances where components map over arrays or calculate statistics inline using `.filter(...).length` directly inside the render logic (e.g., in `AttritionInsights.tsx` with `predictions.filter(p => p.risk_score >= 70).length`). Because these operations take O(N) time and are placed outside `useMemo`, they execute unconditionally on every single component re-render, severely degrading performance for components with large data sets or frequent state updates (like inputs triggering `onChange`).
+**Action:** When calculating derived state or aggregating statistics from arrays (like counting items that meet a specific condition), extract the calculation into a `useMemo` hook with a proper dependency array. This guarantees that O(N) operations only execute when the source data actually changes, freeing the main thread during routine UI interactions.
