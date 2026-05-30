@@ -92,3 +92,6 @@
 ## 2024-05-29 - O(N*M) Lookup in Render Loop
 **Learning:** Found an `O(N*M)` nested lookup bottleneck inside a `.map` loop in `src/components/onboarding/EmployeeOnboardingView.tsx` where `.find` was repeatedly called on an array of `docSubmissions` on every render cycle.
 **Action:** Replace `array.find()` inside `.map()` with a pre-computed dictionary mapping (using `Array.reduce()` inside a `useMemo()`) to reduce complexity to `O(N)`. This drastically reduces redundant operations and keeps rendering performant as the number of employees/documents grows.
+## 2024-05-30 - O(N*M) Lookup in Render Loop
+**Learning:** Found an `O(N*M)` nested lookup bottleneck inside a `.map` loop in `src/pages/Onboarding.tsx` where `.find` was repeatedly called on an array of `docSubmissions` on every render cycle.
+**Action:** Replace `array.find()` inside `.map()` with a pre-computed dictionary mapping (using `Array.reduce()` inside a `useMemo()`) to reduce complexity to `O(N)`. This drastically reduces redundant operations and keeps rendering performant as the number of employees/documents grows.

@@ -198,6 +198,30 @@ export default function Onboarding() {
     return { probationCount, activeCount, pendingCount };
   }, [recentHires]);
 
+  const selectedEmpData = newHires.find((e: any) => e.id === selectedEmployee);
+
+  const getTaskProgress = (empId: string) => {
+    if (empId !== selectedEmployee) return 0;
+    if (steps.length === 0) return 100;
+    return Math.round((progress.length / steps.length) * 100);
+  };
+
+  // ⚡ Bolt: Pre-compute submission map for fast O(1) lookups
+  const submissionMap = useMemo(() => {
+    return docSubmissions.reduce((acc: Record<string, any>, s: any) => {
+      acc[s.requirement_id] = s;
+      return acc;
+    }, {});
+  }, [docSubmissions]);
+
+  const getDocProgress = (empId: string) => {
+    if (empId !== selectedEmployee) return 0;
+    const mandatory = docRequirements.filter((r: any) => r.is_mandatory);
+    if (mandatory.length === 0) return 100;
+    const completed = mandatory.filter(m => submissionMap[m.id]);
+    return Math.round((completed.length / mandatory.length) * 100);
+  };
+
   if (!isAdmin && currentEmployee) {
     return (
       <div className="max-w-4xl mx-auto p-6">
@@ -208,22 +232,6 @@ export default function Onboarding() {
       </div>
     );
   }
-
-  const selectedEmpData = newHires.find((e: any) => e.id === selectedEmployee);
-
-  const getTaskProgress = (empId: string) => {
-    if (empId !== selectedEmployee) return 0;
-    if (steps.length === 0) return 100;
-    return Math.round((progress.length / steps.length) * 100);
-  };
-
-  const getDocProgress = (empId: string) => {
-    if (empId !== selectedEmployee) return 0;
-    const mandatory = docRequirements.filter((r: any) => r.is_mandatory);
-    if (mandatory.length === 0) return 100;
-    const completed = docSubmissions.filter((s: any) => mandatory.some(m => m.id === s.requirement_id));
-    return Math.round((completed.length / mandatory.length) * 100);
-  };
 
   const handleDownload = async (submission: any) => {
     if (!submission.file_url) return;
@@ -439,7 +447,7 @@ export default function Onboarding() {
                         <CardContent className="p-0">
                             <div className="divide-y divide-border/50">
                                 {docRequirements.map((req: any) => {
-                                    const submission = (docSubmissions as any[]).find((s: any) => s.requirement_id === req.id);
+                                    const submission = submissionMap[req.id];
                                     return (
                                         <div key={req.id} className="p-4 flex items-center justify-between hover:bg-muted/20">
                                             <div className="flex items-center gap-3">
