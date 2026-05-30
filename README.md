@@ -1,10 +1,9 @@
-# FastestHR 🚀
+# FastestHR
 
-[![FastestHR](https://img.shields.io/badge/HRMS-Enterprise--Grade-indigo?style=for-the-badge&logo=react)](https://github.com/upmarking/fastesthr-20077824)
+[![FastestHR](https://img.shields.io/badge/HRMS-Enterprise--Grade-indigo?style=for-the-badge&logo=react)]()
 [![Stack](https://img.shields.io/badge/Stack-React%2018%20%7C%20TS%20%7C%20Supabase-blue?style=for-the-badge)](https://supabase.com)
-[![License](https://img.shields.io/badge/License-MIT-emerald?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
-**FastestHR** is a modern, production-grade, multi-tenant SaaS Human Resource Management System (HRMS) built for speed, scalability, and absolute visual elegance. Inspired by top-tier tools like Rippling, BambooHR, and HiBob, it simplifies the entire employee lifecycle—from hire to retire—all in a premium, ultra-responsive dashboard interface.
+**FastestHR** is a premier, enterprise-grade Human Resource Management System (HRMS). Engineered for exceptional performance, scalability, and an intuitive user experience, FastestHR delivers a comprehensive suite of tools designed to streamline the entire employee lifecycle—from recruitment and onboarding to payroll and performance management.
 
 ---
 
@@ -143,10 +142,10 @@ FastestHR places a tremendous focus on aesthetics and user delight:
 
 ### Installation
 
-1. **Clone the repository**:
+1. **Obtain the source code**:
+   Extract the FastestHR source code package to your desired directory and navigate into it:
    ```bash
-   git clone https://github.com/upmarking/fastesthr-20077824.git
-   cd fastest-hr
+   cd fastesthr
    ```
 
 2. **Install dependencies**:
