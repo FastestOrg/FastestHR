@@ -30,3 +30,7 @@
 ## 2026-05-29 - Added missing ARIA labels to icon-only buttons
 **Learning:** Found multiple instances where icon-only custom Button components lacked `aria-label` attributes, affecting screen reader accessibility. Since the text is usually conveyed visually via icons (like 'X' for close, 'Trash' for delete), ensuring these components have proper labels is crucial for non-visual users.
 **Action:** Always verify that `<Button size="icon">` or buttons without inner text include a descriptive `aria-label` property.
+
+## 2026-05-30 - Added missing ARIA labels to multiple icon buttons
+**Learning:** Found several instances across the app where icon-only `Button` elements lacked `aria-label`s, which is critical for screen reader users since they have no visible text. Specifically fixed these in AddCandidateDialog, OfferDetailsDialog, and AssetManagementTab.
+**Action:** Always verify that `<Button size="icon">` or any button lacking visible text content explicitly includes a descriptive `aria-label`.
