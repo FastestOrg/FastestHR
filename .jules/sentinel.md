@@ -40,3 +40,8 @@
 **Vulnerability:** Inline dynamic regex generation (`new RegExp(key)`) allowed Regular Expression Denial of Service (ReDoS) or logic bypass if `key` contained unescaped regex metacharacters.
 **Learning:** When generating `RegExp` objects from dynamic strings, those strings must ALWAYS be escaped to prevent regex injection or ReDoS attacks (`key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')`). Note: In this specific architecture, `DOMPurify` with `ADD_TAGS: ['style']` is required for intended application functionality (custom HTML/CSS templates), so the fix focused exclusively on the regex vulnerability while retaining the `escapeHtml` values injection constraint.
 **Prevention:** Created a centralized `substituteVariables` utility in `src/lib/template-utils.ts` that safely escapes dynamic regex keys and applies `escapeHtml` to all inserted values, while leaving intentional `<style>` functionality intact for user templates.
+
+## 2024-05-20 - Missing isSafeUrl Validation in User-Provided URLs
+**Vulnerability:** User-provided document URLs and social links were placed directly into the `href` attribute of `<a>` tags (e.g. `<a href={proofUrl}>`) without protocol validation.
+**Learning:** This could allow a malicious user to supply a `javascript:` or `data:` URL as their document link or proof link, leading to stored Cross-Site Scripting (XSS) when an admin or another user clicks the link to view the document.
+**Prevention:** Always wrap variables representing user-provided links within `isSafeUrl(url)` checks before passing them to the `href` attribute of any anchor or link tag.

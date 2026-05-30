@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useSecureUpload } from '@/hooks/use-secure-upload';
+import { isSafeUrl } from '@/lib/utils';
 
 interface FileUploadFieldProps {
   label: string;
@@ -163,14 +164,18 @@ export function FileUploadField({
               <p className="text-xs text-muted-foreground truncate">
                 {value.split('/').pop()?.split('?')[0] || 'Uploaded document'}
               </p>
-              <a
-                href={value}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-primary hover:underline font-medium inline-block mt-0.5"
-              >
-                View Document
-              </a>
+              {isSafeUrl(value) ? (
+                <a
+                  href={value}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-primary hover:underline font-medium inline-block mt-0.5"
+                >
+                  View Document
+                </a>
+              ) : (
+                <span className="text-xs text-destructive italic inline-block mt-0.5">Unsafe URL</span>
+              )}
             </div>
             {!disabled && (
               <Button

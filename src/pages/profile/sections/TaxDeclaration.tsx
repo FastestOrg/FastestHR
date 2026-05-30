@@ -9,6 +9,7 @@ import { ProfileSectionCard } from '../components/ProfileSectionCard';
 import { Landmark, ArrowRight, ShieldCheck, DollarSign, Receipt, Info, Sparkles, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { calculatePayrollTaxAndNet } from '@/utils/compliance-formulas';
+import { isSafeUrl } from '@/lib/utils';
 
 interface TaxDeclarationProps {
   employee: any;
@@ -284,12 +285,14 @@ export default function TaxDeclaration({ employee, refetch }: TaxDeclarationProp
                     placeholder="https://drive.google.com/..."
                   />
                 ) : (
-                  proofUrl ? (
+                  proofUrl && isSafeUrl(proofUrl) ? (
                     <p className="text-sm font-semibold py-2">
                       <a href={proofUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary-focus hover:underline flex items-center gap-1.5 transition-colors">
                         <ArrowRight className="w-3.5 h-3.5" /> View Submitted Proof Document
                       </a>
                     </p>
+                  ) : proofUrl ? (
+                    <p className="text-sm text-destructive italic py-2">Invalid or unsafe proof document URL.</p>
                   ) : (
                     <p className="text-sm text-muted-foreground italic py-2">No proof document uploaded yet.</p>
                   )

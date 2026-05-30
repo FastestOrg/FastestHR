@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-
+import { isSafeUrl } from '@/lib/utils';
 
 type LeaveBalanceType = Tables<'leave_balances'> & {
   leave_types: { name: string; color: string | null; code: string | null; } | null;
@@ -665,7 +665,7 @@ export default function Leave() {
                           </h4>
                           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">{req.start_date} — {req.end_date} &bull; {req.total_days} Day{(req.total_days || 0) > 1 ? 's' : ''}</p>
                           {req.reason && <p className="text-xs text-muted-foreground/70 mt-1 italic">"{req.reason}"</p>}
-                          {req.document_url && (
+                          {req.document_url && isSafeUrl(req.document_url) && (
                             <div className="mt-1.5">
                               <a 
                                 href={req.document_url} 
@@ -746,7 +746,7 @@ export default function Leave() {
                           </h4>
                           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">{req.start_date} — {req.end_date} &bull; {req.total_days} Day{(req.total_days || 0) > 1 ? 's' : ''}</p>
                           {req.reason && <p className="text-xs text-muted-foreground/70 mt-1 italic">"{req.reason}"</p>}
-                          {req.document_url && (
+                          {req.document_url && isSafeUrl(req.document_url) && (
                             <div className="mt-1.5">
                               <a 
                                 href={req.document_url} 
