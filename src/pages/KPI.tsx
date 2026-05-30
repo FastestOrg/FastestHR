@@ -1089,7 +1089,8 @@ export default function KPI() {
               </CardHeader>
               <CardContent className="pt-4">
                 {(() => {
-                  const mine = monthlyScores.find((ms: any) => ms.employee_id === myEmployee?.id);
+                  // ⚡ Bolt: Replaced O(N) Array.find with O(1) dictionary lookup for performance
+                  const mine = myEmployee?.id ? monthlyScoreByEmployee[myEmployee.id] : undefined;
                   if (!mine) return (
                     <div className="flex flex-col items-center py-8 gap-2 text-muted-foreground">
                       <Calendar className="w-10 h-10 opacity-30" />
@@ -1277,7 +1278,8 @@ export default function KPI() {
               </CardHeader>
               <CardContent className="pt-4">
                 {(() => {
-                  const mine = quarterlyScores.find((qs: any) => qs.employee_id === myEmployee?.id);
+                  // ⚡ Bolt: Replaced O(N) Array.find with O(1) dictionary lookup for performance
+                  const mine = myEmployee?.id ? quarterlyScoreByEmployee[myEmployee.id] : undefined;
                   if (!mine) return (
                     <div className="flex flex-col items-center py-8 gap-2 text-muted-foreground">
                       <Zap className="w-10 h-10 opacity-30" />
