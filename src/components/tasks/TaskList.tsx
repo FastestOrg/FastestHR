@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -168,8 +168,26 @@ export function TaskList() {
     return `${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
+  // ⚡ Bolt: Pre-calculate all task base durations once when tasks change.
+  // This prevents O(N*M) `.reduce()` recalculations on every single render
+  // (which happens every second when the timer is ticking due to `elapsed` updates).
+  const baseDurations = useMemo(() => {
+    if (!tasks) return {};
+    const dict: Record<string, number> = {};
+    for (const task of tasks) {
+      let logged = 0;
+      if (task.task_time_logs) {
+        for (const log of task.task_time_logs) {
+          logged += log.duration_seconds || 0;
+        }
+      }
+      dict[task.id] = logged;
+    }
+    return dict;
+  }, [tasks]);
+
   const getTaskDuration = (task: any) => {
-    const logged = task.task_time_logs?.reduce((acc: number, log: any) => acc + (log.duration_seconds || 0), 0) || 0;
+    const logged = baseDurations[task.id] || 0;
     if (runningTaskId === task.id) {
       return logged + (elapsed[task.id] || 0);
     }
