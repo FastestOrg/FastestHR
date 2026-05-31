@@ -96,17 +96,14 @@
 ## 2024-05-29 - O(N*M) Lookup Optimization in Onboarding Progress
 **Learning:** Found an O(N*M) lookup bottleneck in `src/pages/Onboarding.tsx` where `docSubmissions.find(s => s.requirement_id === req.id)` was repeatedly called inside an O(N) map, which is inefficient.
 **Action:** Always refactor these O(N*M) nested lookups by building a lookup dictionary map first using `useMemo` and `Array.reduce` to enable O(1) lookups during the render phase.
+## 2024-06-01 - O(N*M) Lookup Optimization via Global Dictionaries and Single-Pass Reductions
+**Learning:** Found multiple instances where `.find()` operations were executed during React renders inside `.map()` loops or inline property accessors. Specifically:
+1. Inside combobox triggers fetching display data (`InviteHRUserDialog.tsx`).
+2. Inside mapping static configurations like icons (`OnboardingSettingsDialog.tsx`).
+3. Inside inline conditional rendering components (`KPI.tsx`).
 
-## 2024-05-30 - Refactoring inline filter lengths in React components
-**Learning:** Found multiple instances where components map over arrays or calculate statistics inline using `.filter(...).length` directly inside the render logic (e.g., in `AttritionInsights.tsx` with `predictions.filter(p => p.risk_score >= 70).length`). Because these operations take O(N) time and are placed outside `useMemo`, they execute unconditionally on every single component re-render, severely degrading performance for components with large data sets or frequent state updates (like inputs triggering `onChange`).
-**Action:** When calculating derived state or aggregating statistics from arrays (like counting items that meet a specific condition), extract the calculation into a `useMemo` hook with a proper dependency array. This guarantees that O(N) operations only execute when the source data actually changes, freeing the main thread during routine UI interactions.
-## 2026-05-30 - O(N*M) Lookup Optimization in Map Loops
-**Learning:** Performing Array.find() inside a map loop over status arrays causes O(N*M) performance bottleneck, as the find operation evaluates array values redundantly.
-**Action:** Always extract invariant computations on outer-loop variables outside the map loop to reduce time complexity to O(N).
+Additionally, counting elements using `.filter(...).length` inside `useMemo` creates unnecessary temporary arrays.
 
-## 2024-05-18 - Avoid mutating objects during array sorts
-**Learning:** Adding temporary properties (like `_nextBirthdayTime`) to cloned objects to optimize `sort()` calculations leaves technical debt, alters original references, and breaks strict type boundaries.
-**Action:** Always use a Schwartzian transform (`map` -> `sort` -> `map` back to original) for O(N log N) optimizations to pre-calculate sort keys without modifying the underlying objects.
-## 2026-05-31 - Optimize Redundant Array Iterations in Render Phase
-**Learning:** In React components like `Performance.tsx`, repeatedly calling `.filter()` and `.reduce()` directly in the render body creates multiple O(N) operations that block the main thread on every re-render (e.g., when updating local state like a text input).
-**Action:** When calculating derived statistics from lists (e.g., `activeGoals`, `completedGoals`, `avgProgress`), combine the operations into a single O(N) loop and wrap it in a `useMemo` block. This memoizes the result and eliminates unnecessary re-calculations, maintaining smooth UI interactions.
+**Action:**
+- Always refactor `.find()` lookups by converting arrays into dictionaries (using `Array.reduce()`). Use a global `const` dictionary for static options (like icons), or a `useMemo` dictionary for dynamic states (like employee lists).
+- Replace `.filter(...).length` inside `useMemo` hooks with single-pass `for...of` loops with counters to prevent temporary array allocations overhead.

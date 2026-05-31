@@ -36,6 +36,11 @@ const ICON_OPTIONS = [
   { name: 'Users', icon: Users },
 ];
 
+const ICON_DICT = ICON_OPTIONS.reduce((acc: any, option) => {
+  acc[option.name] = option.icon;
+  return acc;
+}, {});
+
 interface OnboardingSettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -330,7 +335,7 @@ export function OnboardingSettingsDialog({ open, onOpenChange, companyId }: Onbo
             <ScrollArea className="h-[300px] border rounded-md p-4">
               <div className="space-y-2">
                 {steps.map((step: any) => {
-                    const Icon = ICON_OPTIONS.find(o => o.name === step.icon_name)?.icon || ClipboardList;
+                    const Icon = ICON_DICT[step.icon_name] || ClipboardList;
                     return (
                         <div key={step.id} className="flex items-center gap-3 p-3 rounded-lg border group bg-card transition-all hover:border-primary/30">
                             <div className="bg-primary/10 p-2 rounded text-primary"><Icon className="h-4 w-4" /></div>

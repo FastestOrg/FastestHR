@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, UserPlus, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -159,6 +159,13 @@ export function InviteHRUserDialog({
     },
   });
 
+  const employeeDict = useMemo(() => {
+    return employees.reduce((acc: any, emp: any) => {
+      acc[emp.id] = emp;
+      return acc;
+    }, {});
+  }, [employees]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.employeeId) {
@@ -207,7 +214,7 @@ export function InviteHRUserDialog({
                   disabled={mutation.isPending || licenceFull || loadingEmployees}
                 >
                   {formData.employeeId
-                    ? `${employees.find((e) => e.id === formData.employeeId)?.first_name} ${employees.find((e) => e.id === formData.employeeId)?.last_name}`
+                    ? `${employeeDict[formData.employeeId]?.first_name || ''} ${employeeDict[formData.employeeId]?.last_name || ''}`
                     : "Select employee..."}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>

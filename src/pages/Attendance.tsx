@@ -547,7 +547,8 @@ export default function Attendance() {
 
           // A. Check if the employee is assigned to a specific branch/location
           if (employee.location_id) {
-            const assignedLoc = locations?.find((loc: any) => loc.id === employee.location_id);
+            const locationsDict = locations?.reduce((acc: any, loc: any) => { acc[loc.id] = loc; return acc; }, {});
+            const assignedLoc = locationsDict?.[employee.location_id];
             if (assignedLoc) {
               distance = calculateDistance(latitude, longitude, assignedLoc.latitude, assignedLoc.longitude);
               allowedRadius = assignedLoc.radius_meters || 200;
@@ -707,7 +708,8 @@ export default function Attendance() {
 
             // A. If clock-in matched a specific location ID, strictly validate clock-out against it
             if (matchedLocationId) {
-              const clockInLoc = locations?.find((loc: any) => loc.id === matchedLocationId);
+              const locationsDict = locations?.reduce((acc: any, loc: any) => { acc[loc.id] = loc; return acc; }, {});
+              const clockInLoc = locationsDict?.[matchedLocationId];
               if (clockInLoc) {
                 distance = calculateDistance(latitude, longitude, clockInLoc.latitude, clockInLoc.longitude);
                 allowedRadius = clockInLoc.radius_meters || 200;
