@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -61,8 +61,12 @@ function computeCompletionDetails(employee: any): { percent: number; checks: Com
 
 export default function ProfileDashboard({ employee, onNavigateSection }: ProfileDashboardProps) {
   const navigate = useNavigate();
-  const { percent, checks } = computeCompletionDetails(employee);
-  const missing = checks.filter(c => !c.ok);
+  // ⚡ Bolt: Memoize completion details and missing checks to avoid recalculating on every re-render
+  const { percent, checks, missing } = useMemo(() => {
+    const details = computeCompletionDetails(employee);
+    const missing = details.checks.filter(c => !c.ok);
+    return { ...details, missing };
+  }, [employee]);
   const [auditOpen, setAuditOpen] = useState(false);
 
   const queryClient = useQueryClient();

@@ -504,8 +504,13 @@ export default function Leave() {
     return { approved, pending, rejected, typeDistribution, topTakers };
   }, [leaveRequests]);
 
+  // ⚡ Bolt: Optimize pending reportee count using a single-pass loop
   const pendingReporteeCount = useMemo(() => {
-    return reporteeLeaves.filter((r: any) => r.status === 'pending').length;
+    let count = 0;
+    for (const r of reporteeLeaves) {
+      if (r.status === 'pending') count++;
+    }
+    return count;
   }, [reporteeLeaves]);
 
   const statusStyle: Record<string, { class: string; Icon: any }> = {
