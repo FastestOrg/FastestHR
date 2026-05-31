@@ -107,3 +107,6 @@
 ## 2024-05-18 - Avoid mutating objects during array sorts
 **Learning:** Adding temporary properties (like `_nextBirthdayTime`) to cloned objects to optimize `sort()` calculations leaves technical debt, alters original references, and breaks strict type boundaries.
 **Action:** Always use a Schwartzian transform (`map` -> `sort` -> `map` back to original) for O(N log N) optimizations to pre-calculate sort keys without modifying the underlying objects.
+## 2026-05-31 - Optimize Redundant Array Iterations in Render Phase
+**Learning:** In React components like `Performance.tsx`, repeatedly calling `.filter()` and `.reduce()` directly in the render body creates multiple O(N) operations that block the main thread on every re-render (e.g., when updating local state like a text input).
+**Action:** When calculating derived statistics from lists (e.g., `activeGoals`, `completedGoals`, `avgProgress`), combine the operations into a single O(N) loop and wrap it in a `useMemo` block. This memoizes the result and eliminates unnecessary re-calculations, maintaining smooth UI interactions.

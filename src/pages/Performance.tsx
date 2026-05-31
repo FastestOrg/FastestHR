@@ -13,7 +13,7 @@ import { Target, TrendingUp, Award, Zap, Plus, Pencil, Star, MessageSquare } fro
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth-store';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { toast } from 'sonner';
 
 interface GoalForm {
@@ -117,7 +117,7 @@ export default function Performance() {
     enabled: !!profile?.company_id,
   });
 
-  const activeCycles = reviewCycles.filter(c => c.status === 'active');
+  const activeCycles = useMemo(() => reviewCycles.filter(c => c.status === 'active'), [reviewCycles]);
 
   const createGoalMutation = useMutation({
     mutationFn: async (f: GoalForm) => {
@@ -251,9 +251,24 @@ export default function Performance() {
     });
   };
 
-  const activeGoals = goals.filter((g) => g.status === 'active' || g.status === 'on_track' || g.status === 'at_risk');
-  const completedGoals = goals.filter((g) => g.status === 'completed');
-  const avgProgress = goals.length > 0 ? Math.round(goals.reduce((s: number, g) => s + (g.progress || 0), 0) / goals.length) : 0;
+  const { activeGoals, completedGoals, avgProgress } = useMemo(() => {
+    const active = [];
+    const completed = [];
+    let totalProgress = 0;
+
+    for (const g of goals) {
+      totalProgress += (g.progress || 0);
+      if (g.status === 'completed') {
+        completed.push(g);
+      } else if (g.status === 'active' || g.status === 'on_track' || g.status === 'at_risk') {
+        active.push(g);
+      }
+    }
+
+    const avg = goals.length > 0 ? Math.round(totalProgress / goals.length) : 0;
+
+    return { activeGoals: active, completedGoals: completed, avgProgress: avg };
+  }, [goals]);
 
   return (
     <div className="space-y-6">
