@@ -119,7 +119,7 @@ export function Topbar() {
       {/* User menu */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="h-9 gap-2 px-2">
+          <Button variant="ghost" className="h-9 gap-2 px-2" aria-label="User menu">
             <Avatar className="h-7 w-7">
               <AvatarImage src={profile?.avatar_url || ''} />
               <AvatarFallback className="bg-primary/20 text-primary text-xs font-medium">{initials}</AvatarFallback>
