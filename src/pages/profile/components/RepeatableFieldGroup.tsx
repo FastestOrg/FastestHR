@@ -50,7 +50,9 @@ export function RepeatableFieldGroup<T extends Record<string, any>>({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                aria-label={`Remove ${label}`}
+                title={`Remove ${label}`}
+                className="h-7 w-7 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-offset-2 transition-opacity"
                 onClick={() => removeItem(index)}
               >
                 <Trash2 className="h-3.5 w-3.5" />
