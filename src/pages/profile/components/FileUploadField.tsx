@@ -181,7 +181,9 @@ export function FileUploadField({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0 rounded-full"
+                aria-label="Remove file"
+                title="Remove file"
+                className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0 rounded-full focus-visible:ring-2 focus-visible:ring-offset-2"
                 onClick={handleRemove}
               >
                 <X className="h-3.5 w-3.5" />

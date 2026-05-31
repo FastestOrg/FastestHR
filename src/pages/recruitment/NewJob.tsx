@@ -148,7 +148,9 @@ const SortableStage = ({ id, stage, isFixed, onDelete, onSettings, automationCou
             type="button"
             variant="ghost"
             size="icon"
-            className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity hover:text-destructive"
+            aria-label="Delete stage"
+            title="Delete stage"
+            className="h-7 w-7 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity hover:text-destructive focus-visible:ring-2 focus-visible:ring-offset-2"
             onClick={onDelete}
           >
             <X className="h-3.5 w-3.5" />
@@ -590,8 +592,10 @@ export default function NewJob() {
         <Button
           variant="ghost"
           size="icon"
+          aria-label="Go back"
+          title="Go back"
           onClick={() => navigate('/recruitment')}
-          className="border border-border/50 hover:border-primary hover:bg-primary/10"
+          className="border border-border/50 hover:border-primary hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-offset-2"
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
