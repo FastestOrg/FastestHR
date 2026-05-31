@@ -117,3 +117,6 @@
 ## 2026-05-31 - Memoize inline component stats
 **Learning:** Found an optimization opportunity where array reductions or filters for calculating component stats (e.g. `checks.filter(c => c.ok).length` or `notifications.filter((n) => !n.is_read).length`) were not memoized with `useMemo`, causing O(N) array traversals on every render.
 **Action:** Use `useMemo` for any array computations, even simple filters, when they derive component-level stats to prevent unnecessary re-computations during React renders.
+## 2025-03-08 - O(N) Array Search Avoidance for Static Categories
+**Learning:** Found multiple instances where static configuration arrays (like `CATEGORIES` in SendDesk) were being repeatedly searched using `.find()` inside frequently called UI rendering and getter functions. While small, this violates O(1) best practices.
+**Action:** When a constant array is used for lookups, globally instantiate a map dictionary (e.g., using `reduce`) alongside the array to provide O(1) lookups without introducing React hook overhead.

@@ -56,6 +56,11 @@ const CATEGORIES = [
   },
 ];
 
+const CATEGORIES_MAP = CATEGORIES.reduce((acc, cat) => {
+  acc[cat.id] = cat;
+  return acc;
+}, {} as Record<string, typeof CATEGORIES[0]>);
+
 // ── Employee Variables ──
 export const EMPLOYEE_VARIABLES = [
   'Name', 'First Name', 'Last Name', 'Employee Code', 'Designation',
@@ -154,10 +159,10 @@ export function SendDeskTemplates() {
     ? templates.filter(t => t.category === filterCategory) 
     : templates;
 
-  const getCategoryInfo = (catId: string) => CATEGORIES.find(c => c.id === catId);
+  const getCategoryInfo = (catId: string) => CATEGORIES_MAP[catId];
   const getSubCategoryLabel = (catId: string, subId: string | null) => {
     if (!subId) return null;
-    const cat = CATEGORIES.find(c => c.id === catId);
+    const cat = CATEGORIES_MAP[catId];
     return cat?.subcategories.find(s => s.id === subId)?.label || subId;
   };
 
@@ -385,8 +390,7 @@ function TemplateEditorDialog({ isOpen, onClose, template }: { isOpen: boolean, 
   const handleAIGenerate = async (type: 'template' | 'email' | 'improve') => {
     setIsGeneratingAI(true);
     try {
-      const subCatLabel = CATEGORIES
-        .find(c => c.id === category)
+      const subCatLabel = CATEGORIES_MAP[category]
         ?.subcategories.find(s => s.id === subCategory)?.label || subCategory || 'general document';
 
       const { data, error } = await supabase.functions.invoke('generate-ai-content', {
@@ -419,7 +423,7 @@ function TemplateEditorDialog({ isOpen, onClose, template }: { isOpen: boolean, 
     }
   };
 
-  const currentSubcategories = CATEGORIES.find(c => c.id === category)?.subcategories || [];
+  const currentSubcategories = CATEGORIES_MAP[category]?.subcategories || [];
 
   const sampleVars: Record<string, string> = {
     'Name': 'John Doe',
