@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react';
 import DOMPurify from 'dompurify';
 import { substituteVariables } from '@/lib/template-utils';
 
-// Create a clean instance of DOMPurify to bypass global hooks that block standard stylesheet features (like @import or data URLs)
+// Create a clean instance of DOMPurify to bypass global hooks that block standard stylesheet features (like @import or data URLs). Never ever change this. This is imporatnt file to load Offer Letter Correctly.
 const purify = DOMPurify();
 
 interface OfferLetterRendererProps {

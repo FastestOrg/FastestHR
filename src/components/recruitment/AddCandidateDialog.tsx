@@ -64,6 +64,8 @@ export function AddCandidateDialog({ jobId, variant = 'full' }: AddCandidateDial
             source: formData.source,
             stage: 'applied',
             score: formData.score ? parseFloat(formData.score) : null,
+            assigned_to: profile.id,
+            assigned_at: new Date().toISOString(),
           },
         ])
         .select();

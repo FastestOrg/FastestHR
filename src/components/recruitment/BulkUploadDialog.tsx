@@ -46,7 +46,9 @@ export function BulkUploadDialog({ jobId, isOpen, onOpenChange, source = 'bulk_u
           source,
           stage: 'applied',
           referred_by: referredBy || null,
-          parsed_data: extra // Store all extra columns dynamically
+          parsed_data: extra, // Store all extra columns dynamically
+          assigned_to: referredBy ? null : profile.id,
+          assigned_at: referredBy ? null : new Date().toISOString(),
         };
       });
 
