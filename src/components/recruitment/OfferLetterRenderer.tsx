@@ -1,6 +1,9 @@
 import { useMemo, useRef } from 'react';
-import { sanitizeHtml } from '@/lib/dompurify';
+import DOMPurify from 'dompurify';
 import { substituteVariables } from '@/lib/template-utils';
+
+// Create a clean instance of DOMPurify to bypass global hooks that block standard stylesheet features (like @import or data URLs)
+const purify = DOMPurify();
 
 interface OfferLetterRendererProps {
   htmlContent: string;
@@ -10,20 +13,20 @@ interface OfferLetterRendererProps {
   isPredefinedHtml?: boolean;
 }
 
-export function OfferLetterRenderer({ 
-  htmlContent, 
-  variables, 
+export function OfferLetterRenderer({
+  htmlContent,
+  variables,
   letterheadUrl,
   className = "",
   isPredefinedHtml = false
 }: OfferLetterRendererProps) {
-  
+
   const containerRef = useRef<HTMLDivElement>(null);
 
   const finalHtml = useMemo(() => {
     let content = substituteVariables(htmlContent, variables);
-    // Sanitize the HTML to prevent XSS vulnerabilities while allowing custom styles
-    return sanitizeHtml(content, {
+    // Sanitize the HTML using the clean DOMPurify instance to prevent XSS while allowing styling rules
+    return purify.sanitize(content, {
       ADD_TAGS: ['style'],
       ADD_ATTR: ['style'],
       FORCE_BODY: true
@@ -35,22 +38,23 @@ export function OfferLetterRenderer({
       <div className={`a4-page mx-auto bg-white relative overflow-hidden print:shadow-none print:m-0 ${isPredefinedHtml ? '' : 'shadow-2xl'}`}>
         {letterheadUrl && !isPredefinedHtml && (
           <div className="letterhead-container w-full flex justify-center bg-white">
-            <img 
-              src={letterheadUrl} 
-              alt="Letterhead" 
-              className="w-full object-contain max-h-[150px]" 
+            <img
+              src={letterheadUrl}
+              alt="Letterhead"
+              className="w-full object-contain max-h-[150px]"
             />
           </div>
         )}
-        
-        <div 
+
+        <div
           ref={containerRef}
           className={`content-area max-w-none dark:prose-invert ${isPredefinedHtml ? '' : 'p-12 sm:p-16 md:p-20 prose prose-slate'}`}
           dangerouslySetInnerHTML={{ __html: finalHtml }}
         />
       </div>
 
-      <style dangerouslySetInnerHTML={{ __html: `
+      <style dangerouslySetInnerHTML={{
+        __html: `
         .offer-letter-renderer {
           background-color: transparent;
         }
@@ -143,10 +147,10 @@ export function OfferLetterRenderer({
 }
 
 export function replaceVariables(html: string, variables: Record<string, string>): string {
-    let content = html;
-    Object.entries(variables).forEach(([key, value]) => {
-      const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'gi');
-      content = content.replace(regex, () => value);
-    });
-    return content;
+  let content = html;
+  Object.entries(variables).forEach(([key, value]) => {
+    const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'gi');
+    content = content.replace(regex, () => value);
+  });
+  return content;
 }
