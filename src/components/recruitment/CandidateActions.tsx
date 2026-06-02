@@ -529,17 +529,6 @@ export function CandidateActions({
   return (
     <>
     <div className="flex items-center gap-1">
-      {latestOffer?.token && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-6 px-2 text-[10px] gap-1 text-primary hover:bg-primary/10 hover:text-primary transition-all font-bold uppercase tracking-tighter"
-          onClick={() => window.open(`${window.location.origin}/offer/${latestOffer.token}`, '_blank')}
-        >
-          <ExternalLink className="h-3 w-3" />
-          View Offer
-        </Button>
-      )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" aria-label="Candidate actions" className="h-6 w-6 -mr-2 -mt-2 text-muted-foreground">
@@ -547,6 +536,15 @@ export function CandidateActions({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          {latestOffer?.token && (
+            <DropdownMenuItem
+              onClick={() => window.open(`${window.location.origin}/offer/${latestOffer.token}`, '_blank')}
+              className="text-primary focus:text-primary font-semibold"
+            >
+              <ExternalLink className="mr-2 h-4 w-4" />
+              View Offer Letter
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={handleMoveNext} disabled={isNextDisabled}>
             <ArrowRight className="mr-2 h-4 w-4" />
             Move to Next Step
