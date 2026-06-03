@@ -31,10 +31,11 @@ const STATUS_BADGE: Record<string, string> = {
   on_leave: 'bg-info/10 text-info border-info/40',
   resigned: 'bg-muted text-muted-foreground',
   terminated: 'bg-destructive/10 text-destructive border-destructive/40',
+  absconded: 'bg-destructive/10 text-destructive border-destructive/40',
 };
 
 const EMPLOYMENT_TYPES = ['full_time', 'part_time', 'contract', 'intern'] as const;
-const STATUS_OPTIONS = ['active', 'probation', 'on_leave', 'resigned', 'terminated'] as const;
+const STATUS_OPTIONS = ['active', 'probation', 'on_leave', 'resigned', 'terminated', 'absconded'] as const;
 const GENDERS = ['male', 'female', 'other', 'prefer_not_to_say'] as const;
 
 type Tab = 'profile' | 'attendance' | 'leaves' | 'payroll' | 'shifts';
@@ -69,6 +70,7 @@ export default function EmployeeDetail() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { profile } = useAuthStore();
+  const isHRManagerOrAbove = profile?.platform_role === 'company_admin' || profile?.platform_role === 'super_admin' || profile?.platform_role === 'hr_manager';
   const [editing, setEditing] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('profile');
   const [form, setForm] = useState<Partial<EmployeeRecord>>({});
@@ -550,6 +552,22 @@ export default function EmployeeDetail() {
         </div>
       </div>
 
+      {/* Absconded Warning Banner */}
+      {employee.status === 'absconded' && (
+        <div className="bg-destructive/10 border border-destructive/20 text-destructive rounded-lg p-4 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+          <AlertTriangle className="h-5 w-5 shrink-0 animate-pulse" />
+          <div className="flex-1 text-sm">
+            <span className="font-semibold text-base block mb-0.5">Absconded Status</span>
+            This employee has been marked as absconded due to consecutive absences. 
+            {isHRManagerOrAbove ? (
+              <span> You can restore them to active status by editing their profile and changing their status.</span>
+            ) : (
+              <span> Please contact an HR Manager or Administrator to restore their status.</span>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Profile Card */}
       <Card className="overflow-hidden border-border/40 shadow-sm transition-all hover:shadow-md">
         <CardContent className="p-6">
@@ -704,7 +722,8 @@ export default function EmployeeDetail() {
                       name={name}
                       value={selectValue}
                       onChange={handleChange}
-                      className="flex h-10 w-full rounded-md border border-border/50 bg-background px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors shadow-sm"
+                      disabled={name === 'status' && employee.status === 'absconded' && !isHRManagerOrAbove}
+                      className="flex h-10 w-full rounded-md border border-border/50 bg-background px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <option value="">— Select —</option>
                       {options.map(o => (

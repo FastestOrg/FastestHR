@@ -86,7 +86,7 @@ export default function NewEmployee() {
     employee_code: '',
     department_id: '',
     designation_id: '',
-    date_of_joining: '',
+    date_of_joining: new Date().toLocaleDateString('en-CA'),
     date_of_birth: '',
     gender: 'male' as typeof GENDERS[number],
     employment_type: 'full_time' as typeof EMPLOYMENT_TYPES[number],

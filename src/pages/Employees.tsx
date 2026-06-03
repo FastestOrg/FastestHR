@@ -23,6 +23,7 @@ const statusColor: Record<string, string> = {
   on_leave: 'bg-info/10 text-info',
   resigned: 'bg-muted text-muted-foreground',
   terminated: 'bg-destructive/10 text-destructive',
+  absconded: 'bg-destructive/10 text-destructive',
 };
 
 export default function Employees() {
