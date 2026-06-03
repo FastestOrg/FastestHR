@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Building, Loader2, MapPin } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Building, Loader2, MapPin, Hash, Save, Eye } from 'lucide-react';
 
 export default function GeneralSettings() {
   const { profile } = useAuthStore();
@@ -21,7 +22,7 @@ export default function GeneralSettings() {
     queryFn: async () => {
       if (!profile?.company_id) return null;
       const { data, error } = await supabase.from('companies')
-        .select('id, name, timezone, currency, country, about_company, company_culture, website, linkedin_url, logo_url, geofence_latitude, geofence_longitude, geofence_radius, ip_whitelist')
+        .select('id, name, timezone, currency, country, about_company, company_culture, website, linkedin_url, logo_url, geofence_latitude, geofence_longitude, geofence_radius, ip_whitelist, employee_id_prefix, employee_id_next_number')
         .eq('id', profile.company_id)
         .maybeSingle();
       if (error) throw error;
@@ -36,6 +37,9 @@ export default function GeneralSettings() {
     geofence_latitude: '', geofence_longitude: '', geofence_radius: '200', ip_whitelist: ''
   });
 
+  const [empCodePrefix, setEmpCodePrefix] = useState('EMP-');
+  const [empCodeNextNumber, setEmpCodeNextNumber] = useState(1);
+
   useEffect(() => {
     if (company) {
       const c = company as any;
@@ -47,6 +51,8 @@ export default function GeneralSettings() {
         geofence_radius: c.geofence_radius?.toString() || '200',
         ip_whitelist: c.ip_whitelist || '',
       });
+      setEmpCodePrefix(c.employee_id_prefix || 'EMP-');
+      setEmpCodeNextNumber(c.employee_id_next_number || 1);
     }
   }, [company]);
 
@@ -69,6 +75,25 @@ export default function GeneralSettings() {
       toast.success('General settings saved');
     },
     onError: (error) => toast.error(getErrorMessage(error, 'Failed to save')),
+  });
+
+  const empCodePreview = `${empCodePrefix}${String(empCodeNextNumber).padStart(3, '0')}`;
+
+  const updateEmpCodeMutation = useMutation({
+    mutationFn: async () => {
+      if (!profile?.company_id) throw new Error('Company ID is missing.');
+      const { error } = await supabase.from('companies').update({
+        employee_id_prefix: empCodePrefix,
+        employee_id_next_number: empCodeNextNumber,
+      }).eq('id', profile.company_id).select('id');
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-company'] });
+      queryClient.invalidateQueries({ queryKey: ['company-settings'] });
+      toast.success('Employee code settings saved');
+    },
+    onError: (error) => toast.error(getErrorMessage(error, 'Failed to save employee code settings')),
   });
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -289,6 +314,66 @@ export default function GeneralSettings() {
                 />
                 <p className="text-[10px] text-muted-foreground">If configured, employees checking in from these public IPs will bypass physical GPS checks.</p>
               </div>
+            </div>
+          </div>
+
+          {/* Employee Code Generation */}
+          <div className="pt-6 border-t border-border/50 space-y-4">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Hash className="h-4 w-4 text-primary" /> Employee Code Generation
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Configure how employee codes are auto-generated. Every new employee added to the portal will receive the next sequential code.
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-6 pt-2">
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase">Code Prefix</label>
+                <Input
+                  placeholder="e.g. EMP-, HR-, ACME-"
+                  value={empCodePrefix}
+                  onChange={(e) => setEmpCodePrefix(e.target.value)}
+                  className="bg-background/50 border-border/50 h-10 font-mono"
+                />
+                <p className="text-[10px] text-muted-foreground">This prefix will appear before every auto-generated employee code.</p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase">Next Sequence Number</label>
+                <Input
+                  type="number"
+                  min={1}
+                  placeholder="e.g. 1"
+                  value={empCodeNextNumber}
+                  onChange={(e) => setEmpCodeNextNumber(parseInt(e.target.value) || 1)}
+                  className="bg-background/50 border-border/50 h-10 font-mono"
+                />
+                <p className="text-[10px] text-muted-foreground">The next number in the sequence. Edit this to change the upcoming code.</p>
+              </div>
+            </div>
+
+            {/* Live Preview */}
+            <div className="flex items-center gap-4 p-4 rounded-xl bg-primary/5 border border-primary/15">
+              <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <Eye className="h-3.5 w-3.5" /> Next Code Preview
+              </div>
+              <div className="flex-1 flex items-center gap-3">
+                <span className="text-2xl font-mono font-bold text-primary tracking-tight">{empCodePreview}</span>
+                <Badge variant="outline" className="text-[9px] h-5 border-primary/30 text-primary">AUTO-GENERATED</Badge>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button
+                onClick={() => updateEmpCodeMutation.mutate()}
+                disabled={updateEmpCodeMutation.isPending}
+                variant="outline"
+                className="gap-2 border-primary/30 hover:border-primary hover:bg-primary/5 font-semibold"
+              >
+                {updateEmpCodeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Save Employee Code Settings
+              </Button>
             </div>
           </div>
           

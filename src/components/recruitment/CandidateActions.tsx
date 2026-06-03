@@ -129,11 +129,16 @@ export function CandidateActions({
             const firstName = names[0] || 'First';
             const lastName = names.slice(1).join(' ') || 'Last';
 
-            // Generate employee code
-            const randomBuffer = new Uint32Array(1);
-            window.crypto.getRandomValues(randomBuffer);
-            const randomNum = randomBuffer[0] % 900000;
-            const empCode = `EMP-${100000 + randomNum}`;
+            // Generate sequential employee code from company settings
+            const { data: codeSettings } = await supabase
+              .from('companies')
+              .select('employee_id_prefix, employee_id_next_number')
+              .eq('id', cand.company_id)
+              .single();
+            
+            const prefix = codeSettings?.employee_id_prefix || 'EMP-';
+            const nextNum = codeSettings?.employee_id_next_number || 1;
+            const empCode = `${prefix}${String(nextNum).padStart(3, '0')}`;
 
             // Insert employee
             const { data: newEmp, error: empErr } = await supabase
@@ -156,8 +161,15 @@ export function CandidateActions({
               console.error('Error inserting employee:', empErr);
               toast.error(`Employee profile creation failed: ${empErr.message}`);
             } else {
+              // Increment the sequence counter
+              await supabase
+                .from('companies')
+                .update({ employee_id_next_number: nextNum + 1 })
+                .eq('id', cand.company_id)
+                .select('id');
+
               employeeId = newEmp.id;
-              toast.success(`Created Employee profile for ${cand.full_name}`);
+              toast.success(`Created Employee profile for ${cand.full_name} (${empCode})`);
             }
           } else {
             toast.info(`Employee profile already exists for ${cand.full_name}`);
