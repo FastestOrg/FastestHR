@@ -320,7 +320,6 @@ export default function AssetManagementTab({ companyId }: AssetManagementTabProp
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    aria-label="Delete asset"
                     className="h-8 w-8 text-destructive/50 hover:text-destructive hover:bg-destructive/10"
                     onClick={() => {
                       if (confirm('Delete this asset from inventory?')) {

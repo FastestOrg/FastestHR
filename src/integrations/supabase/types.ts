@@ -180,6 +180,7 @@ export type Database = {
           clock_in: string | null
           clock_in_ip: string | null
           clock_in_location: Json | null
+          clock_out_location: Json | null
           clock_out: string | null
           company_id: string
           created_at: string
@@ -198,6 +199,7 @@ export type Database = {
           clock_in?: string | null
           clock_in_ip?: string | null
           clock_in_location?: Json | null
+          clock_out_location?: Json | null
           clock_out?: string | null
           company_id: string
           created_at?: string
@@ -216,6 +218,7 @@ export type Database = {
           clock_in?: string | null
           clock_in_ip?: string | null
           clock_in_location?: Json | null
+          clock_out_location?: Json | null
           clock_out?: string | null
           company_id?: string
           created_at?: string
@@ -527,6 +530,7 @@ export type Database = {
       companies: {
         Row: {
           about_company: string | null
+          attendance_settings: Json | null
           company_culture: string | null
           compensation_structure: Json | null
           country: string | null
@@ -571,6 +575,7 @@ export type Database = {
         }
         Insert: {
           about_company?: string | null
+          attendance_settings?: Json | null
           company_culture?: string | null
           compensation_structure?: Json | null
           country?: string | null
@@ -615,6 +620,7 @@ export type Database = {
         }
         Update: {
           about_company?: string | null
+          attendance_settings?: Json | null
           company_culture?: string | null
           compensation_structure?: Json | null
           country?: string | null
@@ -3839,6 +3845,7 @@ export type Database = {
         | "on_leave"
         | "resigned"
         | "terminated"
+        | "absconded"
       employment_type: "full_time" | "part_time" | "contract" | "intern"
       exit_status: "initiated" | "in_progress" | "completed"
       goal_status: "active" | "completed" | "missed" | "on_track" | "at_risk"
@@ -4013,6 +4020,7 @@ export const Constants = {
         "on_leave",
         "resigned",
         "terminated",
+        "absconded",
       ],
       employment_type: ["full_time", "part_time", "contract", "intern"],
       exit_status: ["initiated", "in_progress", "completed"],

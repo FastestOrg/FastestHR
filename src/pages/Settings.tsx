@@ -2,7 +2,7 @@ import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth-store';
 import { 
   Building, MapPin, Clock, DollarSign, Shield, Calendar, Bell, 
-  Mail, KeyIcon, Users, Globe, Contact, Laptop, GitBranch 
+  Mail, KeyIcon, Users, Globe, Contact, Laptop, GitBranch
 } from 'lucide-react';
 
 import GeneralSettings from '@/pages/settings/GeneralSettings';
@@ -11,6 +11,7 @@ import DomainSettings from '@/pages/settings/DomainSettings';
 import SecuritySettings from '@/pages/settings/SecuritySettings';
 import WorkScheduleSettings from '@/pages/settings/WorkScheduleSettings';
 import LeaveTypesSettings from '@/pages/settings/LeaveTypesSettings';
+import AttendanceSettings from '@/pages/settings/AttendanceSettings';
 import RolesSettings from '@/pages/settings/RolesSettings';
 import { IDCardTemplateEditor } from '@/components/settings/IDCardTemplateEditor';
 import PayrollSettings from '@/pages/settings/PayrollSettings';
@@ -40,6 +41,7 @@ export default function Settings() {
       items: [
         { path: '/settings/schedule', label: 'Work Schedule', icon: Clock },
         { path: '/settings/leaves', label: 'Leave Types', icon: Calendar },
+        { path: '/settings/attendance', label: 'Attendance Settings', icon: Shield },
         { path: '/settings/roles', label: 'Roles & Access', icon: Shield },
         { path: '/settings/id-card', label: 'ID Cards', icon: Contact },
       ]
@@ -146,6 +148,7 @@ export default function Settings() {
             <Route path="/security" element={<SecuritySettings />} />
             <Route path="/schedule" element={<WorkScheduleSettings />} />
             <Route path="/leaves" element={<LeaveTypesSettings />} />
+            <Route path="/attendance" element={<AttendanceSettings />} />
             <Route path="/roles" element={<RolesSettings />} />
             <Route path="/id-card" element={<IDCardTemplateEditor />} />
             <Route path="/payroll" element={<PayrollSettings />} />

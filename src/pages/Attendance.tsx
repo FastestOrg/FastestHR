@@ -187,10 +187,29 @@ export default function Attendance() {
     queryFn: async () => {
       if (!employee?.id) return null;
       
+      // 0. Auto-process timeout logouts and absconding rules for the company
+      try {
+        await supabase.rpc('process_auto_clock_outs', { p_company_id: employee.company_id });
+        const { data: abscondedList } = await supabase.rpc('check_and_process_absconding', { p_company_id: employee.company_id });
+        if (abscondedList && abscondedList.length > 0) {
+          for (const abscondedEmp of abscondedList) {
+            supabase.functions.invoke('send-absconding-email', {
+              body: {
+                employee_id: abscondedEmp.r_employee_id,
+                company_id: employee.company_id,
+                consecutive_days: abscondedEmp.r_consecutive_days
+              }
+            }).catch(e => console.error("Failed to send absconding email:", e));
+          }
+        }
+      } catch (e) {
+        console.warn('Auto logout/absconding processing error:', e);
+      }
+
       // 1. Fetch active open check-in first (handles crossover night shifts)
       const { data: openRecord } = await supabase
         .from('attendance')
-        .select('*')
+        .select('*, companies(attendance_settings)')
         .eq('employee_id', employee.id)
         .is('clock_out', null)
         .order('clock_in', { ascending: false })
@@ -267,7 +286,48 @@ export default function Attendance() {
       if (!requestDialogRecord) throw new Error("No record selected");
       if (!requestForm.reason.trim()) throw new Error("Please specify a reason");
 
+      // Verify regularization count limits
+      const { data: company } = await supabase
+        .from('companies')
+        .select('attendance_settings')
+        .eq('id', employee!.company_id)
+        .single();
+      const settings = company?.attendance_settings as any;
+      const maxLimit = settings?.max_regularizations_per_month ?? 3;
+
       const dateStr = requestDialogRecord.date;
+      const recordDate = new Date(dateStr);
+      const year = recordDate.getFullYear();
+      const month = recordDate.getMonth();
+      const startDate = new Date(year, month, 1).toLocaleDateString('en-CA');
+      const endDate = new Date(year, month + 1, 0).toLocaleDateString('en-CA');
+
+      const { data: monthRecords, error: countErr } = await supabase
+        .from('attendance')
+        .select('id, regularization_reason, is_regularized')
+        .eq('employee_id', employee!.id)
+        .gte('date', startDate)
+        .lte('date', endDate);
+
+      if (countErr) throw countErr;
+
+      const regularizationCount = (monthRecords || []).filter(r => {
+        if (r.is_regularized) return true;
+        if (r.regularization_reason) {
+          try {
+            const reason = JSON.parse(r.regularization_reason);
+            return reason?.status === 'pending';
+          } catch (e) {
+            return false;
+          }
+        }
+        return false;
+      }).length;
+
+      if (regularizationCount >= maxLimit) {
+        throw new Error(`You have reached the maximum limit of ${maxLimit} regularization requests for this month.`);
+      }
+
       const inDateTime = new Date(`${dateStr}T${requestForm.clock_in_time}:00`);
       const outDateTime = new Date(`${dateStr}T${requestForm.clock_out_time}:00`);
 
@@ -493,11 +553,27 @@ export default function Attendance() {
       const shiftStartStr = activeShift?.start_time || '09:00:00';
       const shiftEndStr = activeShift?.end_time || '18:00:00';
       
+      // Fetch company settings
+      const { data: company, error: companyErr } = await supabase
+        .from('companies')
+        .select('geofence_latitude, geofence_longitude, geofence_radius, ip_whitelist, payroll_settings, attendance_settings')
+        .eq('id', employee.company_id)
+        .single();
+        
+      if (companyErr) {
+        console.error('Failed to load company settings:', companyErr);
+      }
+
+      const payrollSettings = company?.payroll_settings as any;
+      const settings = company?.attendance_settings as any;
+      const lateGrace = payrollSettings?.late_grace_period_mins ?? 15;
+      const locationRequired = settings?.location_required !== false;
+
       // Resolve shift times & date bounds (handles crossover night shifts)
       const { shiftStart, shiftDateStr } = resolveShiftTimes(clockInTime, shiftStartStr, shiftEndStr);
       
       // Calculate isLate
-      const graceTime = new Date(shiftStart.getTime() + 15 * 60 * 1000);
+      const graceTime = new Date(shiftStart.getTime() + lateGrace * 60 * 1000);
       const isLate = clockInTime.getTime() > graceTime.getTime();
 
       let gpsCoords: { latitude: number; longitude: number; accuracy: number; verified: boolean } | null = null;
@@ -508,19 +584,9 @@ export default function Attendance() {
       
       // Location & Geofencing Check
       if (workType === 'office') {
-        const { data: company, error: companyErr } = await supabase
-          .from('companies')
-          .select('geofence_latitude, geofence_longitude, geofence_radius, ip_whitelist')
-          .eq('id', employee.company_id)
-          .single();
-          
-        if (companyErr) {
-          console.error('Failed to load company geofence settings:', companyErr);
-        }
-
-        // 1. Check IP whitelist bypass
-        let ipBypassed = false;
-        if (company?.ip_whitelist && clientIP) {
+        // 1. Check IP whitelist / geofence bypass
+        let ipBypassed = !locationRequired;
+        if (!ipBypassed && company?.ip_whitelist && clientIP) {
           const whitelistedIPs = company.ip_whitelist.split(',').map((ip: string) => ip.trim());
           if (whitelistedIPs.includes(clientIP)) {
             ipBypassed = true;
@@ -608,6 +674,16 @@ export default function Attendance() {
         }
       }
 
+      // Determine status based on late login handling rules
+      const lateAction = settings?.late_login_handling?.action || 'late';
+      let statusToSet: 'present' | 'late' | 'absent' | 'half_day' = 'present';
+      if (isLate) {
+        if (lateAction === 'absent') statusToSet = 'absent';
+        else if (lateAction === 'half_day') statusToSet = 'half_day';
+        else if (lateAction === 'present') statusToSet = 'present';
+        else statusToSet = 'late';
+      }
+
       const { error } = await supabase
         .from('attendance')
         .insert([{
@@ -615,7 +691,7 @@ export default function Attendance() {
           company_id: employee.company_id,
           date: shiftDateStr,
           clock_in: clockInTime.toISOString(),
-          status: (isLate ? 'late' : 'present') as any,
+          status: statusToSet as any,
           clock_in_ip: clientIP,
           clock_in_location: { 
             work_type: workType,
@@ -676,12 +752,15 @@ export default function Attendance() {
       if (workTypeUsed === 'office') {
         const { data: company } = await supabase
           .from('companies')
-          .select('geofence_latitude, geofence_longitude, geofence_radius, ip_whitelist')
+          .select('geofence_latitude, geofence_longitude, geofence_radius, ip_whitelist, attendance_settings')
           .eq('id', employee!.company_id)
           .single();
 
-        let ipBypassed = false;
-        if (company?.ip_whitelist && clientIP) {
+        const settings = company?.attendance_settings as any;
+        const locationRequired = settings?.location_required !== false;
+
+        let ipBypassed = !locationRequired;
+        if (!ipBypassed && company?.ip_whitelist && clientIP) {
           const whitelistedIPs = company.ip_whitelist.split(',').map((ip: string) => ip.trim());
           if (whitelistedIPs.includes(clientIP)) {
             ipBypassed = true;

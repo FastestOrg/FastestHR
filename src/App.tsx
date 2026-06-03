@@ -72,6 +72,13 @@ const CandidatePortal = lazy(() => import('@/pages/candidate/CandidatePortal'));
 const ReferralPortal = lazy(() => import('@/pages/recruitment/ReferralPortal'));
 const EmployeeProfile = lazy(() => import('@/pages/profile/EmployeeProfile'));
 
+// Recruitment sub-pages
+import { RecruitmentPipeline } from '@/pages/recruitment/RecruitmentPipeline';
+import { RecruitmentLeadsBoard } from '@/pages/recruitment/RecruitmentLeadsBoard';
+import { RecruitmentTeam } from '@/pages/recruitment/RecruitmentTeam';
+import { RecruitmentAnalytics } from '@/pages/recruitment/RecruitmentAnalytics';
+import { OfferTemplateList } from '@/components/recruitment/OfferTemplateEditor';
+
 import PlaceholderPage from '@/pages/PlaceholderPage';
 import NotFound from '@/pages/NotFound';
 
@@ -190,11 +197,18 @@ function AppRoutes() {
       <Route path="/leave/apply" element={withLayout(<ApplyLeave />)} />
       <Route path="/payroll" element={withLayout(<Payroll />)} />
       <Route path="/performance" element={withLayout(<Performance />)} />
-      <Route path="/recruitment" element={withLayout(<Recruitment />)} />
+      <Route path="/recruitment" element={withLayout(<Recruitment />)}>
+        <Route index element={<Navigate to="pipeline" replace />} />
+        <Route path="pipeline" element={<RecruitmentPipeline />} />
+        <Route path="leads" element={<RecruitmentLeadsBoard />} />
+        <Route path="analytics" element={<RecruitmentAnalytics />} />
+        <Route path="team" element={<RecruitmentTeam />} />
+        <Route path="templates" element={<OfferTemplateList />} />
+        <Route path="new" element={<Suspense fallback={<div />}><NewJob /></Suspense>} />
+        <Route path="edit/:id" element={<Suspense fallback={<div />}><NewJob /></Suspense>} />
+      </Route>
       <Route path="/culture" element={withLayout(<CultureHub />)} />
       <Route path="/kpi" element={withLayout(<KPI />)} />
-      <Route path="/recruitment/new" element={withLayout(<NewJob />)} />
-      <Route path="/recruitment/edit/:id" element={withLayout(<NewJob />)} />
       <Route path="/referrals" element={withLayout(<ReferralPortal />)} />
       <Route path="/learning" element={withLayout(<Learning />)} />
       <Route path="/helpdesk" element={withLayout(<HelpDesk />)} />

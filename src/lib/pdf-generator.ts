@@ -351,12 +351,14 @@ async function generateAndUploadPDF(
 
       const manipulatedHtml = pdfElement.innerHTML;
       
-      // Position off-screen and make visible so it can be cleanly captured,
-      // but KEEP it in the DOM so html2pdf can render it without appending a visible copy.
-      pdfElement.style.position = 'fixed';
-      pdfElement.style.top = '-9999px';
-      pdfElement.style.left = '-9999px';
-      pdfElement.style.visibility = 'visible';
+      // Remove from DOM and reset styles so html2pdf can render it correctly without viewport scaling/clipping bugs.
+      if (document.body.contains(pdfElement)) {
+        document.body.removeChild(pdfElement);
+      }
+      pdfElement.style.position = '';
+      pdfElement.style.top = '';
+      pdfElement.style.left = '';
+      pdfElement.style.visibility = '';
 
       const blob = await html2pdf().set(opt).from(pdfElement).output('blob');
       return { blob, manipulatedHtml };
@@ -818,13 +820,20 @@ export async function generateAndDownloadPayslipPDF(params: GeneratePayslipPDFPa
     try {
       document.body.style.overflow = 'hidden';
       
-      // Position off-screen and make visible so it can be cleanly captured,
-      // but KEEP it in the DOM so html2pdf can render it without appending a visible copy.
-      container.style.position = 'fixed';
+      container.style.position = 'absolute';
       container.style.top = '-9999px';
       container.style.left = '-9999px';
-      container.style.visibility = 'visible';
+      container.style.visibility = 'hidden';
       document.body.appendChild(container);
+
+      // Remove from DOM and reset styles so html2pdf can render it correctly without viewport scaling/clipping bugs.
+      if (document.body.contains(container)) {
+        document.body.removeChild(container);
+      }
+      container.style.position = '';
+      container.style.top = '';
+      container.style.left = '';
+      container.style.visibility = '';
 
       return await html2pdf().set(opt).from(container).output('blob');
     } finally {
