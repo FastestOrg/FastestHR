@@ -2,7 +2,7 @@ import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth-store';
 import { 
   Building, MapPin, Clock, DollarSign, Shield, Calendar, Bell, 
-  Mail, KeyIcon, Users, Globe, Contact, Laptop, GitBranch
+  Mail, KeyIcon, Users, Globe, Contact, Laptop, GitBranch, Brain
 } from 'lucide-react';
 
 import GeneralSettings from '@/pages/settings/GeneralSettings';
@@ -20,6 +20,7 @@ import EmailDocsSettings from '@/pages/settings/EmailDocsSettings';
 import NotificationsSettings from '@/pages/settings/NotificationsSettings';
 import IntegrationsSettings from '@/pages/settings/IntegrationsSettings';
 import WorkflowBuilder from '@/components/settings/WorkflowBuilder';
+import AiMemorySettings from '@/pages/settings/AiMemorySettings';
 
 export default function Settings() {
   const { profile } = useAuthStore();
@@ -60,6 +61,12 @@ export default function Settings() {
         { path: '/settings/notifications', label: 'Notifications', icon: Bell },
         { path: '/settings/integrations', label: 'Integrations', icon: Users },
         { path: '/settings/workflows', label: 'Workflow Engine', icon: GitBranch },
+      ]
+    },
+    {
+      title: 'AI Intelligence',
+      items: [
+        { path: '/settings/ai-memory', label: 'FastestAI Memory', icon: Brain },
       ]
     }
   ];
@@ -157,6 +164,7 @@ export default function Settings() {
             <Route path="/notifications" element={<NotificationsSettings />} />
             <Route path="/integrations" element={<IntegrationsSettings />} />
             <Route path="/workflows" element={<WorkflowBuilder companyId={profile?.company_id} />} />
+            <Route path="/ai-memory" element={<AiMemorySettings />} />
             <Route path="*" element={<Navigate to="/settings" replace />} />
           </Routes>
         </div>

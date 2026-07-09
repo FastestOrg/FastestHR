@@ -43,13 +43,14 @@ Deno.serve(async (req) => {
 
     const { data: company, error: companyError } = await supabaseClient
       .from('companies')
-      .select('name, company_culture, about_company')
+      .select('name, company_culture, about_company, ai_memory')
       .eq('id', companyId)
       .single();
 
     if (companyError || !company) throw new Error('Company not found');
 
     const culture = company.company_culture || company.about_company || 'A professional environment focusing on growth and excellence.';
+    const memory = company.ai_memory ? `\n      Custom Company Hiring Directives & Guidelines (AI Memory):\n      ${company.ai_memory}` : '';
 
     // 2. Call Gemini to generate criteria
     const apiKey = Deno.env.get('GEMINI_API_KEY');
@@ -63,13 +64,13 @@ Deno.serve(async (req) => {
 
       Company Context:
       Company Name: ${company.name}
-      Culture & Values: ${culture}
+      Culture & Values: ${culture}${memory}
 
       Instructions:
       1. Tailor the points strictly to the "${stageName}" stage. (e.g., Screening should be broad/cultural fit, Technical should be deep skills, etc.)
       2. For each point, provide a "Requirement/Concept" and an "Optimal Answer" (internal reference for the AI).
       3. Mark at least one point as "mandatory" (is_mandatory: true) if it's a deal-breaker for this role/stage.
-      4. Ensure the criteria reflect the company culture and the specific package/level of the role.
+      4. Ensure the criteria reflect the company culture, the specific package/level of the role, and any custom guidelines provided in the custom hiring directives (AI Memory).
 
       Return ONLY a JSON array of objects with this structure:
       [

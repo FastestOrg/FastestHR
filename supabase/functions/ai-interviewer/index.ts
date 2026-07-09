@@ -93,9 +93,21 @@ Deno.serve(async (req) => {
 
       const { data: job } = await supabaseClient
         .from('jobs')
-        .select('title, requirements')
+        .select('title, requirements, company_id')
         .eq('id', jobId)
         .single();
+
+      let memory = '';
+      if (job?.company_id) {
+        const { data: company } = await supabaseClient
+          .from('companies')
+          .select('ai_memory')
+          .eq('id', job.company_id)
+          .single();
+        if (company?.ai_memory) {
+          memory = `\nCustom Company Hiring Guidelines (AI Memory):\n${company.ai_memory}`;
+        }
+      }
 
       // 2. Call Gemini to analyze the transcript
       const apiKey = Deno.env.get('GEMINI_API_KEY');
@@ -108,7 +120,7 @@ Deno.serve(async (req) => {
               text: `Analyze this interview transcript for the position of ${job?.title}.
               
               Requirements: ${job?.requirements}
-              HR Expectations: ${JSON.stringify(expectations)}
+              HR Expectations: ${JSON.stringify(expectations)}${memory}
               
               Transcript:
               ${transcript.map((t: any) => `${t.role}: ${t.text}`).join('\n')}
@@ -118,7 +130,7 @@ Deno.serve(async (req) => {
               2. summary (short 1-2 sentence overview)
               3. pros (array of strings)
               4. cons (array of strings)
-              5. mandatory_check (boolean - true if all mandatory HR expectations were met)
+              5. mandatory_check (boolean - true if all mandatory HR expectations were met and company guidelines were respected)
               
               Return ONLY the JSON.`
             }]
