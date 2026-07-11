@@ -1,6 +1,9 @@
 import { useMemo, useRef } from 'react';
-import { sanitizeHtml } from '@/lib/dompurify';
+import DOMPurify from 'dompurify';
 import { substituteVariables } from '@/lib/template-utils';
+
+// Create a clean instance of DOMPurify to bypass global hooks that block standard stylesheet features (like @import or data URLs).
+const purify = DOMPurify();
 
 interface DocumentRendererProps {
   htmlContent: string;
@@ -22,8 +25,8 @@ export function DocumentRenderer({
 
   const finalHtml = useMemo(() => {
     let content = substituteVariables(htmlContent, variables);
-    // Sanitize the HTML to prevent XSS vulnerabilities while allowing custom styles
-    return sanitizeHtml(content, {
+    // Sanitize the HTML using the clean DOMPurify instance to prevent XSS while allowing styling rules
+    return purify.sanitize(content, {
       ADD_TAGS: ['style'],
       ADD_ATTR: ['style'],
       FORCE_BODY: true

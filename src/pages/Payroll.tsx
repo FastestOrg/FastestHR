@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Download, DollarSign, FileText, Activity, Plus, Percent, Save, AlertTriangle, CheckCircle2, ShieldCheck, Clock, ExternalLink, XCircle, Search } from 'lucide-react';
+import { Download, DollarSign, FileText, Activity, Plus, Percent, Save, AlertTriangle, CheckCircle2, ShieldCheck, Clock, ExternalLink, XCircle, Search, ChevronDown, ChevronUp, Mail, Loader2 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth-store';
@@ -110,6 +110,111 @@ export default function Payroll() {
   const [activeTab, setActiveTab] = useState<'payroll' | 'tax-audit'>('payroll');
   const [auditSearch, setAuditSearch] = useState('');
   const [auditFilter, setAuditFilter] = useState<'all' | 'pending' | 'verified' | 'rejected'>('all');
+
+  const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
+  const [bulkEmailing, setBulkEmailing] = useState<boolean>(false);
+  const [bulkEmailStatus, setBulkEmailStatus] = useState<string>('');
+
+  // Query to fetch all payslips for the expanded payroll run
+  const { data: runPayslips = [], isLoading: loadingRunPayslips } = useQuery({
+    queryKey: ['run-payslips', expandedRunId],
+    queryFn: async () => {
+      if (!expandedRunId) return [];
+      const { data, error } = await supabase
+        .from('payslips')
+        .select('*, employees(id, first_name, last_name, employee_code, work_email, personal_email, departments(name), designations(*))')
+        .eq('payroll_run_id', expandedRunId);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!expandedRunId,
+  });
+
+  const emailPayslipMutation = useMutation({
+    mutationFn: async ({ slip, emp }: { slip: any; emp: any }) => {
+      let pdfPath = slip.pdf_url;
+      
+      // 1. Generate & upload PDF if not already done
+      if (!pdfPath) {
+        await generateAndDownloadPayslipPDF({
+          companyName: companyProfile?.name || "FastestHR Company",
+          employeeName: `${emp.first_name} ${emp.last_name}`,
+          employeeEmail: emp.work_email || emp.personal_email || "",
+          employeeCode: emp.employee_code || undefined,
+          department: emp.departments?.name || undefined,
+          designation: emp.designations?.title || emp.designations?.name || undefined,
+          periodStart: slip.payroll_runs?.period_start || periodStart,
+          periodEnd: slip.payroll_runs?.period_end || periodEnd,
+          slip: { ...slip, payroll_runs: slip.payroll_runs || { period_start: periodStart, period_end: periodEnd } },
+          currency: companyProfile?.currency || "USD",
+          skipDownload: true
+        });
+        
+        // Refetch the updated payslip to get the pdf_url
+        const { data: updatedSlip, error: fetchErr } = await supabase
+          .from('payslips')
+          .select('pdf_url')
+          .eq('id', slip.id)
+          .single();
+          
+        if (fetchErr || !updatedSlip?.pdf_url) {
+          throw new Error("Failed to retrieve generated PDF path.");
+        }
+        pdfPath = updatedSlip.pdf_url;
+      }
+
+      // 2. Trigger email edge function
+      const { data, error } = await supabase.functions.invoke('send-payslip-email', {
+        body: {
+          payslip_id: slip.id,
+          company_id: companyIdToUse,
+          employee_id: emp.id,
+          pdf_path: pdfPath
+        }
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success("Payslip email sent successfully!");
+      queryClient.invalidateQueries({ queryKey: ['run-payslips'] });
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Failed to send payslip email");
+    }
+  });
+
+  const handleBulkEmail = async (runId: string) => {
+    if (runPayslips.length === 0) {
+      toast.error("No payslips found in this run.");
+      return;
+    }
+
+    setBulkEmailing(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < runPayslips.length; i++) {
+      const slip = runPayslips[i];
+      const emp = slip.employees;
+      if (!emp) continue;
+
+      setBulkEmailStatus(`Sending to ${emp.first_name} ${emp.last_name} (${i + 1}/${runPayslips.length})...`);
+
+      try {
+        await emailPayslipMutation.mutateAsync({ slip, emp });
+        successCount++;
+      } catch (err) {
+        console.error(err);
+        failCount++;
+      }
+    }
+
+    setBulkEmailing(false);
+    setBulkEmailStatus('');
+    toast.success(`Bulk email complete: ${successCount} sent successfully. ${failCount} failed.`);
+  };
 
   // Query all employees with their tax declarations for statutory auditing
   const { data: auditEmployees = [], isLoading: loadingAudit } = useQuery({
@@ -600,21 +705,156 @@ export default function Payroll() {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {payrollRuns.map((run: any) => (
-                        <div key={run.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl bg-background/40 border border-border/50 gap-3">
-                          <div>
-                            <p className="font-semibold text-sm text-foreground">{run.period_start} — {run.period_end}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              Gross: {currencySymbol}{formatAmount(run.total_gross || 0, companyProfile?.currency)} · Net: {currencySymbol}{formatAmount(run.total_net || 0, companyProfile?.currency)}
-                            </p>
+                      {payrollRuns.map((run: any) => {
+                        const isExpanded = expandedRunId === run.id;
+                        return (
+                          <div key={run.id} className="rounded-xl border border-border/50 bg-background/40 overflow-hidden transition-all duration-300">
+                            <div 
+                              className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 gap-3 cursor-pointer hover:bg-primary/5 transition-colors"
+                              onClick={() => setExpandedRunId(isExpanded ? null : run.id)}
+                            >
+                              <div>
+                                <p className="font-semibold text-sm text-foreground flex items-center gap-1.5 select-none">
+                                  {run.period_start} — {run.period_end}
+                                  {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  Gross: {currencySymbol}{formatAmount(run.total_gross || 0, companyProfile?.currency)} · Net: {currencySymbol}{formatAmount(run.total_net || 0, companyProfile?.currency)}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2 justify-end w-full sm:w-auto border-t border-border/10 pt-2 sm:pt-0 sm:border-none">
+                                <Badge variant="outline" className={`uppercase text-[9px] ${statusColor[run.status] || ''}`}>
+                                  {run.status}
+                                </Badge>
+                              </div>
+                            </div>
+
+                            {isExpanded && (
+                              <div className="border-t border-border/20 bg-muted/5 p-4 space-y-4 animate-in slide-in-from-top-2 duration-200">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/10 pb-3">
+                                  <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                    <FileText className="w-3.5 h-3.5 text-primary" /> Employees Included in Run
+                                  </h4>
+                                  {runPayslips.length > 0 && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      disabled={bulkEmailing || emailPayslipMutation.isPending}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleBulkEmail(run.id);
+                                      }}
+                                      className="h-8 text-xs font-semibold gap-1.5 border-primary/40 text-primary hover:bg-primary/10"
+                                    >
+                                      {bulkEmailing ? (
+                                        <>
+                                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                          <span className="animate-pulse">{bulkEmailStatus || 'Emailing...'}</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Mail className="h-3.5 w-3.5" />
+                                          <span>Email All Payslips</span>
+                                        </>
+                                      )}
+                                    </Button>
+                                  )}
+                                </div>
+
+                                {loadingRunPayslips ? (
+                                  <div className="space-y-2">
+                                    {[1, 2].map(i => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}
+                                  </div>
+                                ) : runPayslips.length === 0 ? (
+                                  <p className="text-xs text-muted-foreground italic text-center py-4">No payslip records generated for this run.</p>
+                                ) : (
+                                  <div className="space-y-3">
+                                    {runPayslips.map((slip: any) => {
+                                      const emp = slip.employees;
+                                      if (!emp) return null;
+                                      const isEmailing = emailPayslipMutation.isPending && emailPayslipMutation.variables?.slip?.id === slip.id;
+
+                                      return (
+                                        <div key={slip.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg border border-border/30 bg-background/50 gap-3 hover:border-primary/20 transition-all">
+                                          <div>
+                                            <p className="text-sm font-semibold text-foreground">
+                                              {emp.first_name} {emp.last_name}
+                                              {emp.employee_code && (
+                                                <span className="text-[10px] font-mono ml-2 text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded border border-border/20">
+                                                  {emp.employee_code}
+                                                </span>
+                                              )}
+                                            </p>
+                                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-[11px] text-muted-foreground">
+                                              <span>{emp.designations?.title || emp.designations?.name || 'Employee'}</span>
+                                              <span>•</span>
+                                              <span>{emp.departments?.name || 'No Dept'}</span>
+                                              <span>•</span>
+                                              <span className="font-semibold text-foreground">
+                                                Net Payout: {currencySymbol}{formatAmount(slip.net_salary || 0, companyProfile?.currency)}
+                                              </span>
+                                            </div>
+                                          </div>
+
+                                          <div className="flex items-center gap-2 justify-end">
+                                            {/* Download */}
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-8 w-8 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10"
+                                              onClick={async (e) => {
+                                                e.stopPropagation();
+                                                try {
+                                                  await generateAndDownloadPayslipPDF({
+                                                    companyName: companyProfile?.name || "FastestHR Company",
+                                                    employeeName: `${emp.first_name} ${emp.last_name}`,
+                                                    employeeEmail: emp.work_email || emp.personal_email || "",
+                                                    employeeCode: emp.employee_code || undefined,
+                                                    department: emp.departments?.name || undefined,
+                                                    designation: emp.designations?.title || emp.designations?.name || undefined,
+                                                    periodStart: run.period_start,
+                                                    periodEnd: run.period_end,
+                                                    slip,
+                                                    currency: companyProfile?.currency || "USD"
+                                                  });
+                                                  toast.success("Payslip PDF downloaded");
+                                                  queryClient.invalidateQueries({ queryKey: ['run-payslips'] });
+                                                } catch (err: any) {
+                                                  toast.error(err?.message || "Failed to download");
+                                                }
+                                              }}
+                                            >
+                                              <Download className="h-4 w-4" />
+                                            </Button>
+
+                                            {/* Email */}
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              disabled={isEmailing || bulkEmailing}
+                                              className="h-8 w-8 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                emailPayslipMutation.mutate({ slip, emp });
+                                              }}
+                                            >
+                                              {isEmailing ? (
+                                                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                              ) : (
+                                                <Mail className="h-4 w-4" />
+                                              )}
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
-                          <div className="flex items-center gap-2 justify-end w-full sm:w-auto border-t border-border/10 pt-2 sm:pt-0 sm:border-none">
-                            <Badge variant="outline" className={`uppercase text-[9px] ${statusColor[run.status] || ''}`}>
-                              {run.status}
-                            </Badge>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )
                 ) : salaryStructure ? (

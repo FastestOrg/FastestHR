@@ -9,7 +9,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import {
   User, Phone, Users, GraduationCap, Briefcase, Code,
   Landmark, HeartPulse, Link2, Settings, LayoutDashboard,
-  AlertTriangle, Laptop
+  AlertTriangle, Laptop, FileText
 } from 'lucide-react';
 import ProfileDashboard from './ProfileDashboard';
 
@@ -26,8 +26,9 @@ const SocialLinks = lazy(() => import('./sections/SocialLinks'));
 const PreferencesSettings = lazy(() => import('./sections/PreferencesSettings'));
 const EmployeeAssets = lazy(() => import('./sections/EmployeeAssets'));
 const TaxDeclaration = lazy(() => import('./sections/TaxDeclaration'));
+const MyPayslips = lazy(() => import('./sections/MyPayslips'));
 
-type SectionId = 'overview' | 'personal' | 'emergency' | 'family' | 'education' | 'experience' | 'skills' | 'bank' | 'health' | 'social' | 'preferences' | 'assets' | 'tax';
+type SectionId = 'overview' | 'personal' | 'emergency' | 'family' | 'education' | 'experience' | 'skills' | 'bank' | 'health' | 'social' | 'preferences' | 'assets' | 'tax' | 'payslips';
 
 interface SectionTab {
   id: SectionId;
@@ -39,6 +40,7 @@ interface SectionTab {
 const SECTIONS: SectionTab[] = [
   { id: 'overview', label: 'Dashboard', icon: LayoutDashboard, shortLabel: 'Dashboard' },
   { id: 'personal', label: 'Personal Profile', icon: User, shortLabel: 'Personal' },
+  { id: 'payslips', label: 'My Payslips', icon: FileText, shortLabel: 'Payslips' },
   { id: 'assets', label: 'Assigned Devices', icon: Laptop, shortLabel: 'Devices' },
   { id: 'tax', label: 'Tax Declarations', icon: Landmark, shortLabel: 'Tax' },
   { id: 'emergency', label: 'Emergency Contact', icon: Phone, shortLabel: 'Emergency' },
@@ -117,6 +119,7 @@ export default function EmployeeProfile() {
     switch (activeSection) {
       case 'overview': return <ProfileDashboard employee={employee} onNavigateSection={setActiveSection} />;
       case 'personal': return <PersonalProfile {...props} />;
+      case 'payslips': return <MyPayslips {...props} />;
       case 'assets': return <EmployeeAssets {...props} />;
       case 'tax': return <TaxDeclaration {...props} />;
       case 'emergency': return <EmergencyContact {...props} />;

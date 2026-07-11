@@ -425,6 +425,7 @@ interface GeneratePayslipPDFParams {
   periodEnd: string;
   slip: any;
   currency?: string;
+  skipDownload?: boolean;
 }
 
 export async function generateAndDownloadPayslipPDF(params: GeneratePayslipPDFParams): Promise<void> {
@@ -438,11 +439,15 @@ export async function generateAndDownloadPayslipPDF(params: GeneratePayslipPDFPa
     periodStart,
     periodEnd,
     slip,
-    currency = 'USD'
+    currency = 'USD',
+    skipDownload = false
   } = params;
 
   // 1. If pdf_url is already cached in the database, fetch signed URL and trigger download
   if (slip?.pdf_url) {
+    if (skipDownload) {
+      return;
+    }
     try {
       const { data, error } = await supabase.storage
         .from('payslips')
@@ -884,22 +889,26 @@ export async function generateAndDownloadPayslipPDF(params: GeneratePayslipPDFPa
       throw new Error(`Failed to create signed URL for uploaded payslip: ${signedError?.message || 'unknown error'}`);
     }
 
-    const a = document.createElement('a');
-    a.href = signedData.signedUrl;
-    a.target = '_blank';
-    a.download = `Payslip_${employeeName.replace(/\s+/g, '_')}_${periodStart}_to_${periodEnd}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    if (!skipDownload) {
+      const a = document.createElement('a');
+      a.href = signedData.signedUrl;
+      a.target = '_blank';
+      a.download = `Payslip_${employeeName.replace(/\s+/g, '_')}_${periodStart}_to_${periodEnd}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
   } else {
     // Fallback: trigger standard browser download if no DB record matches
-    const url = URL.createObjectURL(pdfBlob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Payslip_${employeeName.replace(/\s+/g, '_')}_${periodStart}_to_${periodEnd}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    if (!skipDownload) {
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Payslip_${employeeName.replace(/\s+/g, '_')}_${periodStart}_to_${periodEnd}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
   }
 }
