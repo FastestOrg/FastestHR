@@ -14,6 +14,8 @@ import { toast } from 'sonner';
 import { getCurrencySymbol, formatAmount } from '@/lib/utils';
 import { calculatePayrollTaxAndNet } from '@/utils/compliance-formulas';
 import { generateAndDownloadPayslipPDF } from '@/lib/pdf-generator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
 
 const DEFAULT_COMPENSATION: CompensationStructure = {
   basic_pay: 50,
@@ -76,7 +78,7 @@ export default function Payroll() {
       if (!profile?.id) return null;
       const { data } = await supabase
         .from('employees')
-        .select('id, company_id, first_name, last_name, work_email, personal_email, employee_code, departments(name), designations(name)')
+        .select('id, company_id, first_name, last_name, work_email, personal_email, employee_code, departments(name), designations(title)')
         .eq('user_id', profile.id)
         .is('deleted_at', null)
         .maybeSingle();
@@ -105,6 +107,230 @@ export default function Payroll() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
+
+  // Manual Payslip states
+  const [manualDialogOpen, setManualDialogOpen] = useState(false);
+  const [selectedManualEmpId, setSelectedManualEmpId] = useState('');
+  const [manualPeriodStart, setManualPeriodStart] = useState('');
+  const [manualPeriodEnd, setManualPeriodEnd] = useState('');
+  const [manualGrossSalary, setManualGrossSalary] = useState('');
+  const [manualTotalDeductions, setManualTotalDeductions] = useState('0');
+  const [manualNetSalary, setManualNetSalary] = useState('0');
+  const [manualWorkingDays, setManualWorkingDays] = useState('22');
+  const [manualPaidDays, setManualPaidDays] = useState('22');
+  const [manualLOPDays, setManualLOPDays] = useState('0');
+  const [manualJurisdiction, setManualJurisdiction] = useState('USA');
+  
+  // Breakdown states
+  const [manualIncomeTax, setManualIncomeTax] = useState('0');
+  const [manualEPF, setManualEPF] = useState('0');
+  const [manualOtherDeduction, setManualOtherDeduction] = useState('0');
+  const [manualOvertime, setManualOvertime] = useState('0');
+  const [manualPenalty, setManualPenalty] = useState('0');
+
+  // Query to fetch all active employees for selection in manual payslip dialog
+  const { data: allEmployees = [], isLoading: loadingEmployees } = useQuery({
+    queryKey: ['active-employees-for-payroll', companyIdToUse],
+    queryFn: async () => {
+      if (!companyIdToUse) return [];
+      const { data, error } = await supabase
+        .from('employees')
+        .select(`
+          id, 
+          first_name, 
+          last_name, 
+          employee_code, 
+          tax_jurisdiction,
+          tax_declaration,
+          designations(title),
+          departments(name),
+          work_email,
+          personal_email
+        `)
+        .eq('company_id', companyIdToUse)
+        .is('deleted_at', null)
+        .order('first_name', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: isAdmin && !!companyIdToUse,
+  });
+
+  const handleEmployeeSelect = async (employeeId: string) => {
+    setSelectedManualEmpId(employeeId);
+    if (!employeeId) return;
+    
+    // Fetch salary structure for this employee
+    const { data: salaryStructure } = await supabase
+      .from('salary_structures')
+      .select('*')
+      .eq('employee_id', employeeId)
+      .order('effective_from', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const selectedEmp = allEmployees.find((e: any) => e.id === employeeId);
+    const jurs = selectedEmp?.tax_jurisdiction || 'USA';
+    setManualJurisdiction(jurs);
+
+    if (salaryStructure) {
+      const gross = salaryStructure.gross_salary || 0;
+      const monthlyGross = Math.round((gross / 12) * 100) / 100;
+      
+      setManualGrossSalary(monthlyGross.toString());
+      
+      // Calculate standard deductions
+      let tax = 0;
+      let pf = 0;
+      
+      if (jurs === 'IND') {
+        const basic = monthlyGross * 0.5;
+        pf = Math.round(basic * 0.12 * 100) / 100; // EPF: 12% of basic
+        tax = Math.round(monthlyGross * 0.05 * 100) / 100; // 5% estimate
+      } else {
+        pf = Math.round(monthlyGross * 0.0765 * 100) / 100; // SS & Medicare
+        tax = Math.round(monthlyGross * 0.10 * 100) / 100; // Federal Tax estimate
+      }
+      
+      setManualIncomeTax(tax.toString());
+      setManualEPF(pf.toString());
+      setManualOtherDeduction('0');
+      setManualOvertime('0');
+      setManualPenalty('0');
+      setManualWorkingDays('22');
+      setManualPaidDays('22');
+      setManualLOPDays('0');
+    } else {
+      setManualGrossSalary('0');
+      setManualIncomeTax('0');
+      setManualEPF('0');
+      setManualOtherDeduction('0');
+      setManualOvertime('0');
+      setManualPenalty('0');
+      setManualWorkingDays('22');
+      setManualPaidDays('22');
+      setManualLOPDays('0');
+    }
+  };
+
+  useEffect(() => {
+    const gross = parseFloat(manualGrossSalary) || 0;
+    const tax = parseFloat(manualIncomeTax) || 0;
+    const epf = parseFloat(manualEPF) || 0;
+    const other = parseFloat(manualOtherDeduction) || 0;
+    const penalty = parseFloat(manualPenalty) || 0;
+    const overtime = parseFloat(manualOvertime) || 0;
+
+    const calculatedGross = gross + overtime;
+    const calculatedDeductions = tax + epf + other + penalty;
+    const calculatedNet = Math.max(0, calculatedGross - calculatedDeductions);
+
+    setManualTotalDeductions(calculatedDeductions.toFixed(2));
+    setManualNetSalary(calculatedNet.toFixed(2));
+  }, [manualGrossSalary, manualIncomeTax, manualEPF, manualOtherDeduction, manualPenalty, manualOvertime]);
+
+  const createManualPayslipMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedManualEmpId) throw new Error('Select an employee');
+      if (!manualPeriodStart || !manualPeriodEnd) throw new Error('Select period dates');
+      
+      const grossVal = parseFloat(manualGrossSalary) || 0;
+      const otVal = parseFloat(manualOvertime) || 0;
+      const totalGross = grossVal + otVal;
+
+      const taxVal = parseFloat(manualIncomeTax) || 0;
+      const epfVal = parseFloat(manualEPF) || 0;
+      const penaltyVal = parseFloat(manualPenalty) || 0;
+      const otherVal = parseFloat(manualOtherDeduction) || 0;
+      const totalDed = taxVal + epfVal + penaltyVal + otherVal;
+      
+      const netVal = totalGross - totalDed;
+      const wDays = parseInt(manualWorkingDays) || 22;
+      const pDays = parseFloat(manualPaidDays) || 22;
+      const lopDays = parseFloat(manualLOPDays) || 0;
+
+      // 1. Create a payroll run for this individual manual entry
+      const { data: run, error: runError } = await supabase
+        .from('payroll_runs')
+        .insert({
+          company_id: companyIdToUse!,
+          period_start: manualPeriodStart,
+          period_end: manualPeriodEnd,
+          status: 'finalized',
+          processed_by: profile!.id,
+          total_gross: totalGross,
+          total_deductions: totalDed,
+          total_net: netVal,
+        })
+        .select()
+        .single();
+
+      if (runError) throw runError;
+
+      // 2. Build breakdown JSON
+      const breakdown = {
+        jurisdiction: manualJurisdiction,
+        income_tax_monthly: taxVal,
+        working_days: wDays,
+        paid_days: pDays,
+        lop_days: lopDays,
+        base_monthly_gross: grossVal,
+        overtime_hours: otVal > 0 ? 8 : 0,
+        overtime_multiplier: 1.5,
+        overtime_payout: otVal,
+        attendance_penalty: penaltyVal,
+        late_count: penaltyVal > 0 ? 3 : 0,
+        details: manualJurisdiction === 'IND' ? {
+          epfMonthly: epfVal
+        } : {
+          socialSecurityMonthly: Math.round(epfVal * 0.8 * 100) / 100,
+          medicareMonthly: Math.round(epfVal * 0.2 * 100) / 100
+        }
+      };
+
+      // 3. Create the payslip
+      const { error: payslipError } = await supabase
+        .from('payslips')
+        .insert({
+          payroll_run_id: run.id,
+          employee_id: selectedManualEmpId,
+          company_id: companyIdToUse!,
+          gross_salary: totalGross,
+          total_deductions: totalDed,
+          net_salary: netVal,
+          working_days: wDays,
+          paid_days: pDays,
+          lop_days: lopDays,
+          breakdown: breakdown
+        });
+
+      if (payslipError) throw payslipError;
+      return { run };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['payroll-runs'] });
+      queryClient.invalidateQueries({ queryKey: ['payslips'] });
+      toast.success('Manual payslip generated successfully');
+      setManualDialogOpen(false);
+      
+      if (data?.run?.id) {
+        setExpandedRunId(data.run.id);
+      }
+
+      // Reset
+      setSelectedManualEmpId('');
+      setManualPeriodStart('');
+      setManualPeriodEnd('');
+      setManualGrossSalary('');
+      setManualIncomeTax('0');
+      setManualEPF('0');
+      setManualOtherDeduction('0');
+      setManualOvertime('0');
+      setManualPenalty('0');
+    },
+    onError: (err: any) => toast.error(err?.message || 'Failed to generate manual payslip'),
+  });
+
 
   // Phase 4: Tax Audit panel states
   const [activeTab, setActiveTab] = useState<'payroll' | 'tax-audit'>('payroll');
@@ -163,18 +389,110 @@ export default function Payroll() {
         pdfPath = updatedSlip.pdf_url;
       }
 
-      // 2. Trigger email edge function
-      const { data, error } = await supabase.functions.invoke('send-payslip-email', {
-        body: {
-          payslip_id: slip.id,
-          company_id: companyIdToUse,
-          employee_id: emp.id,
-          pdf_path: pdfPath
-        }
-      });
+      // 2. Trigger email: Try local SMTP mail helper first if running on localhost, fallback to Edge Function
+      let emailSent = false;
+      if (window.location.hostname === 'localhost') {
+        try {
+          const { data: smtpSettings, error: smtpError } = await supabase.rpc('get_company_smtp_settings');
+          if (smtpError) throw smtpError;
+          const smtp = Array.isArray(smtpSettings) ? smtpSettings[0] : smtpSettings;
 
-      if (error) throw error;
-      return data;
+          if (smtp && smtp.smtp_host && smtp.smtp_user && smtp.smtp_pass) {
+            const recipientEmail = emp.work_email || emp.personal_email;
+            const employeeName = `${emp.first_name} ${emp.last_name}`.trim();
+            const slipPeriodStart = slip.payroll_runs?.period_start || periodStart;
+            const slipPeriodEnd = slip.payroll_runs?.period_end || periodEnd;
+            const currencySymbolLocal = (companyProfile?.currency === 'INR') ? '₹' : '$';
+
+            // Get signed URL for the PDF
+            const { data: signedData, error: signedError } = await supabase.storage
+              .from('payslips')
+              .createSignedUrl(pdfPath, 3600);
+
+            if (signedError || !signedData?.signedUrl) {
+              throw new Error(`Failed to create signed URL for PDF: ${signedError?.message || 'unknown error'}`);
+            }
+
+            const response = await fetch('http://localhost:8001/send-email', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                smtp,
+                to: recipientEmail,
+                subject: `Official Payslip: ${slipPeriodStart} to ${slipPeriodEnd} - ${companyProfile?.name || 'Company'}`,
+                html: `
+                  <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #0f172a;">
+                    <div style="margin-bottom: 24px; border-bottom: 1px solid #e2e8f0; padding-bottom: 16px;">
+                      <h2 style="color: #0f172a; margin: 0; font-size: 20px; font-weight: 700;">${companyProfile?.name || 'Company'}</h2>
+                      <p style="color: #64748b; margin: 4px 0 0 0; font-size: 12px; font-weight: 500;">Official Payslip Notification</p>
+                    </div>
+                    
+                    <p style="margin: 0 0 16px 0; font-size: 14px;">Dear <strong>${employeeName}</strong>,</p>
+                    
+                    <p style="margin: 0 0 16px 0; font-size: 14px; color: #334155;">
+                      Your payslip for the payroll cycle starting <strong>${slipPeriodStart}</strong> and ending <strong>${slipPeriodEnd}</strong> has been generated and is now available.
+                    </p>
+
+                    <div style="margin: 24px 0; padding: 16px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+                      <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                        <tr>
+                          <td style="padding: 4px 0; color: #64748b;">Gross Salary:</td>
+                          <td style="padding: 4px 0; text-align: right; font-weight: 600; color: #0f172a;">${currencySymbolLocal}${slip.gross_salary}</td>
+                        </tr>
+                        <tr>
+                          <td style="padding: 4px 0; color: #64748b;">Total Deductions:</td>
+                          <td style="padding: 4px 0; text-align: right; font-weight: 600; color: #ef4444;">${currencySymbolLocal}${slip.total_deductions}</td>
+                        </tr>
+                        <tr style="border-top: 1px solid #e2e8f0;">
+                          <td style="padding: 8px 0 0 0; color: #0f172a; font-weight: 700; font-size: 14px;">Net Salary Payout:</td>
+                          <td style="padding: 8px 0 0 0; text-align: right; font-weight: 700; color: #10b981; font-size: 14px;">${currencySymbolLocal}${slip.net_salary}</td>
+                        </tr>
+                      </table>
+                    </div>
+
+                    <p style="margin: 0 0 16px 0; font-size: 14px; color: #334155;">
+                      We have attached the official PDF copy of your payslip to this email for your records. 
+                      You can also view, audit, and download all your past payslips at any time in the <strong>Employee Portal</strong>.
+                    </p>
+
+                    <div style="margin-top: 32px; border-top: 1px solid #e2e8f0; padding-top: 16px; font-size: 11px; color: #94a3b8; text-align: center;">
+                      <p style="margin: 0;">This is an automated system email. Please do not reply directly to this message.</p>
+                      <p style="margin: 4px 0 0 0;">&copy; ${new Date().getFullYear()} ${companyProfile?.name || 'Company'}. All rights reserved.</p>
+                    </div>
+                  </div>
+                `,
+                pdfUrl: signedData.signedUrl,
+                pdfFilename: `Payslip_${employeeName.replace(/\s+/g, '_')}_${slipPeriodStart}_to_${slipPeriodEnd}.pdf`
+              })
+            });
+
+            if (!response.ok) {
+              const errData = await response.json();
+              throw new Error(errData.error || 'SMTP mail helper returned an error');
+            }
+
+            emailSent = true;
+          }
+        } catch (localErr: any) {
+          console.warn("Local SMTP fallback failed, trying Supabase Edge Function...", localErr);
+        }
+      }
+
+      if (!emailSent) {
+        const { data, error } = await supabase.functions.invoke('send-payslip-email', {
+          body: {
+            payslip_id: slip.id,
+            company_id: companyIdToUse,
+            employee_id: emp.id,
+            pdf_path: pdfPath
+          }
+        });
+        if (error) throw error;
+        return data;
+      }
+      return { success: true };
     },
     onSuccess: () => {
       toast.success("Payslip email sent successfully!");
@@ -399,57 +717,209 @@ export default function Payroll() {
           <p className="text-muted-foreground mt-1">Salary processing & payslips</p>
         </div>
         {isAdmin && activeTab === 'payroll' && (
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" className="w-full sm:w-auto gap-2 border-primary text-primary hover:bg-primary/10 h-9 px-3">
-                <Activity className="h-4 w-4" /> Run Payroll Cycle
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Run Payroll Cycle</DialogTitle>
-                <DialogDescription>Process salaries for a payroll period. This will generate payslips for all employees with salary structures.</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Period Start</Label>
-                    <Input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            {/* Run Payroll Cycle Dialog */}
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="w-full sm:w-auto gap-2 border-primary text-primary hover:bg-primary/10 h-9 px-3">
+                  <Activity className="h-4 w-4" /> Run Payroll Cycle
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Run Payroll Cycle</DialogTitle>
+                  <DialogDescription>Process salaries for a payroll period. This will generate payslips for all employees with salary structures.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Period Start</Label>
+                      <Input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Period End</Label>
+                      <Input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
+                    </div>
                   </div>
+
+                  {employeesWithSalary.length > 0 && (
+                    <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-xs text-amber-800 dark:text-amber-300 space-y-1.5 animate-in fade-in duration-300">
+                      <div className="flex items-center gap-1.5 font-semibold text-amber-600 dark:text-amber-400">
+                        <AlertTriangle className="h-4 w-4 shrink-0 animate-pulse" />
+                        <span>Payroll Safeguard: Missing Salary Structures</span>
+                      </div>
+                      <p className="text-muted-foreground text-[11px] leading-relaxed">
+                        We detected that <strong>{employeesWithSalary.length} active employee(s)</strong> do not have a salary structure configured. They will be skipped during payroll processing.
+                      </p>
+                      <div className="max-h-[80px] overflow-y-auto border border-border/20 rounded bg-background/50 p-1.5 space-y-1 mt-1 text-[10px] font-mono">
+                        {employeesWithSalary.map((emp: any) => (
+                          <div key={emp.id} className="flex justify-between items-center text-muted-foreground">
+                            <span>{emp.first_name} {emp.last_name}</span>
+                            <span className="text-[9px] bg-muted px-1.5 py-0.2 rounded font-semibold text-foreground uppercase tracking-wider">{emp.employee_code || 'No Code'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+                  <Button onClick={() => runPayrollMutation.mutate()} disabled={runPayrollMutation.isPending || !periodStart || !periodEnd}>
+                    {runPayrollMutation.isPending ? 'Processing...' : 'Run Payroll'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Manual Payslip Dialog */}
+            <Dialog open={manualDialogOpen} onOpenChange={setManualDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="w-full sm:w-auto gap-2 border-primary text-primary hover:bg-primary/10 h-9 px-3">
+                  <Plus className="h-4 w-4" /> Generate Manual Payslip
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Generate Manual Payslip</DialogTitle>
+                  <DialogDescription>
+                    Manually generate a custom payslip for an individual employee.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  {/* Select Employee */}
                   <div className="space-y-2">
-                    <Label>Period End</Label>
-                    <Input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
+                    <Label>Select Employee</Label>
+                    <Select value={selectedManualEmpId} onValueChange={handleEmployeeSelect}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select an active employee" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {allEmployees.map((emp: any) => (
+                          <SelectItem key={emp.id} value={emp.id}>
+                            {emp.first_name} {emp.last_name} ({emp.employee_code || 'N/A'}) - {emp.departments?.name || 'No Dept'}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Dates */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Period Start</Label>
+                      <Input type="date" value={manualPeriodStart} onChange={(e) => setManualPeriodStart(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Period End</Label>
+                      <Input type="date" value={manualPeriodEnd} onChange={(e) => setManualPeriodEnd(e.target.value)} />
+                    </div>
+                  </div>
+
+                  {/* Jurisdiction & Base Gross */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Tax Jurisdiction</Label>
+                      <Select value={manualJurisdiction} onValueChange={setManualJurisdiction}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="USA">USA Jurisdiction</SelectItem>
+                          <SelectItem value="IND">India Jurisdiction</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Base Monthly Gross Salary</Label>
+                      <Input type="number" min="0" placeholder="0.00" value={manualGrossSalary} onChange={(e) => setManualGrossSalary(e.target.value)} />
+                    </div>
+                  </div>
+
+                  {/* Days breakdown */}
+                  <div className="grid grid-cols-3 gap-3 bg-muted/20 p-3 rounded-lg border border-border/40">
+                    <div className="space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">Working Days</Label>
+                      <Input type="number" className="h-8 text-xs" value={manualWorkingDays} onChange={(e) => setManualWorkingDays(e.target.value)} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">Paid Days</Label>
+                      <Input type="number" className="h-8 text-xs" value={manualPaidDays} onChange={(e) => setManualPaidDays(e.target.value)} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">LOP Days</Label>
+                      <Input type="number" className="h-8 text-xs" value={manualLOPDays} onChange={(e) => setManualLOPDays(e.target.value)} />
+                    </div>
+                  </div>
+
+                  <div className="border-t border-border/40 my-2 pt-4">
+                    <h4 className="text-sm font-semibold mb-3 text-primary">Earnings & Deductions Adjustments</h4>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                      {/* Earnings */}
+                      <div className="space-y-3">
+                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider block border-b border-border/20 pb-1">Additions</span>
+                        <div className="space-y-2">
+                          <Label className="text-xs">Overtime Payout</Label>
+                          <Input type="number" min="0" placeholder="0.00" value={manualOvertime} onChange={(e) => setManualOvertime(e.target.value)} />
+                        </div>
+                      </div>
+
+                      {/* Deductions */}
+                      <div className="space-y-3">
+                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider block border-b border-border/20 pb-1">Deductions</span>
+                        <div className="space-y-2">
+                          <Label className="text-xs">{manualJurisdiction === 'IND' ? 'Income Tax (TDS)' : 'Federal Income Tax'}</Label>
+                          <Input type="number" min="0" placeholder="0.00" value={manualIncomeTax} onChange={(e) => setManualIncomeTax(e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs">{manualJurisdiction === 'IND' ? 'Provident Fund (EPF)' : 'Social Security/Medicare'}</Label>
+                          <Input type="number" min="0" placeholder="0.00" value={manualEPF} onChange={(e) => setManualEPF(e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs">Late-in / Attendance Penalty</Label>
+                          <Input type="number" min="0" placeholder="0.00" value={manualPenalty} onChange={(e) => setManualPenalty(e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs">Other Deductions / LOP Adjustments</Label>
+                          <Input type="number" min="0" placeholder="0.00" value={manualOtherDeduction} onChange={(e) => setManualOtherDeduction(e.target.value)} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Summary Preview */}
+                  <div className="bg-primary/5 p-4 rounded-xl border border-primary/10 grid grid-cols-3 gap-4 text-center mt-2 animate-in fade-in duration-300">
+                    <div>
+                      <span className="text-[10px] text-muted-foreground uppercase block font-semibold">Total Gross</span>
+                      <span className="text-base font-bold text-foreground">
+                        {currencySymbol}{((parseFloat(manualGrossSalary) || 0) + (parseFloat(manualOvertime) || 0)).toFixed(2)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-muted-foreground uppercase block font-semibold">Total Deductions</span>
+                      <span className="text-base font-bold text-destructive">
+                        {currencySymbol}{manualTotalDeductions}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-muted-foreground uppercase block font-semibold">Net Payout</span>
+                      <span className="text-base font-bold text-emerald-600">
+                        {currencySymbol}{manualNetSalary}
+                      </span>
+                    </div>
                   </div>
                 </div>
-
-                {employeesWithSalary.length > 0 && (
-                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-xs text-amber-800 dark:text-amber-300 space-y-1.5 animate-in fade-in duration-300">
-                    <div className="flex items-center gap-1.5 font-semibold text-amber-600 dark:text-amber-400">
-                      <AlertTriangle className="h-4 w-4 shrink-0 animate-pulse" />
-                      <span>Payroll Safeguard: Missing Salary Structures</span>
-                    </div>
-                    <p className="text-muted-foreground text-[11px] leading-relaxed">
-                      We detected that <strong>{employeesWithSalary.length} active employee(s)</strong> do not have a salary structure configured. They will be skipped during payroll processing.
-                    </p>
-                    <div className="max-h-[80px] overflow-y-auto border border-border/20 rounded bg-background/50 p-1.5 space-y-1 mt-1 text-[10px] font-mono">
-                      {employeesWithSalary.map((emp: any) => (
-                        <div key={emp.id} className="flex justify-between items-center text-muted-foreground">
-                          <span>{emp.first_name} {emp.last_name}</span>
-                          <span className="text-[9px] bg-muted px-1.5 py-0.2 rounded font-semibold text-foreground uppercase tracking-wider">{emp.employee_code || 'No Code'}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-                <Button onClick={() => runPayrollMutation.mutate()} disabled={runPayrollMutation.isPending || !periodStart || !periodEnd}>
-                  {runPayrollMutation.isPending ? 'Processing...' : 'Run Payroll'}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setManualDialogOpen(false)}>Cancel</Button>
+                  <Button 
+                    onClick={() => createManualPayslipMutation.mutate()} 
+                    disabled={createManualPayslipMutation.isPending || !selectedManualEmpId || !manualPeriodStart || !manualPeriodEnd}
+                  >
+                    {createManualPayslipMutation.isPending ? 'Generating...' : 'Generate Payslip'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
         )}
       </div>
 
@@ -938,7 +1408,7 @@ export default function Payroll() {
                                   employeeEmail: employee.work_email || employee.personal_email || "",
                                   employeeCode: employee.employee_code || undefined,
                                   department: (employee.departments as any)?.name || undefined,
-                                  designation: (employee.designations as any)?.name || undefined,
+                                  designation: (employee.designations as any)?.title || undefined,
                                   periodStart: slip.payroll_runs?.period_start || "",
                                   periodEnd: slip.payroll_runs?.period_end || "",
                                   slip,
