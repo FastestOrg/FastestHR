@@ -1,0 +1,3 @@
+Create an end to end Slack Grade in office communication section called "Chats". In this, Users can message company members (employees) or Admins and can create groups with multiple users to chat (Admin, Manager and Member setup like Whatsapp/Slack). Simple UI/UX but enterprise production grade chat services. Also show which user is active with a green dots. Double tick with blue colour is messege is been already read.
+
+Instructions: Make it production grade end to end. Users will not be able to delete message once sent. Company admin have primary access to all groups created/Individual messages sent and can see all conversations.

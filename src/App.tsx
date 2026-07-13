@@ -59,6 +59,9 @@ import AttritionInsights from '@/pages/admin/AttritionInsights';
 import CultureHub from '@/pages/CultureHub';
 import KPI from '@/pages/KPI';
 
+// Chat module (lazy loaded)
+const Chats = lazy(() => import('@/pages/Chats'));
+
 // Sub-pages (lazy loaded for performance)
 const NewEmployee = lazy(() => import('@/pages/employees/NewEmployee'));
 const EmployeeDetail = lazy(() => import('@/pages/employees/EmployeeDetail'));
@@ -219,6 +222,7 @@ function AppRoutes() {
       <Route path="/exit-management" element={withLayout(<ExitManagement />)} />
       <Route path="/holidays" element={withLayout(<HolidayCalendar />)} />
       <Route path="/tasks" element={withLayout(<Tasks />)} />
+      <Route path="/chats" element={withLayout(<Chats />)} />
       <Route path="/senddesk" element={withLayout(<SendDesk />)} />
       <Route path="/id-card" element={withLayout(<VirtualIDCard />)} />
       <Route path="/billing" element={withLayout(<Billing />, 'company_admin')} />

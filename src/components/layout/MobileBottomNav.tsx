@@ -4,7 +4,7 @@ import {
   LayoutDashboard,
   Clock,
   CalendarDays,
-  CalendarCheck,
+  MessageSquare,
   Menu,
 } from 'lucide-react';
 import { useScrollDirection } from '@/hooks/use-scroll-direction';
@@ -35,9 +35,9 @@ const NAV_ITEMS: NavItem[] = [
     matchRoutes: ['/leave', '/leave/apply'],
   },
   {
-    icon: CalendarCheck,
-    label: 'Tasks',
-    route: '/tasks',
+    icon: MessageSquare,
+    label: 'Chats',
+    route: '/chats',
   },
   {
     icon: Menu,
