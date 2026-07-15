@@ -3830,6 +3830,8 @@ export type Database = {
         | "on_leave"
         | "holiday"
         | "weekend"
+        | "late"
+        | "early_leave"
       candidate_stage:
         | "applied"
         | "screening"
@@ -4003,6 +4005,8 @@ export const Constants = {
         "on_leave",
         "holiday",
         "weekend",
+        "late",
+        "early_leave",
       ],
       candidate_stage: [
         "applied",

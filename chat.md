@@ -1,3 +1,1 @@
-Create an end to end Slack Grade in office communication section called "Chats". In this, Users can message company members (employees) or Admins and can create groups with multiple users to chat (Admin, Manager and Member setup like Whatsapp/Slack). Simple UI/UX but enterprise production grade chat services. Also show which user is active with a green dots. Double tick with blue colour is messege is been already read.
-
-Instructions: Make it production grade end to end. Users will not be able to delete message once sent. Company admin have primary access to all groups created/Individual messages sent and can see all conversations.
+Changes In Attandance, Admin can set buffer time for attendance and it can check an option if late login is alloweed or not. Also Admin can set like brackets for Absent, Half Day, Full day like (Time between 0 to 4 hours is Absent, 4-7 Hours is half day and 7 hours -15 hours is full day something like this )

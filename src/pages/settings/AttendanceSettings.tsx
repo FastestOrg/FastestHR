@@ -47,6 +47,11 @@ export default function AttendanceSettings() {
     late_login_min_hours: '4',
     absconding_consecutive_leaves: '5',
     absconding_email_template: '',
+    late_grace_period_mins: '15',
+    allow_late_login: true,
+    absent_limit_hours: '4',
+    half_day_limit_hours: '7',
+    full_day_limit_hours: '15',
   });
 
   useEffect(() => {
@@ -81,6 +86,11 @@ export default function AttendanceSettings() {
         late_login_min_hours: settings.late_login_handling?.min_working_hours?.toString() || '4',
         absconding_consecutive_leaves: settings.absconding_consecutive_leaves?.toString() || '5',
         absconding_email_template: settings.absconding_email_template || '',
+        late_grace_period_mins: settings.late_grace_period_mins?.toString() || '15',
+        allow_late_login: settings.allow_late_login !== false,
+        absent_limit_hours: settings.brackets?.absent_limit_hours?.toString() || '4',
+        half_day_limit_hours: settings.brackets?.half_day_limit_hours?.toString() || '7',
+        full_day_limit_hours: settings.brackets?.full_day_limit_hours?.toString() || '15',
       });
     }
   }, [company]);
@@ -127,7 +137,14 @@ export default function AttendanceSettings() {
             min_working_hours: parseFloat(form.late_login_min_hours) || 4
           },
           absconding_consecutive_leaves: parseInt(form.absconding_consecutive_leaves) || 5,
-          absconding_email_template: form.absconding_email_template
+          absconding_email_template: form.absconding_email_template,
+          late_grace_period_mins: parseInt(form.late_grace_period_mins) || 15,
+          allow_late_login: form.allow_late_login,
+          brackets: {
+            absent_limit_hours: parseFloat(form.absent_limit_hours) || 4.0,
+            half_day_limit_hours: parseFloat(form.half_day_limit_hours) || 7.0,
+            full_day_limit_hours: parseFloat(form.full_day_limit_hours) || 15.0
+          }
         }
       };
 
@@ -284,9 +301,9 @@ export default function AttendanceSettings() {
             <div className="border-t border-border/50 pt-6">
               <div className="mb-4">
                 <h3 className="text-sm font-semibold flex items-center gap-2 uppercase tracking-wider text-xs">
-                  <Shield className="w-4 h-4 text-primary" /> Exception Handling Rules
+                  <Shield className="w-4 h-4 text-primary" /> Exception & Lateness Policies
                 </h3>
-                <p className="text-xs text-muted-foreground mt-0.5">Determine how to classify missing clock-outs and late logins</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Determine how to classify missing clock-outs, late logins, and working hours brackets</p>
               </div>
 
               <div className="grid gap-6 md:grid-cols-2 bg-background/20 p-5 rounded-xl border border-border/50">
@@ -322,36 +339,82 @@ export default function AttendanceSettings() {
                   </div>
                 </div>
 
-                {/* Late Logins */}
+                {/* Late Logins Policy */}
                 <div className="space-y-4">
-                  <h4 className="text-xs font-bold text-foreground border-b border-border/30 pb-1.5 uppercase tracking-wider">Late Logins</h4>
+                  <h4 className="text-xs font-bold text-foreground border-b border-border/30 pb-1.5 uppercase tracking-wider">Late Login Policy</h4>
                   <div className="space-y-3">
-                    <div className="space-y-1">
-                      <Label className="text-xs">Mark attendance as</Label>
-                      <select
-                        value={form.late_login_action}
-                        onChange={(e) => setForm(f => ({ ...f, late_login_action: e.target.value }))}
-                        className="flex h-9 w-full rounded-md border border-border/50 bg-background px-3 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                      >
-                        <option value="late">Late</option>
-                        <option value="absent">Absent</option>
-                        <option value="half_day">Half Day</option>
-                        <option value="present">Full Day Present</option>
-                      </select>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Late Grace Period / Buffer (Minutes)</Label>
+                      <Input
+                        type="number"
+                        placeholder="15"
+                        value={form.late_grace_period_mins}
+                        onChange={(e) => setForm(f => ({ ...f, late_grace_period_mins: e.target.value }))}
+                        className="bg-background border-border/50 h-9"
+                      />
+                      <p className="text-[10px] text-muted-foreground">Allowed minutes after shift start before marked as late.</p>
                     </div>
 
-                    {form.late_login_action === 'half_day' && (
-                      <div className="space-y-1">
-                        <Label className="text-xs">Minimum Working Hours</Label>
-                        <Input
-                          type="number"
-                          placeholder="4"
-                          value={form.late_login_min_hours}
-                          onChange={(e) => setForm(f => ({ ...f, late_login_min_hours: e.target.value }))}
-                          className="bg-background/50 border-border/50 h-9"
-                        />
+                    <div className="flex items-center gap-3 pt-2">
+                      <input
+                        type="checkbox"
+                        id="allow_late_login"
+                        checked={form.allow_late_login}
+                        onChange={(e) => setForm(f => ({ ...f, allow_late_login: e.target.checked }))}
+                        className="rounded border-border bg-background text-primary focus:ring-primary h-4.5 w-4.5"
+                      />
+                      <div>
+                        <Label htmlFor="allow_late_login" className="cursor-pointer text-xs font-bold text-foreground">Allow Late Logins</Label>
+                        <p className="text-[10px] text-muted-foreground">If disabled, clock-in is blocked past the buffer time.</p>
                       </div>
-                    )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Attendance Status Brackets */}
+                <div className="space-y-4 col-span-2 border-t border-border/30 pt-4 mt-2">
+                  <h4 className="text-xs font-bold text-foreground border-b border-border/30 pb-1.5 uppercase tracking-wider">Attendance Status Brackets (Hours Worked)</h4>
+                  <p className="text-[11px] text-muted-foreground">Determine dynamic attendance status based on actual shift hours worked.</p>
+                  
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div className="space-y-2">
+                      <Label className="text-xs">Absent Max Hours</Label>
+                      <Input
+                        type="number"
+                        step="0.5"
+                        placeholder="4"
+                        value={form.absent_limit_hours}
+                        onChange={(e) => setForm(f => ({ ...f, absent_limit_hours: e.target.value }))}
+                        className="bg-background border-border/50 h-9"
+                      />
+                      <p className="text-[10px] text-muted-foreground">Hours between 0 and this are marked as <strong>Absent</strong>.</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-xs">Half Day Max Hours</Label>
+                      <Input
+                        type="number"
+                        step="0.5"
+                        placeholder="7"
+                        value={form.half_day_limit_hours}
+                        onChange={(e) => setForm(f => ({ ...f, half_day_limit_hours: e.target.value }))}
+                        className="bg-background border-border/50 h-9"
+                      />
+                      <p className="text-[10px] text-muted-foreground">Hours between absent limit and this are marked as <strong>Half Day</strong>.</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-xs">Full Day Max Hours</Label>
+                      <Input
+                        type="number"
+                        step="0.5"
+                        placeholder="15"
+                        value={form.full_day_limit_hours}
+                        onChange={(e) => setForm(f => ({ ...f, full_day_limit_hours: e.target.value }))}
+                        className="bg-background border-border/50 h-9"
+                      />
+                      <p className="text-[10px] text-muted-foreground">Hours between half day limit and this are marked as <strong>Full Day</strong>.</p>
+                    </div>
                   </div>
                 </div>
               </div>

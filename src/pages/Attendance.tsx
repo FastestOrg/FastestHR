@@ -461,6 +461,24 @@ export default function Attendance() {
           console.error("Error querying assigned shift:", shiftErr);
         }
 
+        // Load company attendance settings and payroll settings
+        let settings: any = null;
+        let lateGrace = 15;
+        try {
+          const { data: company } = await supabase
+            .from('companies')
+            .select('attendance_settings, payroll_settings')
+            .eq('id', record.company_id)
+            .single();
+          if (company) {
+            settings = company.attendance_settings as any;
+            const payrollSettings = company.payroll_settings as any;
+            lateGrace = settings?.late_grace_period_mins ?? payrollSettings?.late_grace_period_mins ?? 15;
+          }
+        } catch (compErr) {
+          console.error("Error loading company settings:", compErr);
+        }
+
         // Parse shift hours and minutes
         const [sHour, sMin] = shiftStartStr.split(':').map(Number);
         const [eHour, eMin] = shiftEndStr.split(':').map(Number);
@@ -470,7 +488,7 @@ export default function Attendance() {
         const inMin = inDate.getMinutes();
         const inTotalMin = inHour * 60 + inMin;
         const shiftStartTotalMin = sHour * 60 + sMin;
-        const isLate = inTotalMin > (shiftStartTotalMin + 15); // 15-minute grace limit
+        const isLate = inTotalMin > (shiftStartTotalMin + lateGrace);
 
         // Compare check-out time (local hours & minutes)
         const outHour = outDate.getHours();
@@ -479,8 +497,13 @@ export default function Attendance() {
         const shiftEndTotalMin = eHour * 60 + eMin;
         const isEarlyLeave = outTotalMin < shiftEndTotalMin;
 
-        // Calculate and resolve calculated status
-        if (totalHrs < 4.0) {
+        // Calculate and resolve status using dynamic company brackets
+        const absentThreshold = settings?.brackets?.absent_limit_hours ?? 4.0;
+        const halfDayThreshold = settings?.brackets?.half_day_limit_hours ?? 7.0;
+
+        if (totalHrs < absentThreshold) {
+          updateData.status = 'absent';
+        } else if (totalHrs < halfDayThreshold) {
           updateData.status = 'half_day';
         } else if (isLate) {
           updateData.status = 'late';
@@ -566,7 +589,8 @@ export default function Attendance() {
 
       const payrollSettings = company?.payroll_settings as any;
       const settings = company?.attendance_settings as any;
-      const lateGrace = payrollSettings?.late_grace_period_mins ?? 15;
+      const lateGrace = settings?.late_grace_period_mins ?? payrollSettings?.late_grace_period_mins ?? 15;
+      const allowLateLogin = settings?.allow_late_login !== false;
       const locationRequired = settings?.location_required !== false;
 
       // Resolve shift times & date bounds (handles crossover night shifts)
@@ -575,6 +599,10 @@ export default function Attendance() {
       // Calculate isLate
       const graceTime = new Date(shiftStart.getTime() + lateGrace * 60 * 1000);
       const isLate = clockInTime.getTime() > graceTime.getTime();
+
+      if (isLate && !allowLateLogin) {
+        throw new Error(`Clock-in rejected: Late login is not allowed. Your shift started at ${shiftStartStr.substring(0, 5)} and the allowed late buffer is ${lateGrace} minutes.`);
+      }
 
       let gpsCoords: { latitude: number; longitude: number; accuracy: number; verified: boolean } | null = null;
       let clientIP: string | null = null;
@@ -748,15 +776,21 @@ export default function Attendance() {
 
       const workTypeUsed = (todayRecord.clock_in_location as any)?.work_type || 'office';
 
+      // Fetch company settings once at the beginning
+      const { data: company, error: companyErr } = await supabase
+        .from('companies')
+        .select('geofence_latitude, geofence_longitude, geofence_radius, ip_whitelist, attendance_settings')
+        .eq('id', employee!.company_id)
+        .single();
+        
+      if (companyErr) {
+        console.error('Failed to load company settings:', companyErr);
+      }
+
+      const settings = company?.attendance_settings as any;
+
       // Capture GPS coordinates on clock out for office work
       if (workTypeUsed === 'office') {
-        const { data: company } = await supabase
-          .from('companies')
-          .select('geofence_latitude, geofence_longitude, geofence_radius, ip_whitelist, attendance_settings')
-          .eq('id', employee!.company_id)
-          .single();
-
-        const settings = company?.attendance_settings as any;
         const locationRequired = settings?.location_required !== false;
 
         let ipBypassed = !locationRequired;
@@ -858,12 +892,31 @@ export default function Attendance() {
         }
       }
       
+      // Calculate final status based on working hours brackets
+      const absentThreshold = settings?.brackets?.absent_limit_hours ?? 4.0;
+      const halfDayThreshold = settings?.brackets?.half_day_limit_hours ?? 7.0;
+
+      let statusToSet = todayRecord.status;
+      if (totalHours < absentThreshold) {
+        statusToSet = 'absent';
+      } else if (totalHours < halfDayThreshold) {
+        statusToSet = 'half_day';
+      } else {
+        if (todayRecord.status === 'late') {
+          statusToSet = 'late';
+        } else if (isEarlyLeave) {
+          statusToSet = 'early_leave';
+        } else {
+          statusToSet = 'present';
+        }
+      }
+
       const { error } = await supabase
         .from('attendance')
         .update({
           clock_out: clockOutTime.toISOString(),
           total_hours: parseFloat(totalHours.toFixed(2)),
-          status: (isEarlyLeave ? 'early_leave' : todayRecord.status) as any,
+          status: statusToSet as any,
           clock_out_location: {
             work_type: workTypeUsed,
             ip_address: clientIP || 'unknown',
