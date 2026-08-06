@@ -1,1 +1,0 @@
-Changes In Attandance, Admin can set buffer time for attendance and it can check an option if late login is alloweed or not. Also Admin can set like brackets for Absent, Half Day, Full day like (Time between 0 to 4 hours is Absent, 4-7 Hours is half day and 7 hours -15 hours is full day something like this )

@@ -74,6 +74,9 @@ const CandidateLogin = lazy(() => import('@/pages/candidate/CandidateLogin'));
 const CandidatePortal = lazy(() => import('@/pages/candidate/CandidatePortal'));
 const ReferralPortal = lazy(() => import('@/pages/recruitment/ReferralPortal'));
 const EmployeeProfile = lazy(() => import('@/pages/profile/EmployeeProfile'));
+const GlobalEmployeeVerification = lazy(() => import('@/pages/GlobalEmployeeVerification'));
+const GlobalEmployeeProfile = lazy(() => import('@/pages/public/GlobalEmployeeProfile'));
+const GlobalEmployeeVerify = lazy(() => import('@/pages/public/GlobalEmployeeVerify'));
 
 // Recruitment sub-pages
 import { RecruitmentPipeline } from '@/pages/recruitment/RecruitmentPipeline';
@@ -172,6 +175,10 @@ function AppRoutes() {
       <Route path="/id/:publicId" element={<PublicIDCard />} />
       <Route path="/author/:slug" element={<AuthorDetail />} />
 
+      {/* Global Employee Verification - Public Pages */}
+      <Route path="/employeebg/:id" element={<Suspense fallback={<div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] text-white/20 font-mono text-[10px] tracking-[0.2em] uppercase"><div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin mb-4" />LOADING PROFILE</div>}><GlobalEmployeeProfile /></Suspense>} />
+      <Route path="/employeebg/verify/:token" element={<Suspense fallback={<div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] text-white/20 font-mono text-[10px] tracking-[0.2em] uppercase"><div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin mb-4" />VERIFICATION PORTAL</div>}><GlobalEmployeeVerify /></Suspense>} />
+
 
       {/* Company Career Pages */}
       <Route path="/company/:companySlug" element={<Suspense fallback={<div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] text-white/20 font-mono text-[10px] tracking-[0.2em] uppercase"><div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin mb-4" />LOADING EXPERIENCE</div>}><CompanyPage /></Suspense>} />
@@ -224,6 +231,7 @@ function AppRoutes() {
       <Route path="/tasks" element={withLayout(<Tasks />)} />
       <Route path="/chats" element={withLayout(<Chats />)} />
       <Route path="/senddesk" element={withLayout(<SendDesk />)} />
+      <Route path="/global-verification" element={withLayout(<GlobalEmployeeVerification />)} />
       <Route path="/id-card" element={withLayout(<VirtualIDCard />)} />
       <Route path="/billing" element={withLayout(<Billing />, 'company_admin')} />
       <Route path="/roles" element={withLayout(<Roles />, 'company_admin')} />

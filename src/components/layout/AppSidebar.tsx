@@ -60,6 +60,7 @@ const managementNav: NavItem[] = [
   { title: 'Payroll', url: '/payroll', icon: DollarSign, roles: [...ADMIN_HR, 'user', 'recruiter'] },
   { title: 'Exit Management', url: '/exit-management', icon: UserMinus, roles: ADMIN_HR },
   { title: 'SendDesk', url: '/senddesk', icon: Send, roles: ADMIN_HR },
+  { title: 'Employee BG', url: '/global-verification', icon: Globe, roles: ADMIN_HR },
 ];
 
 const accountNav: NavItem[] = [

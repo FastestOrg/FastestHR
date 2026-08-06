@@ -13,7 +13,7 @@ import {
   DialogFooter,
   DialogDescription
 } from '@/components/ui/dialog';
-import { Loader2, Plus, Trash2, Edit2, FileText, ExternalLink, Eye, Mail, Variable } from 'lucide-react';
+import { Loader2, Plus, Trash2, Edit2, FileText, ExternalLink, Eye, Mail, Variable, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OfferLetterRenderer } from './OfferLetterRenderer';
@@ -109,6 +109,34 @@ export function OfferTemplateList() {
     }
   });
 
+  const duplicateMutation = useMutation({
+    mutationFn: async (template: OfferTemplate) => {
+      const payload = {
+        company_id: profile!.company_id!,
+        name: `${template.name} (Copy)`,
+        html_content: template.html_content,
+        letterhead_url: template.letterhead_url,
+        email_subject: template.email_subject,
+        email_body: template.email_body,
+        is_predefined_html: template.is_predefined_html,
+        custom_variables: template.custom_variables,
+      };
+
+      const { error } = await supabase
+        .from('offer_templates')
+        .insert(payload as any);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['offer-templates'] });
+      toast.success('Template duplicated successfully');
+    },
+    onError: (error) => {
+      toast.error('Failed to duplicate template');
+      console.error(error);
+    }
+  });
+
   if (isLoading) {
     return (
       <div className="flex justify-center p-12">
@@ -147,6 +175,17 @@ export function OfferTemplateList() {
                     onClick={() => { setEditingTemplate(template); setIsEditorOpen(true); }}
                   >
                     <Edit2 className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    aria-label="Duplicate template"
+                    title="Duplicate template"
+                    className="h-8 w-8"
+                    onClick={() => duplicateMutation.mutate(template)}
+                    disabled={duplicateMutation.isPending}
+                  >
+                    <Copy className="h-3.5 w-3.5" />
                   </Button>
                   <Button 
                     variant="ghost" 
@@ -520,9 +559,9 @@ function OfferTemplateEditor({ isOpen, onClose, template }: { isOpen: boolean, o
           </TabsContent>
 
           {/* ── Live Preview ── */}
-          <TabsContent value="preview" className="py-2">
-            <div className="bg-muted/10 rounded-xl p-8 border border-border/50 max-h-[60vh] overflow-auto flex justify-center">
-              <div className="scale-[0.8] origin-top">
+          <TabsContent value="preview" className="space-y-4">
+            <div className="bg-muted/10 rounded-xl p-4 sm:p-6 border border-border/50 max-h-[60vh] overflow-auto flex justify-center">
+              <div className="w-full flex justify-center">
                 <OfferLetterRenderer 
                   htmlContent={htmlContent}
                   letterheadUrl={letterheadUrl}

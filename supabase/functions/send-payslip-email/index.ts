@@ -5,12 +5,25 @@ import * as nodemailer from "npm:nodemailer@6.9.8";
 // Polyfill Buffer for nodemailer running in Deno
 (globalThis as any).Buffer = Buffer;
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+const allowedOrigins = [
+  'https://fastesthr.com',
+  'http://localhost:8080',
+  'http://localhost:5173',
+  'https://*.fastesthr.com'
+];
+
+const getCorsHeaders = (req: Request) => {
+  const origin = req.headers.get('Origin');
+  const isAllowed = origin && (allowedOrigins.includes(origin) || origin.endsWith('.fastesthr.com'));
+  return {
+    'Access-Control-Allow-Origin': isAllowed ? origin : allowedOrigins[0],
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  };
 };
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -116,6 +129,14 @@ Deno.serve(async (req) => {
 
           <div style="margin: 24px 0; padding: 16px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
             <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+              <tr>
+                <td style="padding: 4px 0; color: #64748b;">Period Start:</td>
+                <td style="padding: 4px 0; text-align: right; font-weight: 600; color: #0f172a;">${periodStart}</td>
+              </tr>
+              <tr>
+                <td style="padding: 4px 0; color: #64748b;">Period End:</td>
+                <td style="padding: 4px 0; text-align: right; font-weight: 600; color: #0f172a;">${periodEnd}</td>
+              </tr>
               <tr>
                 <td style="padding: 4px 0; color: #64748b;">Gross Salary:</td>
                 <td style="padding: 4px 0; text-align: right; font-weight: 600; color: #0f172a;">${(company.currency || 'USD') === 'INR' ? '₹' : '$'}${payslip.gross_salary}</td>

@@ -188,6 +188,14 @@ function buildPredefinedHtmlElement(html: string): HTMLElement {
         margin: 0 !important;
         padding: 0 !important;
         border: none !important;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        font-size: 13px;
+        line-height: 1.45;
+        color: #1e293b;
+        box-sizing: border-box;
+      }
+      #pdf-predefined-wrapper * {
+        box-sizing: border-box;
       }
       #pdf-predefined-wrapper > *:first-child {
         margin-top: 0 !important;
@@ -319,9 +327,7 @@ async function generateAndUploadPDF(
       scrollX: 0,
       windowWidth: 794 
     },
-    jsPDF: isPredefinedHtml 
-      ? { unit: 'px' as const, format: [794, 1123] as [number, number], orientation: 'portrait' as const, hotfixes: ["px_scaling"] }
-      : { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const },
+    jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const },
     pagebreak: isPredefinedHtml ? { mode: [] } : { mode: ['css', 'legacy'] }
   };
 
@@ -717,6 +723,14 @@ export async function generateAndDownloadPayslipPDF(params: GeneratePayslipPDFPa
               <td style="color: #64748b; font-weight: 500;">Department:</td>
               <td style="color: #0f172a;">${escapeHtml(department)}</td>
             </tr>` : ''}
+            <tr style="height: 20px;">
+              <td style="color: #64748b; font-weight: 500;">Period Start:</td>
+              <td style="color: #0f172a;">${escapeHtml(periodStart)}</td>
+            </tr>
+            <tr style="height: 20px;">
+              <td style="color: #64748b; font-weight: 500;">Period End:</td>
+              <td style="color: #0f172a;">${escapeHtml(periodEnd)}</td>
+            </tr>
           </table>
         </div>
         <div style="flex: 1;">

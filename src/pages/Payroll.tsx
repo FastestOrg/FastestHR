@@ -438,6 +438,14 @@ export default function Payroll() {
                     <div style="margin: 24px 0; padding: 16px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
                       <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                         <tr>
+                          <td style="padding: 4px 0; color: #64748b;">Period Start:</td>
+                          <td style="padding: 4px 0; text-align: right; font-weight: 600; color: #0f172a;">${slipPeriodStart}</td>
+                        </tr>
+                        <tr>
+                          <td style="padding: 4px 0; color: #64748b;">Period End:</td>
+                          <td style="padding: 4px 0; text-align: right; font-weight: 600; color: #0f172a;">${slipPeriodEnd}</td>
+                        </tr>
+                        <tr>
                           <td style="padding: 4px 0; color: #64748b;">Gross Salary:</td>
                           <td style="padding: 4px 0; text-align: right; font-weight: 600; color: #0f172a;">${currencySymbolLocal}${slip.gross_salary}</td>
                         </tr>
@@ -839,15 +847,42 @@ export default function Payroll() {
                   <div className="grid grid-cols-3 gap-3 bg-muted/20 p-3 rounded-lg border border-border/40">
                     <div className="space-y-1">
                       <Label className="text-[11px] text-muted-foreground">Working Days</Label>
-                      <Input type="number" className="h-8 text-xs" value={manualWorkingDays} onChange={(e) => setManualWorkingDays(e.target.value)} />
+                      <Input 
+                        type="number" 
+                        className="h-8 text-xs" 
+                        value={manualWorkingDays} 
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setManualWorkingDays(val);
+                          const w = parseFloat(val) || 0;
+                          const l = parseFloat(manualLOPDays) || 0;
+                          setManualPaidDays(Math.max(0, w - l).toString());
+                        }} 
+                      />
                     </div>
                     <div className="space-y-1">
                       <Label className="text-[11px] text-muted-foreground">Paid Days</Label>
-                      <Input type="number" className="h-8 text-xs" value={manualPaidDays} onChange={(e) => setManualPaidDays(e.target.value)} />
+                      <Input 
+                        type="number" 
+                        className="h-8 text-xs" 
+                        value={manualPaidDays} 
+                        onChange={(e) => setManualPaidDays(e.target.value)} 
+                      />
                     </div>
                     <div className="space-y-1">
                       <Label className="text-[11px] text-muted-foreground">LOP Days</Label>
-                      <Input type="number" className="h-8 text-xs" value={manualLOPDays} onChange={(e) => setManualLOPDays(e.target.value)} />
+                      <Input 
+                        type="number" 
+                        className="h-8 text-xs" 
+                        value={manualLOPDays} 
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setManualLOPDays(val);
+                          const w = parseFloat(manualWorkingDays) || 0;
+                          const l = parseFloat(val) || 0;
+                          setManualPaidDays(Math.max(0, w - l).toString());
+                        }} 
+                      />
                     </div>
                   </div>
 

@@ -48,7 +48,7 @@ export function OfferLetterRenderer({
 
         <div
           ref={containerRef}
-          className={`content-area max-w-none dark:prose-invert ${isPredefinedHtml ? '' : 'p-12 sm:p-16 md:p-20 prose prose-slate'}`}
+          className={`content-area max-w-none ${isPredefinedHtml ? '' : 'p-12 sm:p-16 md:p-20 prose prose-slate dark:prose-invert'}`}
           dangerouslySetInnerHTML={{ __html: finalHtml }}
         />
       </div>
@@ -73,44 +73,58 @@ export function OfferLetterRenderer({
           overflow: hidden;
         }
 
-        ${isPredefinedHtml ? '' : `
+        ${isPredefinedHtml ? `
+        .content-area {
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+          font-size: 13px;
+          line-height: 1.45;
+          color: #1e293b;
+          box-sizing: border-box;
+        }
+        .content-area * {
+          box-sizing: border-box;
+        }
+        ` : `
         .content-area {
           line-height: 1.6;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         }
 
         .content-area h1 { 
-          font-size: 2.25rem; 
+          font-size: 28pt; 
           font-weight: 800; 
           color: #0f172a; 
-          border-bottom: 2px solid #f1f5f9;
-          padding-bottom: 0.75rem;
-          margin-bottom: 2rem;
+          border-bottom: 2pt solid #f1f5f9;
+          padding-bottom: 15pt;
+          margin-bottom: 30pt;
         }
         
         .content-area h2 { 
-          font-size: 1.5rem; 
+          font-size: 18pt; 
           font-weight: 700; 
           color: #1e293b;
-          margin-top: 2rem;
-          margin-bottom: 1rem;
+          margin-top: 25pt;
+          margin-bottom: 12pt;
         }
 
         .content-area p { 
-          margin-bottom: 1.25rem; 
-          font-size: 1rem; 
+          margin-bottom: 15pt; 
+          font-size: 11pt; 
           color: #334155; 
+          line-height: 1.6;
         }
 
         .content-area table { 
           width: 100%; 
           border-collapse: collapse; 
-          margin: 2rem 0; 
+          margin: 20pt 0; 
         }
 
         .content-area th, .content-area td { 
           border: 1px solid #e2e8f0; 
-          padding: 0.75rem; 
+          padding: 10pt; 
           text-align: left; 
+          font-size: 10pt; 
         }
 
         .content-area th { 
