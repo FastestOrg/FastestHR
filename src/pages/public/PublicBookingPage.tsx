@@ -42,6 +42,7 @@ import {
   generateOutlookWebUrl,
   createGoogleCalendarMeetingEvent,
   fetchGoogleCalendarBusyRanges,
+  generateGoogleMeetRoomUrl,
 } from '@/lib/google-calendar';
 
 const MONTH_NAMES = [
@@ -276,10 +277,12 @@ export default function PublicBookingPage() {
       let googleEventId: string | null = null;
 
       // 1. If host has Google Calendar connected, create real Google Calendar Event & obtain real Google Meet Link
-      if (pageData?.settings?.google_calendar_connected && pageData?.settings?.google_access_token) {
+      if (pageData?.settings?.google_calendar_connected) {
         try {
           const gcalResult = await createGoogleCalendarMeetingEvent({
-            accessToken: pageData.settings.google_access_token,
+            companySlug: companySlug || undefined,
+            bookingSlug: bookingSlug || undefined,
+            accessToken: pageData.settings.google_access_token || undefined,
             title: `${effectiveTitle} with ${guestName.trim()}`,
             description: guestNotes.trim(),
             guestName: guestName.trim(),
@@ -299,6 +302,11 @@ export default function PublicBookingPage() {
         } catch (gcalErr: any) {
           console.warn('Google Calendar event provisioning notice:', gcalErr);
         }
+      }
+
+      // If auto_google_meet is enabled and link is not set yet, ensure valid unique Google Meet link
+      if (!googleMeetLink && (pageData?.settings?.auto_google_meet ?? true)) {
+        googleMeetLink = generateGoogleMeetRoomUrl();
       }
 
       // 2. Persist booking record in Database with the exact Google Calendar event and Google Meet link

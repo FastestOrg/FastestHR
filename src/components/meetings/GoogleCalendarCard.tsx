@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import {
   requestGoogleCalendarAuth,
+  requestGoogleCalendarCodeAuth,
   testGoogleCalendarSync,
 } from '@/lib/google-calendar';
 import { UserMeetingSettings } from '@/types/meeting';
@@ -45,6 +46,24 @@ export function GoogleCalendarCard({
       setIsConnecting(true);
       toast.loading('Opening Google authorization popup...', { id: 'gcal-auth' });
 
+      if (settings?.user_id) {
+        try {
+          const auth = await requestGoogleCalendarCodeAuth(settings.user_id);
+          localStorage.setItem('fastest_gcal_token', auth.accessToken);
+          toast.success(`🎉 Google Calendar connected with 24/7 permanent sync! (${auth.email})`, { id: 'gcal-auth' });
+          await onUpdateSettings({
+            google_calendar_connected: true,
+            google_calendar_email: auth.email,
+            google_access_token: auth.accessToken,
+            google_token_expiry: new Date(Date.now() + 3600 * 1000).toISOString(),
+            google_calendar_id: 'primary',
+          });
+          return;
+        } catch (codeErr: any) {
+          console.warn('Code flow notice, using direct token fallback:', codeErr);
+        }
+      }
+
       const auth = await requestGoogleCalendarAuth();
 
       toast.loading('Connecting Google Calendar to your FastestHR account...', { id: 'gcal-auth' });
@@ -57,7 +76,6 @@ export function GoogleCalendarCard({
         google_calendar_id: 'primary',
       });
 
-      // Save token to localStorage for immediate client-side API requests
       localStorage.setItem('fastest_gcal_token', auth.accessToken);
 
       toast.success(`🎉 Google Calendar connected! (${auth.email})`, { id: 'gcal-auth' });
@@ -143,19 +161,30 @@ export function GoogleCalendarCard({
                   <Button
                     variant="outline"
                     size="sm"
+                    onClick={handleConnect}
+                    disabled={isConnecting || isLoading}
+                    className="gap-1.5 h-9 text-xs"
+                    title="Refresh Google OAuth authorization"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isConnecting ? 'animate-spin' : ''}`} />
+                    {isConnecting ? 'Refreshing...' : 'Refresh Token'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={handleTestConnection}
                     disabled={isTesting || isLoading}
-                    className="gap-1.5 h-9"
+                    className="gap-1.5 h-9 text-xs"
                   >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isTesting ? 'animate-spin' : ''}`} />
-                    {isTesting ? 'Testing...' : 'Test Connection'}
+                    <Radio className={`w-3.5 h-3.5 text-blue-500 ${isTesting ? 'animate-pulse' : ''}`} />
+                    {isTesting ? 'Testing...' : 'Test Sync'}
                   </Button>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={handleDisconnect}
                     disabled={isLoading}
-                    className="text-red-500 hover:text-red-600 hover:bg-red-500/10 gap-1.5 h-9"
+                    className="text-red-500 hover:text-red-600 hover:bg-red-500/10 gap-1.5 h-9 text-xs"
                   >
                     <Unlink className="w-3.5 h-3.5" />
                     Disconnect
@@ -178,30 +207,69 @@ export function GoogleCalendarCard({
         <CardContent className="space-y-6 pt-2">
           {/* Account Details Box */}
           {isConnected ? (
-            <div className="p-4 rounded-xl bg-card border border-border/80 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-sm">
-                  {settings?.google_calendar_email?.charAt(0).toUpperCase() || 'G'}
+            <div className="space-y-3">
+              <div className="p-4 rounded-xl bg-card border border-border/80 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-sm">
+                    {settings?.google_calendar_email?.charAt(0).toUpperCase() || 'G'}
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      {settings?.google_calendar_email}
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-3">
+                      <span>Primary Calendar: <code className="text-foreground/80">primary</code></span>
+                      <span>•</span>
+                      {settings?.google_token_expiry && new Date(settings.google_token_expiry).getTime() > Date.now() ? (
+                        <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                          <Radio className="w-3 h-3 animate-ping" /> Real-time active sync
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-amber-500 font-medium">
+                          <AlertCircle className="w-3 h-3" /> Token expired — Click "Refresh Token"
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <div className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    {settings?.google_calendar_email}
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-3">
-                    <span>Primary Calendar: <code className="text-foreground/80">primary</code></span>
-                    <span>•</span>
-                    <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-                      <Radio className="w-3 h-3 animate-ping" /> Real-time bi-directional sync
-                    </span>
-                  </div>
+
+                <div className="flex items-center gap-2">
+                  {settings?.google_token_expiry && new Date(settings.google_token_expiry).getTime() <= Date.now() && (
+                    <Button
+                      size="sm"
+                      onClick={handleConnect}
+                      disabled={isConnecting || isLoading}
+                      className="bg-amber-600 hover:bg-amber-700 text-white text-xs h-8 gap-1.5 shadow-sm animate-pulse"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isConnecting ? 'animate-spin' : ''}`} />
+                      Refresh Token Now
+                    </Button>
+                  )}
+
+                  {testResult && (
+                    <div className="px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2">
+                      <Zap className="w-3.5 h-3.5" />
+                      Latency: {testResult.latencyMs}ms (API Healthy)
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {testResult && (
-                <div className="px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2">
-                  <Zap className="w-3.5 h-3.5" />
-                  Latency: {testResult.latencyMs}ms (API Healthy)
+              {settings?.google_token_expiry && new Date(settings.google_token_expiry).getTime() <= Date.now() && (
+                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-amber-500" />
+                    <span>Your Google authorization has lapsed (Google OAuth tokens expire after 1 hour). Please click <strong>Refresh Token</strong> to enable instant Google Calendar event creation.</span>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleConnect}
+                    className="border-amber-500/50 text-amber-700 dark:text-amber-200 hover:bg-amber-500/20 text-xs h-7 shrink-0"
+                  >
+                    Refresh
+                  </Button>
                 </div>
               )}
             </div>

@@ -395,9 +395,9 @@ export function MeetingsOverview({
                       {/* Right: Action Buttons */}
                       <div className="flex flex-wrap items-center gap-2 pt-2 lg:pt-0 shrink-0">
                         {/* Join Meeting Link */}
-                        {booking.meeting_link && booking.status === 'confirmed' && (
+                        {booking.status === 'confirmed' && (
                           <a
-                            href={booking.meeting_link}
+                            href={booking.meeting_link || 'https://meet.google.com/new'}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center justify-center rounded-lg text-xs font-semibold transition-colors bg-blue-600 hover:bg-blue-700 text-white h-9 px-3.5 gap-2 shadow-sm"
