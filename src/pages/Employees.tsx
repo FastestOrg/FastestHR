@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Users, Plus, Search, Grid3X3, List, Network } from 'lucide-react';
+import { Users, Plus, Search, Grid3X3, List, Network, Trash2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth-store';
@@ -16,6 +16,7 @@ import { useState } from 'react';
 import { useDebounce } from '@/hooks/use-debounce';
 import { EmployeeOrgChart } from '@/components/employees/EmployeeOrgChart';
 import { OrgChartPro } from '@/components/employees/OrgChartPro';
+import { DeleteEmployeeDialog } from '@/components/employees/DeleteEmployeeDialog';
 
 // ⚡ Bolt: Hoisted static object configuration outside of component body
 // to prevent unnecessary memory reallocation on every render.
@@ -31,8 +32,10 @@ const statusColor: Record<string, string> = {
 export default function Employees() {
   const navigate = useNavigate();
   const { profile } = useAuthStore();
+  const isAdmin = profile?.platform_role === 'company_admin' || profile?.platform_role === 'super_admin';
   const { orgClient, isBYOS } = useOrgClient();
   const [search, setSearch] = useState('');
+  const [employeeToDelete, setEmployeeToDelete] = useState<any | null>(null);
   // ⚡ Bolt: Debounce search input to prevent firing an API call on every keystroke.
   // This reduces Supabase queries and React Query cache invalidations significantly.
   const debouncedSearch = useDebounce(search, 300);
@@ -123,7 +126,7 @@ export default function Employees() {
       ) : view === 'grid' ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {employees.map((emp: any) => (
-            <Card key={emp.id} className="cursor-pointer transition-all hover:border-primary/50 hover:shadow-md hover:bg-card/80" onClick={() => navigate(`/employees/${emp.id}`)}>
+            <Card key={emp.id} className="cursor-pointer transition-all hover:border-primary/50 hover:shadow-md hover:bg-card/80 group" onClick={() => navigate(`/employees/${emp.id}`)}>
               <CardContent className="p-6">
                 <div className="flex items-start gap-4">
                   <Avatar className="h-12 w-12">
@@ -140,9 +143,25 @@ export default function Employees() {
                 </div>
                 <div className="mt-4 flex items-center justify-between">
                   <span className="text-xs text-muted-foreground">{emp.employee_code || '—'}</span>
-                  <Badge className={statusColor[emp.status || 'active'] || ''} variant="secondary">
-                    {emp.status || 'active'}
-                  </Badge>
+                  <div className="flex items-center gap-1.5">
+                    <Badge className={statusColor[emp.status || 'active'] || ''} variant="secondary">
+                      {emp.status || 'active'}
+                    </Badge>
+                    {isAdmin && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                        title="Permanently Delete Employee & Account"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEmployeeToDelete(emp);
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -166,6 +185,20 @@ export default function Employees() {
                 <Badge className={statusColor[emp.status || 'active'] || ''} variant="secondary">
                   {emp.status || 'active'}
                 </Badge>
+                {isAdmin && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 shrink-0"
+                    title="Permanently Delete Employee & Account"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEmployeeToDelete(emp);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             ))}
           </div>
@@ -180,6 +213,15 @@ export default function Employees() {
           </div>
         </div>
       )}
+
+      {/* Complete Employee Deletion Dialog */}
+      <DeleteEmployeeDialog
+        open={!!employeeToDelete}
+        onOpenChange={(open) => {
+          if (!open) setEmployeeToDelete(null);
+        }}
+        employee={employeeToDelete}
+      />
     </div>
   );
 }

@@ -8,12 +8,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { UserMinus, ClipboardCheck, DollarSign, MessageSquare, Package, Plus, AlertTriangle, Loader2 } from 'lucide-react';
+import { UserMinus, ClipboardCheck, DollarSign, MessageSquare, Package, Plus, AlertTriangle, Loader2, Trash2 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth-store';
 import { useState, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
+import { DeleteEmployeeDialog } from '@/components/employees/DeleteEmployeeDialog';
 
 const assetChecklist = [
   'Laptop / Desktop',
@@ -72,6 +73,7 @@ export default function ExitManagement() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState({ employee_id: '', resignation_date: '', last_working_day: '', reason: '' });
   const [selectedExit, setSelectedExit] = useState<string | null>(null);
+  const [employeeToDelete, setEmployeeToDelete] = useState<any | null>(null);
   const [interviewAnswers, setInterviewAnswers] = useState<string[]>(['', '', '', '']);
 
   // Fetch Exits
@@ -82,7 +84,7 @@ export default function ExitManagement() {
         .from('employee_exits')
         .select(`
           *,
-          employees (id, first_name, last_name, employee_code, departments(name))
+          employees (id, first_name, last_name, employee_code, work_email, user_id, departments(name))
         `)
         .eq('company_id', profile!.company_id!)
         .order('created_at', { ascending: false });
@@ -220,7 +222,7 @@ export default function ExitManagement() {
     });
   };
 
-  const selectedRecord = exits.find(e => e.id === selectedExit);
+  const selectedRecord = useMemo(() => exits.find(e => e.id === selectedExit), [exits, selectedExit]);
 
   const [settlementInput, setSettlementInput] = useState({
     baseSalary: 0,
@@ -252,7 +254,7 @@ export default function ExitManagement() {
   });
 
   // Query leave balances for exit employee
-  const { data: leaveBalances = [] } = useQuery({
+  const { data: leaveBalances } = useQuery({
     queryKey: ['exit-leave-balances', selectedRecord?.employee_id],
     queryFn: async () => {
       const { data } = await supabase
@@ -264,6 +266,14 @@ export default function ExitManagement() {
     },
     enabled: !!selectedRecord?.employee_id,
   });
+
+  const totalUnusedLeaves = useMemo(() => {
+    if (!leaveBalances || !Array.isArray(leaveBalances)) return 0;
+    return leaveBalances.reduce((acc: number, curr: any) => {
+      const remaining = (curr.total_days || 0) - (curr.used_days || 0);
+      return acc + Math.max(0, remaining);
+    }, 0);
+  }, [leaveBalances]);
 
   // Query company profile to fetch dynamic currency setting
   const { data: companyProfile } = useQuery({
@@ -279,53 +289,62 @@ export default function ExitManagement() {
     enabled: !!profile?.company_id,
   });
 
+  const grossSalary = salaryStructure?.gross_salary ? Number(salaryStructure.gross_salary) : 0;
+  const selectedExitId = selectedRecord?.id;
+  const isSettlementDone = selectedRecord?.settlement_done;
+  const settlementSummary = selectedRecord?.settlement_summary;
+  const lastWorkingDay = selectedRecord?.last_working_day;
+  const resignationDate = selectedRecord?.resignation_date;
+
   // Auto-populate settlement calculations when selected exit changes
   useEffect(() => {
-    if (selectedRecord) {
-      if (selectedRecord.settlement_done && selectedRecord.settlement_summary) {
-        const summary = selectedRecord.settlement_summary as any;
-        setSettlementInput({
-          baseSalary: summary.base_salary || 0,
-          workingDaysInMonth: summary.working_days_in_month || 30,
-          daysWorked: summary.days_worked || 0,
-          standardNoticeDays: summary.standard_notice_days || 30,
-          noticeServedDays: summary.notice_served_days || 0,
-          remainingLeaves: summary.remaining_leaves || 0,
-          customBonus: summary.custom_bonus || 0,
-          customDeduction: summary.custom_deduction || 0,
-          adjustmentReason: summary.custom_adjustment_reason || '',
-          waiveNoticeRecovery: summary.waive_notice_recovery || false,
-        });
-      } else {
-        const annualGross = salaryStructure ? Number(salaryStructure.gross_salary) : 0;
-        const monthlySalary = annualGross > 0 ? (annualGross / 12) : 0;
-        const daysInMonth = selectedRecord.last_working_day ? getDaysInMonth(selectedRecord.last_working_day) : 30;
-        const daysWorked = selectedRecord.last_working_day ? getDayOfMonth(selectedRecord.last_working_day) : 0;
-        
-        const servedDays = (selectedRecord.resignation_date && selectedRecord.last_working_day)
-          ? getDaysBetween(selectedRecord.resignation_date, selectedRecord.last_working_day)
-          : 0;
-          
-        const totalUnusedLeaves = leaveBalances.reduce((acc: number, curr: any) => {
-          const remaining = (curr.total_days || 0) - (curr.used_days || 0);
-          return acc + Math.max(0, remaining);
-        }, 0);
+    if (!selectedRecord) return;
 
-        setSettlementInput({
-          baseSalary: Math.round(monthlySalary),
-          workingDaysInMonth: daysInMonth,
-          daysWorked: daysWorked,
-          standardNoticeDays: 30,
-          noticeServedDays: servedDays,
-          remainingLeaves: totalUnusedLeaves,
-          customBonus: 0,
-          customDeduction: 0,
-          adjustmentReason: '',
-          waiveNoticeRecovery: false,
-        });
-      }
+    if (isSettlementDone && settlementSummary) {
+      const summary = settlementSummary as any;
+      setSettlementInput({
+        baseSalary: summary.base_salary || 0,
+        workingDaysInMonth: summary.working_days_in_month || 30,
+        daysWorked: summary.days_worked || 0,
+        standardNoticeDays: summary.standard_notice_days || 30,
+        noticeServedDays: summary.notice_served_days || 0,
+        remainingLeaves: summary.remaining_leaves || 0,
+        customBonus: summary.custom_bonus || 0,
+        customDeduction: summary.custom_deduction || 0,
+        adjustmentReason: summary.custom_adjustment_reason || '',
+        waiveNoticeRecovery: summary.waive_notice_recovery || false,
+      });
+    } else {
+      const monthlySalary = grossSalary > 0 ? (grossSalary / 12) : 0;
+      const daysInMonth = lastWorkingDay ? getDaysInMonth(lastWorkingDay) : 30;
+      const daysWorked = lastWorkingDay ? getDayOfMonth(lastWorkingDay) : 0;
+      
+      const servedDays = (resignationDate && lastWorkingDay)
+        ? getDaysBetween(resignationDate, lastWorkingDay)
+        : 0;
+
+      setSettlementInput({
+        baseSalary: Math.round(monthlySalary),
+        workingDaysInMonth: daysInMonth,
+        daysWorked: daysWorked,
+        standardNoticeDays: 30,
+        noticeServedDays: servedDays,
+        remainingLeaves: totalUnusedLeaves,
+        customBonus: 0,
+        customDeduction: 0,
+        adjustmentReason: '',
+        waiveNoticeRecovery: false,
+      });
     }
-  }, [selectedRecord, salaryStructure, leaveBalances]);
+  }, [
+    selectedExitId,
+    isSettlementDone,
+    settlementSummary,
+    grossSalary,
+    totalUnusedLeaves,
+    lastWorkingDay,
+    resignationDate
+  ]);
 
   const handleSaveSettlement = async (exitId: string) => {
     if (!selectedRecord) return;
@@ -592,12 +611,28 @@ export default function ExitManagement() {
               exits.map(exit => (
                 <div
                   key={exit.id}
-                  className={`p-4 cursor-pointer hover:bg-muted/30 transition-colors ${selectedExit === exit.id ? 'bg-primary/5 border-l-2 border-l-primary' : ''}`}
+                  className={`p-4 cursor-pointer hover:bg-muted/30 transition-colors group ${selectedExit === exit.id ? 'bg-primary/5 border-l-2 border-l-primary' : ''}`}
                   onClick={() => setSelectedExit(exit.id)}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <h4 className="font-medium text-sm">{getEmployeeName(exit.employees)}</h4>
-                    <Badge variant="outline" className={`text-[10px] uppercase ${statusColor[exit.status]}`}>{exit.status.replace('_', ' ')}</Badge>
+                    <h4 className="font-medium text-sm truncate mr-2">{getEmployeeName(exit.employees)}</h4>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <Badge variant="outline" className={`text-[10px] uppercase ${statusColor[exit.status]}`}>{exit.status.replace('_', ' ')}</Badge>
+                      {isAdmin && exit.employees && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                          title="Permanently Delete Employee & Account"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEmployeeToDelete(exit.employees);
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   <p className="text-xs text-muted-foreground">{getDepartmentName(exit.employees)} • LWD: {exit.last_working_day || 'N/A'}</p>
                 </div>
@@ -618,9 +653,21 @@ export default function ExitManagement() {
               <CardHeader className="border-b border-border/50 pb-4">
                 <CardTitle className="text-base flex items-center justify-between">
                   <span>{getEmployeeName(selectedRecord.employees)}</span>
-                  {selectedRecord.status !== 'completed' && selectedRecord.assets_returned && selectedRecord.exit_interview && (
-                     <Button size="sm" variant="outline" className="h-7 text-xs border-success/50 text-success hover:bg-success hover:text-success-foreground" onClick={() => updateMutation.mutate({id: selectedRecord.id, updates: {status: 'in_progress'}})}>Mark In Progress</Button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {selectedRecord.status !== 'completed' && selectedRecord.assets_returned && selectedRecord.exit_interview && (
+                       <Button size="sm" variant="outline" className="h-7 text-xs border-success/50 text-success hover:bg-success hover:text-success-foreground" onClick={() => updateMutation.mutate({id: selectedRecord.id, updates: {status: 'in_progress'}})}>Mark In Progress</Button>
+                    )}
+                    {isAdmin && selectedRecord.employees && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors"
+                        onClick={() => setEmployeeToDelete(selectedRecord.employees)}
+                      >
+                        <Trash2 className="h-3 w-3 mr-1" /> Delete Employee
+                      </Button>
+                    )}
+                  </div>
                 </CardTitle>
                 <CardDescription>{getDepartmentName(selectedRecord.employees)} • Resigned: {selectedRecord.resignation_date || 'N/A'}</CardDescription>
               </CardHeader>
@@ -659,6 +706,29 @@ export default function ExitManagement() {
                         <DollarSign className="w-3 h-3 mr-1" /> Settlement {selectedRecord.settlement_done ? '✓' : '—'}
                       </Badge>
                     </div>
+
+                    {/* Permanent Deletion Action in Overview for Admin */}
+                    {isAdmin && selectedRecord.employees && (
+                      <div className="p-4 rounded-lg border border-destructive/25 bg-destructive/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-6">
+                        <div>
+                          <p className="text-xs font-semibold text-destructive flex items-center gap-1.5">
+                            <AlertTriangle className="h-3.5 w-3.5" /> Permanently Delete Employee & Account
+                          </p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            Irreversibly purges this employee, all exit logs, settlement history, attendance, documents, and portal login account.
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          className="text-xs font-semibold shrink-0 bg-destructive hover:bg-destructive/90 text-destructive-foreground shadow-sm"
+                          onClick={() => setEmployeeToDelete(selectedRecord.employees)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-1" />
+                          DELETE PERMANENTLY
+                        </Button>
+                      </div>
+                    )}
                   </TabsContent>
                   
                   <TabsContent value="assets" className="p-6 mt-0">
@@ -970,6 +1040,21 @@ export default function ExitManagement() {
           )}
         </Card>
       </div>
+
+      {/* Complete Employee Deletion Dialog */}
+      <DeleteEmployeeDialog
+        open={!!employeeToDelete}
+        onOpenChange={(open) => {
+          if (!open) setEmployeeToDelete(null);
+        }}
+        employee={employeeToDelete}
+        onDeleted={() => {
+          setSelectedExit(null);
+          queryClient.invalidateQueries({ queryKey: ['exits'] });
+          queryClient.invalidateQueries({ queryKey: ['activeEmployees'] });
+          queryClient.invalidateQueries({ queryKey: ['employees'] });
+        }}
+      />
     </div>
   );
 }

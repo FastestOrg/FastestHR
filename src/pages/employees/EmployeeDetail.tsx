@@ -24,6 +24,7 @@ import {
   DialogFooter,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { DeleteEmployeeDialog } from '@/components/employees/DeleteEmployeeDialog';
 
 const STATUS_BADGE: Record<string, string> = {
   active: 'bg-success/10 text-success border-success/40',
@@ -71,6 +72,7 @@ export default function EmployeeDetail() {
   const queryClient = useQueryClient();
   const { profile } = useAuthStore();
   const isHRManagerOrAbove = profile?.platform_role === 'company_admin' || profile?.platform_role === 'super_admin' || profile?.platform_role === 'hr_manager';
+  const isAdmin = profile?.platform_role === 'company_admin' || profile?.platform_role === 'super_admin';
   const [editing, setEditing] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('profile');
   const [form, setForm] = useState<Partial<EmployeeRecord>>({});
@@ -79,6 +81,7 @@ export default function EmployeeDetail() {
   const [isNewDesignation, setIsNewDesignation] = useState(false);
   const [newDesignationName, setNewDesignationName] = useState('');
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [newPassword, setNewPassword] = useState('');
 
   const { data: employee, isLoading } = useQuery<EmployeeRecord>({
@@ -983,10 +986,10 @@ export default function EmployeeDetail() {
         </CardHeader>
         <CardContent className="flex items-center justify-between py-4 border-b border-destructive/10">
           <div>
-            <p className="text-sm text-foreground">
+            <p className="text-sm font-medium text-foreground">
               {employee.user_id ? 'Set Account Password' : 'Create Portal Account'}
             </p>
-            <p className="text-xs font-medium text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {employee.user_id 
                 ? "Manually set a new password for this employee's portal access."
                 : "This employee doesn't have portal access yet. Create their account and set a password."}
@@ -1001,10 +1004,10 @@ export default function EmployeeDetail() {
             {employee.user_id ? 'Set Password' : 'Create Account'}
           </Button>
         </CardContent>
-        <CardContent className="flex items-center justify-between py-4">
+        <CardContent className={`flex items-center justify-between py-4 ${isAdmin ? 'border-b border-destructive/10' : ''}`}>
           <div>
-            <p className="text-sm text-foreground">Terminate Employee</p>
-            <p className="text-xs font-medium text-muted-foreground">Marks the employee as terminated and soft-deletes their record.</p>
+            <p className="text-sm font-medium text-foreground">Terminate Employee</p>
+            <p className="text-xs text-muted-foreground">Marks the employee as terminated and soft-deletes their record.</p>
           </div>
           <Button
             variant="outline"
@@ -1021,6 +1024,29 @@ export default function EmployeeDetail() {
             TERMINATE
           </Button>
         </CardContent>
+
+        {/* Permanent Hard Deletion - Admins Only */}
+        {isAdmin && (
+          <CardContent className="flex items-center justify-between py-4 bg-destructive/10">
+            <div>
+              <p className="text-sm font-semibold text-destructive flex items-center gap-1.5">
+                <AlertTriangle className="h-4 w-4" /> Permanently Delete Employee & Account
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Irreversibly destroys all database records (attendance, leaves, payroll, KPIs, documents) and deletes their authentication account.
+              </p>
+            </div>
+            <Button
+              variant="destructive"
+              size="sm"
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold shadow-sm ml-4 shrink-0"
+              onClick={() => setIsDeleteDialogOpen(true)}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              DELETE PERMANENTLY
+            </Button>
+          </CardContent>
+        )}
       </Card>
 
       <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
@@ -1056,6 +1082,14 @@ export default function EmployeeDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Complete Deletion Modal */}
+      <DeleteEmployeeDialog
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+        employee={employee}
+        onDeleted={() => navigate('/employees')}
+      />
     </div>
   );
 }
