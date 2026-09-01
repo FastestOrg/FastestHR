@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { getCurrencySymbol, formatAmount } from '@/lib/utils';
 import { calculatePayrollTaxAndNet } from '@/utils/compliance-formulas';
 import { generateAndDownloadPayslipPDF } from '@/lib/pdf-generator';
+import { isDrivePath, extractDriveFileId } from '@/lib/storage-provider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 
@@ -404,13 +405,20 @@ export default function Payroll() {
             const slipPeriodEnd = slip.payroll_runs?.period_end || periodEnd;
             const currencySymbolLocal = (companyProfile?.currency === 'INR') ? '₹' : '$';
 
-            // Get signed URL for the PDF
-            const { data: signedData, error: signedError } = await supabase.storage
-              .from('payslips')
-              .createSignedUrl(pdfPath, 3600);
+            // Get download URL for the PDF (Google Drive or Supabase)
+            let emailPdfUrl = '';
+            if (isDrivePath(pdfPath)) {
+              const driveFileId = extractDriveFileId(pdfPath);
+              emailPdfUrl = `https://drive.google.com/uc?export=download&id=${driveFileId}`;
+            } else {
+              const { data: signedData, error: signedError } = await supabase.storage
+                .from('payslips')
+                .createSignedUrl(pdfPath, 3600);
 
-            if (signedError || !signedData?.signedUrl) {
-              throw new Error(`Failed to create signed URL for PDF: ${signedError?.message || 'unknown error'}`);
+              if (signedError || !signedData?.signedUrl) {
+                throw new Error(`Failed to create signed URL for PDF: ${signedError?.message || 'unknown error'}`);
+              }
+              emailPdfUrl = signedData.signedUrl;
             }
 
             const response = await fetch('http://localhost:8001/send-email', {
@@ -435,7 +443,8 @@ export default function Payroll() {
                       Your payslip for the payroll cycle starting <strong>${slipPeriodStart}</strong> and ending <strong>${slipPeriodEnd}</strong> has been generated and is now available.
                     </p>
 
-                    <div style="margin: 24px 0; padding: 16px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+                    <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+                      <h3 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: #0f172a;">Payroll Summary</h3>
                       <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                         <tr>
                           <td style="padding: 4px 0; color: #64748b;">Period Start:</td>
@@ -471,7 +480,7 @@ export default function Payroll() {
                     </div>
                   </div>
                 `,
-                pdfUrl: signedData.signedUrl,
+                pdfUrl: emailPdfUrl,
                 pdfFilename: `Payslip_${employeeName.replace(/\s+/g, '_')}_${slipPeriodStart}_to_${slipPeriodEnd}.pdf`
               })
             });

@@ -3,7 +3,8 @@ import {
   LayoutDashboard, Users, Clock, CalendarDays, DollarSign, BarChart3,
   Briefcase, GraduationCap, Headset, Megaphone, PieChart, Settings,
   Globe, Building2, CreditCard, Server, ChevronLeft, LogOut, Zap,
-  FileText, UserPlus, Network, UserMinus, CalendarCheck, ChevronRight, Send, Shield, Contact, UserCircle2, ActivitySquare, MessageSquare
+  FileText, UserPlus, Network, UserMinus, CalendarCheck, ChevronRight, Send, Shield, Contact, UserCircle2, ActivitySquare, MessageSquare,
+  CalendarClock
 } from 'lucide-react';
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
@@ -53,6 +54,7 @@ const fastBoardNav: NavItem[] = [
 const managementNav: NavItem[] = [
   { title: 'Recruitment', url: '/recruitment', icon: Briefcase, roles: ['company_admin', 'hr_manager', 'recruiter'] },
   { title: 'Onboarding', url: '/onboarding', icon: UserPlus, roles: ADMIN_HR },
+  { title: 'Meeting', url: '/meetings', icon: CalendarClock, roles: ALL_ROLES },
   { title: 'Performance', url: '/performance', icon: BarChart3, roles: ALL_ROLES },
   { title: 'KPI Matrix', url: '/kpi', icon: ActivitySquare, roles: ALL_ROLES },
   { title: 'Help Desk', url: '/helpdesk', icon: Headset, roles: ALL_ROLES },

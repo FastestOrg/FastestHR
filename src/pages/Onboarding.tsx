@@ -20,6 +20,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth-store';
 import { useState, useMemo } from 'react';
+import { downloadDocument } from '@/lib/storage-provider';
 import { OnboardingSettingsDialog } from '@/components/onboarding/OnboardingSettingsDialog';
 import { AssignIdDialog } from '@/components/onboarding/AssignIdDialog';
 import { InviteToPortalDialog } from '@/components/onboarding/InviteToPortalDialog';
@@ -242,17 +243,10 @@ export default function Onboarding() {
   const handleDownload = async (submission: any) => {
     if (!submission.file_url) return;
     try {
-      const { data, error } = await supabase.storage.from('documents').download(submission.file_url);
-      if (error) throw error;
-      const url = URL.createObjectURL(data);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = submission.file_url.split('/').pop() || 'document';
-      document.body.appendChild(a);
-      a.click();
-      URL.revokeObjectURL(url);
+      const fileName = submission.file_url.split('/').pop() || 'document';
+      await downloadDocument(submission.file_url, fileName, 'documents', profile?.company_id);
     } catch (err: any) {
-        toast.error('Failed to download: ' + err.message);
+      toast.error('Failed to download: ' + (err?.message || String(err)));
     }
   };
 

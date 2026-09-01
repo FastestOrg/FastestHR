@@ -2,7 +2,7 @@ import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth-store';
 import { 
   Building, MapPin, Clock, DollarSign, Shield, Calendar, Bell, 
-  Mail, KeyIcon, Users, Globe, Contact, Laptop, GitBranch, Brain
+  Mail, KeyIcon, Users, Globe, Contact, Laptop, GitBranch, Brain, Database, HardDrive
 } from 'lucide-react';
 
 import GeneralSettings from '@/pages/settings/GeneralSettings';
@@ -21,6 +21,8 @@ import NotificationsSettings from '@/pages/settings/NotificationsSettings';
 import IntegrationsSettings from '@/pages/settings/IntegrationsSettings';
 import WorkflowBuilder from '@/components/settings/WorkflowBuilder';
 import AiMemorySettings from '@/pages/settings/AiMemorySettings';
+import BYOSSettings from '@/pages/settings/BYOSSettings';
+import StorageSettings from '@/pages/settings/StorageSettings';
 
 export default function Settings() {
   const { profile } = useAuthStore();
@@ -61,6 +63,13 @@ export default function Settings() {
         { path: '/settings/notifications', label: 'Notifications', icon: Bell },
         { path: '/settings/integrations', label: 'Integrations', icon: Users },
         { path: '/settings/workflows', label: 'Workflow Engine', icon: GitBranch },
+      ]
+    },
+    {
+      title: 'Infrastructure & Data',
+      items: [
+        { path: '/settings/byos', label: 'BYOS Database', icon: Database },
+        { path: '/settings/storage', label: 'Storage & Drive (BYOS)', icon: HardDrive },
       ]
     },
     {
@@ -164,6 +173,8 @@ export default function Settings() {
             <Route path="/notifications" element={<NotificationsSettings />} />
             <Route path="/integrations" element={<IntegrationsSettings />} />
             <Route path="/workflows" element={<WorkflowBuilder companyId={profile?.company_id} />} />
+            <Route path="/byos" element={<BYOSSettings />} />
+            <Route path="/storage" element={<StorageSettings />} />
             <Route path="/ai-memory" element={<AiMemorySettings />} />
             <Route path="*" element={<Navigate to="/settings" replace />} />
           </Routes>

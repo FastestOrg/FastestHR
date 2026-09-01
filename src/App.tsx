@@ -12,6 +12,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { HelmetProvider } from 'react-helmet-async';
 import { getCompanySlugFromHost } from '@/utils/tenantUtils';
 import { Capacitor } from '@capacitor/core';
+import { BYOSProvider } from '@/contexts/BYOSContext';
 
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
@@ -77,6 +78,8 @@ const EmployeeProfile = lazy(() => import('@/pages/profile/EmployeeProfile'));
 const GlobalEmployeeVerification = lazy(() => import('@/pages/GlobalEmployeeVerification'));
 const GlobalEmployeeProfile = lazy(() => import('@/pages/public/GlobalEmployeeProfile'));
 const GlobalEmployeeVerify = lazy(() => import('@/pages/public/GlobalEmployeeVerify'));
+const Meetings = lazy(() => import('@/pages/Meetings'));
+const PublicBookingPage = lazy(() => import('@/pages/public/PublicBookingPage'));
 
 // Recruitment sub-pages
 import { RecruitmentPipeline } from '@/pages/recruitment/RecruitmentPipeline';
@@ -151,6 +154,8 @@ function AppRoutes() {
         <Route path="/offer/:token" element={<OfferView />} />
         <Route path="/ai-interview/:hash" element={<Suspense fallback={<LazyFallback />}><AIInterview /></Suspense>} />
         <Route path="/id/:publicId" element={<PublicIDCard />} />
+        <Route path="/book/:bookingSlug" element={<Suspense fallback={<LazyFallback />}><PublicBookingPage /></Suspense>} />
+        <Route path="/:bookingSlug" element={<Suspense fallback={<LazyFallback />}><PublicBookingPage /></Suspense>} />
         <Route path="*" element={<Suspense fallback={<LazyFallback />}><CompanyPage /></Suspense>} />
       </Routes>
     );
@@ -230,6 +235,7 @@ function AppRoutes() {
       <Route path="/holidays" element={withLayout(<HolidayCalendar />)} />
       <Route path="/tasks" element={withLayout(<Tasks />)} />
       <Route path="/chats" element={withLayout(<Chats />)} />
+      <Route path="/meetings" element={withLayout(<Meetings />)} />
       <Route path="/senddesk" element={withLayout(<SendDesk />)} />
       <Route path="/global-verification" element={withLayout(<GlobalEmployeeVerification />)} />
       <Route path="/id-card" element={withLayout(<VirtualIDCard />)} />
@@ -255,6 +261,10 @@ function AppRoutes() {
       <Route path="/legal/terms" element={<TermsOfService />} />
       <Route path="/legal/privacy" element={<PrivacyPolicy />} />
       <Route path="/legal/security" element={<Security />} />
+
+      {/* Public Booking routes: /book/:companySlug/:bookingSlug and /:companySlug/:bookingSlug */}
+      <Route path="/book/:companySlug/:bookingSlug" element={<Suspense fallback={<LazyFallback />}><PublicBookingPage /></Suspense>} />
+      <Route path="/:companySlug/:bookingSlug" element={<Suspense fallback={<LazyFallback />}><PublicBookingPage /></Suspense>} />
 
       <Route path="*" element={<NotFound />} />
     </Routes>
@@ -289,7 +299,9 @@ const App = () => (
             <Toaster />
             <Sonner />
             <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-              <AppRoutes />
+              <BYOSProvider>
+                <AppRoutes />
+              </BYOSProvider>
             </BrowserRouter>
           </TooltipProvider>
         </QueryClientProvider>

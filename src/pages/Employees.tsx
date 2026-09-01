@@ -9,6 +9,8 @@ import { Users, Plus, Search, Grid3X3, List, Network } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth-store';
+import { useOrgClient } from '@/hooks/useOrgClient';
+import { makeBYOSQueryKey } from '@/utils/byosUtils';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useDebounce } from '@/hooks/use-debounce';
@@ -29,6 +31,7 @@ const statusColor: Record<string, string> = {
 export default function Employees() {
   const navigate = useNavigate();
   const { profile } = useAuthStore();
+  const { orgClient, isBYOS } = useOrgClient();
   const [search, setSearch] = useState('');
   // ⚡ Bolt: Debounce search input to prevent firing an API call on every keystroke.
   // This reduces Supabase queries and React Query cache invalidations significantly.
@@ -36,13 +39,16 @@ export default function Employees() {
   const [view, setView] = useState<'grid' | 'list' | 'org'>('grid');
 
   const { data: employees = [], isLoading } = useQuery({
-    queryKey: ['employees', debouncedSearch, profile?.company_id],
+    queryKey: makeBYOSQueryKey('employees', orgClient, profile?.company_id, [debouncedSearch, view]),
     queryFn: async () => {
-      let query = supabase
+      let query = orgClient
         .from('employees')
         .select('*, departments(name), designations(title)')
-        .eq('company_id', profile!.company_id!)
         .is('deleted_at', null);
+
+      if (!isBYOS) {
+        query = query.eq('company_id', profile!.company_id!);
+      }
 
       if (view !== 'org') {
         query = query.order('created_at', { ascending: false });
@@ -51,7 +57,7 @@ export default function Employees() {
       }
 
       if (debouncedSearch) {
-        query = query.or(`first_name.ilike.%${debouncedSearch}%,last_name.ilike.%${debouncedSearch}%,work_email.ilike.%${debouncedSearch}%`);
+        query = query.or(`first_name.ilike.%${debouncedSearch}%,last_name.ilike.%${debouncedSearch}%,email.ilike.%${debouncedSearch}%`);
       }
 
       const { data } = await query;

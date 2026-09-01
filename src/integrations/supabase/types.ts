@@ -320,6 +320,97 @@ export type Database = {
           },
         ]
       }
+      byos_audit_log: {
+        Row: {
+          action: string
+          created_at: string
+          details: Json | null
+          id: string
+          performed_by: string | null
+          status: string
+          tenant_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          performed_by?: string | null
+          status: string
+          tenant_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          performed_by?: string | null
+          status?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "byos_audit_log_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      byos_connections: {
+        Row: {
+          created_at: string
+          error_log: Json | null
+          health_status: string | null
+          id: string
+          last_health_check: string | null
+          migration_version: string | null
+          status: string
+          supabase_anon_key: string
+          supabase_service_role_key_encrypted: string
+          supabase_url: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          error_log?: Json | null
+          health_status?: string | null
+          id?: string
+          last_health_check?: string | null
+          migration_version?: string | null
+          status?: string
+          supabase_anon_key: string
+          supabase_service_role_key_encrypted: string
+          supabase_url: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          error_log?: Json | null
+          health_status?: string | null
+          id?: string
+          last_health_check?: string | null
+          migration_version?: string | null
+          status?: string
+          supabase_anon_key?: string
+          supabase_service_role_key_encrypted?: string
+          supabase_url?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "byos_connections_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       candidate_offers: {
         Row: {
           candidate_id: string
@@ -531,6 +622,7 @@ export type Database = {
         Row: {
           about_company: string | null
           attendance_settings: Json | null
+          byos_enabled: boolean | null
           company_culture: string | null
           compensation_structure: Json | null
           country: string | null
@@ -576,6 +668,7 @@ export type Database = {
         Insert: {
           about_company?: string | null
           attendance_settings?: Json | null
+          byos_enabled?: boolean | null
           company_culture?: string | null
           compensation_structure?: Json | null
           country?: string | null
@@ -621,6 +714,7 @@ export type Database = {
         Update: {
           about_company?: string | null
           attendance_settings?: Json | null
+          byos_enabled?: boolean | null
           company_culture?: string | null
           compensation_structure?: Json | null
           country?: string | null
@@ -3747,6 +3841,19 @@ export type Database = {
           smtp_pass: string
           smtp_port: number
           smtp_user: string
+        }[]
+      }
+      get_byos_connection: {
+        Args: { p_tenant_id: string }
+        Returns: {
+          byos_enabled: boolean
+          health_status: string | null
+          id: string
+          last_health_check: string | null
+          migration_version: string | null
+          status: string
+          supabase_anon_key: string
+          supabase_url: string
         }[]
       }
       get_employee_by_public_id: {

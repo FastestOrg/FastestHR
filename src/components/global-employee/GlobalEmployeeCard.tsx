@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { CheckCircle2, Star, MapPin, Briefcase, ExternalLink } from 'lucide-react';
+import { CheckCircle2, ShieldCheck, MapPin, Briefcase, ExternalLink, Lock, Award, Star } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { GlobalEmployee } from '@/types/global-employee';
@@ -7,6 +7,7 @@ import type { GlobalEmployee } from '@/types/global-employee';
 interface GlobalEmployeeCardProps {
   employee: GlobalEmployee;
   onClick?: () => void;
+  onRequestConsent?: (e: React.MouseEvent) => void;
   showActions?: boolean;
 }
 
@@ -36,7 +37,7 @@ function StarRating({ rating, size = 'sm' }: { rating: number; size?: 'sm' | 'md
 
 export { StarRating };
 
-export function GlobalEmployeeCard({ employee, onClick }: GlobalEmployeeCardProps) {
+export function GlobalEmployeeCard({ employee, onClick, onRequestConsent }: GlobalEmployeeCardProps) {
   const initials = employee.name
     ?.split(' ')
     .map((n) => n[0])
@@ -45,6 +46,7 @@ export function GlobalEmployeeCard({ employee, onClick }: GlobalEmployeeCardProp
     .slice(0, 2) || '??';
 
   const latestJob = employee.work_experience?.[0];
+  const structuredRefsCount = (employee.structured_references?.length || 0) + (employee.feedbacks_by_employer?.length || 0);
 
   return (
     <motion.div
@@ -89,10 +91,10 @@ export function GlobalEmployeeCard({ employee, onClick }: GlobalEmployeeCardProp
               </p>
             )}
 
-            {(employee.city || employee.state) && (
+            {(employee.city || employee.country) && (
               <p className="text-xs text-muted-foreground/70 truncate mt-0.5 flex items-center gap-1.5">
                 <MapPin className="h-3 w-3 shrink-0" />
-                {[employee.city, employee.state].filter(Boolean).join(', ')}
+                {[employee.city, employee.country].filter(Boolean).join(', ')}
               </p>
             )}
           </div>
@@ -100,41 +102,37 @@ export function GlobalEmployeeCard({ employee, onClick }: GlobalEmployeeCardProp
           <ExternalLink className="h-4 w-4 text-muted-foreground/30 group-hover:text-primary transition-colors shrink-0 mt-1" />
         </div>
 
-        {/* Rating */}
-        <div className="mt-4 flex items-center justify-between">
+        {/* Unified Rating Bar */}
+        <div className="mt-4 pt-3 border-t border-border/40 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <StarRating rating={Number(employee.rating) || 0} />
-            <span className="text-xs text-muted-foreground font-mono">
-              {Number(employee.rating)?.toFixed(1) || '0.0'}
+            <span className="text-xs font-bold text-foreground font-mono">
+              {Number(employee.rating) > 0 ? Number(employee.rating).toFixed(1) : '0.0'}
             </span>
+            {structuredRefsCount > 0 && (
+              <span className="text-[10px] text-muted-foreground">
+                ({structuredRefsCount} review{structuredRefsCount !== 1 ? 's' : ''})
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-1.5">
             {employee.verified ? (
-              <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-[10px] font-semibold hover:bg-emerald-500/20">
-                Verified
+              <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-[10px] font-semibold">
+                <ShieldCheck className="h-3 w-3 mr-1" /> Verified
               </Badge>
             ) : (
               <Badge variant="outline" className="text-[10px] font-semibold text-muted-foreground">
-                Unverified
-              </Badge>
-            )}
-            {employee.public ? (
-              <Badge variant="outline" className="text-[10px] font-semibold text-blue-400 border-blue-400/20">
-                Public
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="text-[10px] font-semibold text-muted-foreground">
-                Private
+                Pending Audit
               </Badge>
             )}
           </div>
         </div>
 
-        {/* Skills */}
+        {/* Skills preview */}
         {employee.skills && employee.skills.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-1.5">
-            {employee.skills.slice(0, 4).map((skill, i) => (
+            {employee.skills.slice(0, 3).map((skill, i) => (
               <span
                 key={i}
                 className="px-2 py-0.5 rounded-full bg-primary/5 text-primary/80 text-[10px] font-medium border border-primary/10"
@@ -142,20 +140,23 @@ export function GlobalEmployeeCard({ employee, onClick }: GlobalEmployeeCardProp
                 {skill}
               </span>
             ))}
-            {employee.skills.length > 4 && (
+            {employee.skills.length > 3 && (
               <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground text-[10px] font-medium">
-                +{employee.skills.length - 4}
+                +{employee.skills.length - 3}
               </span>
             )}
           </div>
         )}
 
-        {/* Feedback count */}
-        {employee.feedbacks_by_employer && employee.feedbacks_by_employer.length > 0 && (
-          <p className="mt-3 text-[10px] text-muted-foreground/70 uppercase tracking-wider font-semibold">
-            {employee.feedbacks_by_employer.length} employer review{employee.feedbacks_by_employer.length !== 1 ? 's' : ''}
-          </p>
-        )}
+        {/* Privacy & Consent indicator */}
+        <div className="mt-3 pt-2 border-t border-border/20 flex items-center justify-between text-[10px] text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <Lock className="h-3 w-3 text-emerald-500" /> Masked ID Tokenized
+          </span>
+          <span className="font-medium text-primary/80 group-hover:text-primary transition-colors">
+            View Career Passport →
+          </span>
+        </div>
       </div>
     </motion.div>
   );

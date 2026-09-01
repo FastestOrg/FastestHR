@@ -48,7 +48,7 @@ export function DocumentRenderer({
         
         <div 
           ref={containerRef}
-          className={`content-area max-w-none dark:prose-invert ${isPredefinedHtml ? '' : 'p-12 sm:p-16 md:p-20 prose prose-slate'}`}
+          className={`content-area max-w-none dark:prose-invert ${isPredefinedHtml ? '' : 'px-[45px] py-[30px]'}`}
           dangerouslySetInnerHTML={{ __html: finalHtml }}
         />
       </div>
@@ -72,44 +72,59 @@ export function DocumentRenderer({
           overflow: hidden;
         }
 
-        ${isPredefinedHtml ? '' : `
+        ${isPredefinedHtml ? `
         .content-area {
-          line-height: 1.6;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+          font-size: 13px;
+          line-height: 1.45;
+          color: #1e293b;
+        }
+        ` : `
+        .content-area {
+          line-height: 1.5;
+          font-size: 9.5pt;
+          color: #334155;
+          font-family: sans-serif;
         }
 
         .content-area h1 { 
-          font-size: 2.25rem; 
+          font-size: 20pt; 
           font-weight: 800; 
           color: #0f172a; 
-          border-bottom: 2px solid #f1f5f9;
-          padding-bottom: 0.75rem;
-          margin-bottom: 2rem;
+          border-bottom: 1.5pt solid #f1f5f9;
+          padding-bottom: 10pt;
+          margin-bottom: 20pt;
+          font-family: sans-serif;
         }
         
         .content-area h2 { 
-          font-size: 1.5rem; 
+          font-size: 14pt; 
           font-weight: 700; 
           color: #1e293b;
-          margin-top: 2rem;
-          margin-bottom: 1rem;
+          margin-top: 18pt;
+          margin-bottom: 8pt;
+          font-family: sans-serif;
         }
 
         .content-area p { 
-          margin-bottom: 1.25rem; 
-          font-size: 1rem; 
+          margin-bottom: 10pt; 
+          font-size: 9.5pt; 
           color: #334155; 
+          line-height: 1.5;
+          font-family: sans-serif;
         }
 
         .content-area table { 
           width: 100%; 
           border-collapse: collapse; 
-          margin: 2rem 0; 
+          margin: 14pt 0; 
         }
 
         .content-area th, .content-area td { 
           border: 1px solid #e2e8f0; 
-          padding: 0.75rem; 
+          padding: 6pt 8pt; 
           text-align: left; 
+          font-size: 9pt;
         }
 
         .content-area th { 

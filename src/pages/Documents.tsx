@@ -7,13 +7,23 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FileText, Upload, Download, Trash2, Search, FolderOpen, Shield, FileCheck, File, Eye, Loader2, AlertCircle } from 'lucide-react';
+import { FileText, Upload, Download, Trash2, Search, FolderOpen, Shield, FileCheck, File, Eye, Loader2, AlertCircle, Cloud, ExternalLink, HardDrive } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { useAuthStore } from '@/store/auth-store';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { differenceInDays } from 'date-fns';
 import { useSecureUpload } from '@/hooks/use-secure-upload';
+import { 
+  uploadDocumentToStorage, 
+  getDocumentPreviewUrl, 
+  downloadDocument, 
+  deleteDocumentFromStorage, 
+  isDrivePath, 
+  extractDriveFileId,
+  getCompanyStorageConfig 
+} from '@/lib/storage-provider';
+import { useQuery } from '@tanstack/react-query';
 
 interface Document {
   id: string;
@@ -53,6 +63,20 @@ export default function Documents() {
   const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+
+  // Storage configuration query
+  const { data: storageConfig } = useQuery({
+    queryKey: ['company-storage-config', profile?.company_id],
+    queryFn: () => profile?.company_id ? getCompanyStorageConfig(profile.company_id) : null,
+    enabled: !!profile?.company_id,
+  });
+
+  const isDriveActive = !!(
+    storageConfig &&
+    storageConfig.provider === 'google_drive' &&
+    storageConfig.is_active &&
+    storageConfig.root_folder_id
+  );
 
   useEffect(() => {
     fetchDocuments();
@@ -119,10 +143,7 @@ export default function Documents() {
     const counts: Record<string, number> = {};
 
     for (const d of documents) {
-      // Aggregate categories
       counts[d.category] = (counts[d.category] || 0) + 1;
-
-      // Count expiring
       if (d.expiresAt) {
         const exp = new Date(d.expiresAt);
         const daysLeft = differenceInDays(exp, now);
@@ -149,14 +170,15 @@ export default function Documents() {
         return;
       }
 
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${profile.company_id}/${Date.now()}_${crypto.randomUUID()}.${fileExt}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(fileName, file);
-
-      if (uploadError) throw uploadError;
+      // Unified storage upload (Google Drive if connected, Supabase fallback)
+      const uploadResult = await uploadDocumentToStorage({
+        companyId: profile.company_id,
+        file,
+        fileName: file.name,
+        contentType: file.type,
+        bucket: 'documents',
+        category: 'documents',
+      });
 
       const { error: dbError } = await supabase
         .from('company_documents')
@@ -165,19 +187,21 @@ export default function Documents() {
           name: form.name,
           category: form.category,
           description: form.description,
-          file_path: fileName,
-          size: file.size,
+          file_path: uploadResult.path,
+          size: uploadResult.size || file.size,
           expires_at: form.expiresAt ? new Date(form.expiresAt).toISOString() : null,
           created_by: profile.id
         });
 
       if (dbError) {
         // Rollback upload
-        await supabase.storage.from('documents').remove([fileName]);
+        await deleteDocumentFromStorage(uploadResult.path, 'documents', profile.company_id);
         throw dbError;
       }
 
-      toast.success('Document uploaded successfully');
+      toast.success(uploadResult.provider === 'google_drive' 
+        ? 'Document saved directly to Google Drive (FastestHR)' 
+        : 'Document uploaded successfully');
       setDialogOpen(false);
       setForm({ name: '', category: 'hr_policies', description: '', expiresAt: '' });
       setFile(null);
@@ -193,12 +217,8 @@ export default function Documents() {
   const handleDelete = async (doc: Document) => {
     if (!doc.filePath || !confirm('Are you sure you want to delete this document?')) return;
     try {
-      // 1. Delete from storage
-      const { error: storageError } = await supabase.storage
-        .from('documents')
-        .remove([doc.filePath]);
-        
-      if (storageError) throw storageError;
+      // 1. Delete from storage (Google Drive or Supabase)
+      await deleteDocumentFromStorage(doc.filePath, 'documents', profile?.company_id);
 
       // 2. Delete from DB
       const { error: dbError } = await supabase
@@ -219,25 +239,8 @@ export default function Documents() {
   const handleDownload = async (doc: Document) => {
     if (!doc.filePath) return;
     try {
-      const { data, error } = await supabase.storage
-        .from('documents')
-        .download(doc.filePath);
-        
-      if (error) throw error;
-      
-      const url = URL.createObjectURL(data);
-      const a = document.createElement('a');
-      a.href = url;
-      // Extract original file extension from filePath if possible, or just use name
-      const ext = doc.filePath.split('.').pop() || '';
-      const downloadName = doc.name.endsWith(`.${ext}`) ? doc.name : `${doc.name}.${ext}`;
-      
-      a.download = downloadName.replace(/\s+/g, '_').toLowerCase();
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast.success(`Downloading ${doc.name}...`);
+      toast.success(`Preparing download for ${doc.name}...`);
+      await downloadDocument(doc.filePath, doc.name, 'documents', profile?.company_id);
     } catch (err: unknown) {
       toast.error('Failed to download document');
       console.error(err);
@@ -249,12 +252,8 @@ export default function Documents() {
     setPreviewDoc(doc);
     setPreviewLoading(true);
     try {
-      const { data, error } = await supabase.storage
-        .from('documents')
-        .createSignedUrl(doc.filePath, 300);
-      
-      if (error) throw error;
-      setPreviewUrl(data?.signedUrl || null);
+      const url = await getDocumentPreviewUrl(doc.filePath, 'documents', profile?.company_id);
+      setPreviewUrl(url || null);
     } catch (err) {
       toast.error('Failed to generate preview URL');
       console.error(err);
@@ -267,7 +266,20 @@ export default function Documents() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Document Management</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold tracking-tight">Document Management</h1>
+            {isDriveActive ? (
+              <Badge className="bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 text-xs gap-1.5 py-1 px-2.5 font-semibold">
+                <Cloud className="w-3.5 h-3.5" />
+                Google Drive Storage
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-xs text-muted-foreground gap-1.5 py-1 px-2.5">
+                <HardDrive className="w-3.5 h-3.5" />
+                Supabase Storage
+              </Badge>
+            )}
+          </div>
           <p className="text-muted-foreground mt-1">
             HR policies, contracts & company documents
             {expiringCount > 0 && <Badge variant="outline" className="ml-2 border-warning text-warning text-[10px]">{expiringCount} expiring/expired</Badge>}
@@ -281,7 +293,15 @@ export default function Documents() {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Upload Document</DialogTitle>
-                <DialogDescription>Add a new document to the company repository</DialogDescription>
+                <DialogDescription>
+                  {isDriveActive ? (
+                    <span className="text-emerald-500 font-medium flex items-center gap-1 mt-1">
+                      <Cloud className="w-3.5 h-3.5 inline" /> File will be saved directly into your connected Google Drive ("FastestHR / Company Documents")
+                    </span>
+                  ) : (
+                    'Add a new document to the company repository'
+                  )}
+                </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
@@ -393,50 +413,79 @@ export default function Documents() {
             </Card>
           ) : (
             <div className="space-y-3">
-              {filteredDocs.map(doc => (
-                <Card key={doc.id} className="hover:border-primary/40 transition-colors">
-                  <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="flex items-start sm:items-center gap-3 w-full">
-                      <div className="p-2.5 rounded-xl bg-primary/10 flex-shrink-0">
-                        <FileText className="w-5 h-5 text-primary" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <h4 className="font-semibold text-foreground text-sm truncate">{doc.name}</h4>
-                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{doc.description}</p>
-                        <div className="flex flex-wrap items-center gap-2 mt-1.5 text-[9px] sm:text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
-                          <span>{doc.uploadedBy}</span>
-                          <span>&bull;</span>
-                          <span>{doc.uploadedAt}</span>
-                          <span>&bull;</span>
-                          <span>{doc.size}</span>
-                          {doc.expiresAt && (() => {
-                            const status = getExpiryStatus(doc.expiresAt);
-                            return status ? (
-                              <>
-                                <span>&bull;</span>
-                                <Badge variant="outline" className={`text-[8px] uppercase font-bold tracking-tight py-0 px-1.5 ${status.class}`}>{status.label}</Badge>
-                              </>
-                            ) : null;
-                          })()}
+              {filteredDocs.map(doc => {
+                const isDrive = isDrivePath(doc.filePath);
+                const driveFileId = isDrive && doc.filePath ? extractDriveFileId(doc.filePath) : null;
+                return (
+                  <Card key={doc.id} className="hover:border-primary/40 transition-colors">
+                    <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex items-start sm:items-center gap-3 w-full">
+                        <div className="p-2.5 rounded-xl bg-primary/10 flex-shrink-0">
+                          <FileText className="w-5 h-5 text-primary" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="font-semibold text-foreground text-sm truncate">{doc.name}</h4>
+                            {isDrive && (
+                              <Badge variant="outline" className="text-[9px] uppercase font-bold tracking-tight py-0 px-1.5 bg-emerald-500/10 text-emerald-500 border-emerald-500/20 gap-1">
+                                <Cloud className="w-2.5 h-2.5" /> Google Drive
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{doc.description}</p>
+                          <div className="flex flex-wrap items-center gap-2 mt-1.5 text-[9px] sm:text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
+                            <span>{doc.uploadedBy}</span>
+                            <span>&bull;</span>
+                            <span>{doc.uploadedAt}</span>
+                            <span>&bull;</span>
+                            <span>{doc.size}</span>
+                            {doc.expiresAt && (() => {
+                              const status = getExpiryStatus(doc.expiresAt);
+                              return status ? (
+                                <>
+                                  <span>&bull;</span>
+                                  <Badge variant="outline" className={`text-[8px] uppercase font-bold tracking-tight py-0 px-1.5 ${status.class}`}>{status.label}</Badge>
+                                </>
+                              ) : null;
+                            })()}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2 justify-end w-full sm:w-auto border-t border-border/10 pt-2 sm:pt-0 sm:border-none">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10 rounded-lg" onClick={() => handlePreview(doc)} aria-label="Preview document">
-                        <Eye className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10 rounded-lg" onClick={() => handleDownload(doc)} aria-label="Download document">
-                        <Download className="w-4 h-4" />
-                      </Button>
-                      {isAdmin && (
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10 rounded-lg" onClick={() => handleDelete(doc)} aria-label="Delete document">
-                          <Trash2 className="w-4 h-4" />
+                      <div className="flex items-center gap-2 justify-end w-full sm:w-auto border-t border-border/10 pt-2 sm:pt-0 sm:border-none">
+                        {isDrive && driveFileId && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            asChild
+                            className="h-8 w-8 text-emerald-500 hover:bg-emerald-500/10 rounded-lg"
+                            title="Open in Google Drive"
+                          >
+                            <a
+                              href={`https://drive.google.com/file/d/${driveFileId}/view`}
+                              target="_blank"
+                              rel="noreferrer"
+                              aria-label="Open in Google Drive"
+                            >
+                              <ExternalLink className="w-4 h-4" />
+                            </a>
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10 rounded-lg" onClick={() => handlePreview(doc)} aria-label="Preview document" title="Preview">
+                          <Eye className="w-4 h-4" />
                         </Button>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10 rounded-lg" onClick={() => handleDownload(doc)} aria-label="Download document" title="Download">
+                          <Download className="w-4 h-4" />
+                        </Button>
+                        {isAdmin && (
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10 rounded-lg" onClick={() => handleDelete(doc)} aria-label="Delete document" title="Delete">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </TabsContent>

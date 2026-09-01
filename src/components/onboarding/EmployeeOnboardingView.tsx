@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSecureUpload } from '@/hooks/use-secure-upload';
+import { uploadDocumentToStorage } from '@/lib/storage-provider';
 
 interface EmployeeOnboardingViewProps {
   employeeId: string;
@@ -78,11 +79,15 @@ export function EmployeeOnboardingView({ employeeId, companyId }: EmployeeOnboar
       const fileExt = file.name.split('.').pop();
       const filePath = `onboarding/${employeeId}/${requirementId}_${Date.now()}.${fileExt}`;
       
-      const { error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(filePath, file);
-      
-      if (uploadError) throw uploadError;
+      const uploadResult = await uploadDocumentToStorage({
+        companyId,
+        file,
+        fileName: file.name,
+        contentType: file.type,
+        bucket: 'documents',
+        category: 'onboarding',
+        customPath: filePath,
+      });
 
       // Clean up previous submission if any before inserting new one
       await supabase
@@ -96,7 +101,7 @@ export function EmployeeOnboardingView({ employeeId, companyId }: EmployeeOnboar
         .insert({
           employee_id: employeeId,
           requirement_id: requirementId,
-          file_url: filePath,
+          file_url: uploadResult.path,
           status: 'pending'
         });
       

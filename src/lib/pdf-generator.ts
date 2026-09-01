@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { uploadDocumentToStorage, downloadDocument } from '@/lib/storage-provider';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
 
@@ -244,13 +245,13 @@ function buildRawHtmlElement(html: string, letterheadUrl?: string | null): HTMLE
   el.innerHTML = `
     <div style="background-color:white;">
       ${letterheadBlock}
-      <div style="padding:40px 60px;line-height:1.6;">
+      <div style="padding:30px 45px;line-height:1.5;">
         <style>
-          h1 { font-size:28pt; font-weight:800; color:#0f172a; border-bottom:2pt solid #f1f5f9; padding-bottom:15pt; margin-bottom:30pt; font-family:sans-serif; }
-          h2 { font-size:18pt; font-weight:700; color:#1e293b; margin-top:25pt; margin-bottom:12pt; font-family:sans-serif; }
-          p  { font-size:11pt; color:#334155; margin-bottom:15pt; line-height:1.6; font-family:sans-serif; }
-          table { width:100%; border-collapse:collapse; margin:20pt 0; }
-          th, td { border:1px solid #e2e8f0; padding:10pt; text-align:left; font-size:10pt; }
+          h1 { font-size:20pt; font-weight:800; color:#0f172a; border-bottom:1.5pt solid #f1f5f9; padding-bottom:10pt; margin-bottom:20pt; font-family:sans-serif; }
+          h2 { font-size:14pt; font-weight:700; color:#1e293b; margin-top:18pt; margin-bottom:8pt; font-family:sans-serif; }
+          p  { font-size:9.5pt; color:#334155; margin-bottom:10pt; line-height:1.5; font-family:sans-serif; }
+          table { width:100%; border-collapse:collapse; margin:14pt 0; }
+          th, td { border:1px solid #e2e8f0; padding:6pt 8pt; text-align:left; font-size:9pt; }
           th { background-color:#f8fafc; font-weight:600; color:#475569; }
         </style>
         ${html}
@@ -379,19 +380,21 @@ async function generateAndUploadPDF(
   pdfBlob = result.blob;
   const manipulatedHtml = result.manipulatedHtml;
 
-  const fileName = `${companyId}/${fileNamePrefix}_${Date.now()}.pdf`;
-  const { data: uploadData, error: uploadError } = await supabase.storage
-    .from(bucketName)
-    .upload(fileName, pdfBlob, {
-      contentType: 'application/pdf',
-      upsert: true,
-    });
+  const category = bucketName === 'offer_letters' 
+    ? 'offer_letters' 
+    : (bucketName === 'senddesk-documents' ? 'senddesk' : 'documents');
 
-  if (uploadError) {
-    throw new Error(`Failed to upload PDF: ${uploadError.message}`);
-  }
+  const uploadResult = await uploadDocumentToStorage({
+    companyId,
+    file: pdfBlob,
+    fileName: `${fileNamePrefix}_${Date.now()}.pdf`,
+    contentType: 'application/pdf',
+    bucket: bucketName,
+    category: category as any,
+    customPath: `${companyId}/${fileNamePrefix}_${Date.now()}.pdf`,
+  });
 
-  return { pdfPath: uploadData.path, manipulatedHtml };
+  return { pdfPath: uploadResult.path, manipulatedHtml };
 }
 
 /**
@@ -449,27 +452,15 @@ export async function generateAndDownloadPayslipPDF(params: GeneratePayslipPDFPa
     skipDownload = false
   } = params;
 
-  // 1. If pdf_url is already cached in the database, fetch signed URL and trigger download
+  // 1. If pdf_url is already cached in the database, fetch & trigger download
   if (slip?.pdf_url) {
     if (skipDownload) {
       return;
     }
     try {
-      const { data, error } = await supabase.storage
-        .from('payslips')
-        .createSignedUrl(slip.pdf_url, 60);
-      if (!error && data?.signedUrl) {
-        const a = document.createElement('a');
-        a.href = data.signedUrl;
-        a.target = '_blank';
-        a.download = `Payslip_${employeeName.replace(/\s+/g, '_')}_${periodStart}_to_${periodEnd}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        return;
-      } else {
-        console.warn("Failed to get signed URL for cached payslip, regenerating...", error);
-      }
+      const downloadName = `Payslip_${employeeName.replace(/\s+/g, '_')}_${periodStart}_to_${periodEnd}.pdf`;
+      await downloadDocument(slip.pdf_url, downloadName, 'payslips', slip.company_id);
+      return;
     } catch (err) {
       console.warn("Error retrieving cached payslip PDF, regenerating...", err);
     }
@@ -867,50 +858,35 @@ export async function generateAndDownloadPayslipPDF(params: GeneratePayslipPDFPa
     throw new Error("Failed to generate PDF Blob");
   }
 
-  // 3. Upload to secure bucket if we have a valid slip and employee/company IDs
+  // 3. Upload to storage (Google Drive if connected, Supabase fallback)
   if (slip?.id && slip?.company_id && slip?.employee_id) {
     const fileExtension = 'pdf';
     const uniqueId = Date.now();
-    const fileName = `${slip.company_id}/${slip.employee_id}/Payslip_${periodStart}_to_${periodEnd}_${uniqueId}.${fileExtension}`;
+    const fileName = `Payslip_${periodStart}_to_${periodEnd}_${uniqueId}.${fileExtension}`;
     
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('payslips')
-      .upload(fileName, pdfBlob, {
-        contentType: 'application/pdf',
-        upsert: true,
-      });
-
-    if (uploadError) {
-      throw new Error(`Failed to upload payslip PDF: ${uploadError.message}`);
-    }
+    const uploadResult = await uploadDocumentToStorage({
+      companyId: slip.company_id,
+      file: pdfBlob,
+      fileName,
+      contentType: 'application/pdf',
+      bucket: 'payslips',
+      category: 'payslips',
+      customPath: `${slip.company_id}/${slip.employee_id}/${fileName}`,
+    });
 
     // Update the payslip record with the path
     const { error: updateError } = await supabase
       .from('payslips')
-      .update({ pdf_url: uploadData.path })
+      .update({ pdf_url: uploadResult.path })
       .eq('id', slip.id);
 
     if (updateError) {
       console.error("Failed to update payslip with pdf_url:", updateError);
     }
 
-    // Get signed URL to trigger download
-    const { data: signedData, error: signedError } = await supabase.storage
-      .from('payslips')
-      .createSignedUrl(uploadData.path, 60);
-
-    if (signedError || !signedData?.signedUrl) {
-      throw new Error(`Failed to create signed URL for uploaded payslip: ${signedError?.message || 'unknown error'}`);
-    }
-
     if (!skipDownload) {
-      const a = document.createElement('a');
-      a.href = signedData.signedUrl;
-      a.target = '_blank';
-      a.download = `Payslip_${employeeName.replace(/\s+/g, '_')}_${periodStart}_to_${periodEnd}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      const downloadName = `Payslip_${employeeName.replace(/\s+/g, '_')}_${periodStart}_to_${periodEnd}.pdf`;
+      await downloadDocument(uploadResult.path, downloadName, 'payslips', slip.company_id);
     }
   } else {
     // Fallback: trigger standard browser download if no DB record matches
