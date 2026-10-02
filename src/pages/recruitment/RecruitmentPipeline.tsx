@@ -160,9 +160,12 @@ export function RecruitmentPipeline() {
           <Button variant="outline" size="sm" className="rounded-full px-3 h-8 sm:h-9 text-xs sm:text-sm" onClick={() => {
             const c = (activeJobData as any).companies;
             const slug = activeJobData.job_slug || activeJobData.id;
+            const base = (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1'))
+              ? 'https://fastesthr.com'
+              : window.location.origin;
             const url = c?.custom_domain
               ? `https://${c.custom_domain}/jobs/${slug}`
-              : `${window.location.origin}/company/${c?.slug}/jobs/${slug}`;
+              : `${base}/company/${c?.slug}/jobs/${slug}`;
             navigator.clipboard.writeText(url);
             toast.success('Job link copied');
           }}>

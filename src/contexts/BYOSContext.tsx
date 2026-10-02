@@ -96,7 +96,7 @@ export function BYOSProvider({
 
       return null;
     },
-    enabled: !!tenantId,
+    enabled: !!tenantId && !!profile?.id,
     staleTime: 1000 * 60 * 5, // 5 minutes
     gcTime: 1000 * 60 * 10,
     retry: 1,

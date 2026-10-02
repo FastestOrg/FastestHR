@@ -57,6 +57,8 @@ const COMMON_TIMEZONES = [
   'Australia/Sydney',
 ];
 
+const PRESET_FUTURE_DAYS = [7, 14, 30, 60, 90];
+
 export function WorkingHoursEditor({
   settings,
   onSaveSettings,
@@ -73,6 +75,13 @@ export function WorkingHoursEditor({
   const [bufferAfter, setBufferAfter] = useState<number>(settings?.buffer_after_minutes ?? 0);
   const [minNotice, setMinNotice] = useState<number>(settings?.min_notice_hours ?? 2);
   const [maxFutureDays, setMaxFutureDays] = useState<number>(settings?.max_future_days ?? 7);
+  const [isCustomDays, setIsCustomDays] = useState<boolean>(() => {
+    const initial = settings?.max_future_days ?? 7;
+    return !PRESET_FUTURE_DAYS.includes(initial);
+  });
+  const [customDaysInput, setCustomDaysInput] = useState<string>(() => {
+    return String(settings?.max_future_days ?? 7);
+  });
 
   const [isSaving, setIsSaving] = useState(false);
 
@@ -84,7 +93,11 @@ export function WorkingHoursEditor({
       if (settings.buffer_before_minutes !== undefined) setBufferBefore(settings.buffer_before_minutes);
       if (settings.buffer_after_minutes !== undefined) setBufferAfter(settings.buffer_after_minutes);
       if (settings.min_notice_hours !== undefined) setMinNotice(settings.min_notice_hours);
-      if (settings.max_future_days !== undefined) setMaxFutureDays(settings.max_future_days);
+      if (settings.max_future_days !== undefined) {
+        setMaxFutureDays(settings.max_future_days);
+        setCustomDaysInput(String(settings.max_future_days));
+        setIsCustomDays(!PRESET_FUTURE_DAYS.includes(settings.max_future_days));
+      }
     }
   }, [settings]);
 
@@ -168,9 +181,64 @@ export function WorkingHoursEditor({
     toast.success('Reset to default hours: Mon–Sat 10:00 AM – 2:00 PM & 3:00 PM – 7:00 PM.');
   };
 
+  const handleMaxDaysSelect = (val: string) => {
+    if (val === 'custom') {
+      setIsCustomDays(true);
+      const current = maxFutureDays > 0 ? maxFutureDays : 7;
+      setCustomDaysInput(String(current));
+      setMaxFutureDays(current);
+    } else {
+      setIsCustomDays(false);
+      const parsed = Number(val);
+      setMaxFutureDays(parsed);
+      setCustomDaysInput(String(parsed));
+    }
+  };
+
+  const handleCustomDaysChange = (val: string) => {
+    setCustomDaysInput(val);
+    const parsed = parseInt(val, 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      setMaxFutureDays(parsed);
+    }
+  };
+
+  const handleCustomDaysBlur = () => {
+    const parsed = parseInt(customDaysInput, 10);
+    if (isNaN(parsed) || parsed < 1) {
+      setMaxFutureDays(1);
+      setCustomDaysInput('1');
+    } else if (parsed > 365) {
+      setMaxFutureDays(365);
+      setCustomDaysInput('365');
+      toast.info('Maximum future booking window is 365 days.');
+    } else {
+      setMaxFutureDays(parsed);
+      setCustomDaysInput(String(parsed));
+    }
+  };
+
   const handleSave = async () => {
     try {
       setIsSaving(true);
+      let resolvedMaxFutureDays = maxFutureDays;
+      if (isCustomDays) {
+        const parsed = parseInt(customDaysInput, 10);
+        if (isNaN(parsed) || parsed < 1) {
+          toast.error('Please enter a valid custom future range (at least 1 day).');
+          setIsSaving(false);
+          return;
+        }
+        if (parsed > 365) {
+          toast.error('Custom future range cannot exceed 365 days (1 year).');
+          setIsSaving(false);
+          return;
+        }
+        resolvedMaxFutureDays = parsed;
+        setMaxFutureDays(parsed);
+        setCustomDaysInput(String(parsed));
+      }
+
       await onSaveSettings({
         weekly_schedule: schedule,
         duration_minutes: duration,
@@ -178,7 +246,7 @@ export function WorkingHoursEditor({
         buffer_before_minutes: bufferBefore,
         buffer_after_minutes: bufferAfter,
         min_notice_hours: minNotice,
-        max_future_days: maxFutureDays,
+        max_future_days: resolvedMaxFutureDays,
       });
       toast.success('🎉 Availability and working hours saved successfully!');
     } catch (err: any) {
@@ -422,8 +490,8 @@ export function WorkingHoursEditor({
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium">Max Future Range</Label>
                 <Select
-                  value={String(maxFutureDays)}
-                  onValueChange={(val) => setMaxFutureDays(Number(val))}
+                  value={isCustomDays ? 'custom' : String(maxFutureDays)}
+                  onValueChange={handleMaxDaysSelect}
                 >
                   <SelectTrigger className="h-9">
                     <SelectValue />
@@ -434,10 +502,57 @@ export function WorkingHoursEditor({
                     <SelectItem value="30">30 days into future</SelectItem>
                     <SelectItem value="60">60 days into future</SelectItem>
                     <SelectItem value="90">90 days into future</SelectItem>
+                    <SelectItem value="custom">
+                      {isCustomDays ? `Custom (${maxFutureDays || customDaysInput || 1} days)` : 'Custom days...'}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
+
+            {/* Custom Future Range Input */}
+            {isCustomDays && (
+              <div className="p-3 bg-muted/40 border border-border/70 rounded-lg space-y-2 animate-in fade-in-50 slide-in-from-top-1 duration-200">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="custom-future-range-input" className="text-xs font-medium flex items-center gap-1.5 text-foreground">
+                    <Calendar className="w-3.5 h-3.5 text-amber-500" />
+                    Custom Booking Window
+                  </Label>
+                  <span className="text-[11px] text-muted-foreground font-medium">1 – 365 days</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      id="custom-future-range-input"
+                      type="number"
+                      min={1}
+                      max={365}
+                      value={customDaysInput}
+                      onChange={(e) => handleCustomDaysChange(e.target.value)}
+                      onBlur={handleCustomDaysBlur}
+                      placeholder="e.g. 45"
+                      className="h-9 text-xs pr-14 font-semibold"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium pointer-events-none">
+                      days
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleMaxDaysSelect('7')}
+                    className="h-9 text-xs px-2.5 text-muted-foreground hover:text-foreground shrink-0"
+                    title="Reset to 7-day standard"
+                  >
+                    Reset
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Guests can book slots up to <strong className="text-foreground font-semibold">{maxFutureDays || customDaysInput || 1} days</strong> ahead from today.
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 

@@ -45,8 +45,8 @@ CREATE TABLE IF NOT EXISTS public.byos_audit_log (
   tenant_id UUID NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
   action TEXT NOT NULL
     CHECK (action IN (
-      'connect', 'validate', 'migrate', 'health_check',
-      'sync_data', 'disconnect', 'migrate_back', 'error'
+      'connect', 'validate', 'migrate', 'health_check', 'health',
+      'sync_data', 'sync-data', 'disconnect', 'migrate_back', 'error'
     )),
   status TEXT NOT NULL CHECK (status IN ('started', 'success', 'failed')),
   details JSONB DEFAULT '{}'::jsonb,
@@ -91,10 +91,16 @@ CREATE POLICY "byos_audit_log_admin_select"
     OR auth.role() = 'service_role'
   );
 
-DROP POLICY IF EXISTS "byos_audit_log_service_insert" ON public.byos_audit_log;
-CREATE POLICY "byos_audit_log_service_insert"
+DROP POLICY IF EXISTS "byos_audit_log_insert" ON public.byos_audit_log;
+CREATE POLICY "byos_audit_log_insert"
   ON public.byos_audit_log FOR INSERT
-  WITH CHECK (true);
+  WITH CHECK (
+    auth.role() = 'service_role' 
+    OR tenant_id IN (
+      SELECT company_id FROM public.profiles 
+      WHERE id = auth.uid()
+    )
+  );
 
 -- 8. Performance Indexes
 CREATE INDEX IF NOT EXISTS idx_byos_connections_tenant_id ON public.byos_connections(tenant_id);
@@ -126,6 +132,14 @@ AS $$
 DECLARE
   passphrase TEXT;
 BEGIN
+  -- Strict caller authorization check
+  IF auth.role() <> 'service_role' AND NOT EXISTS (
+    SELECT 1 FROM public.profiles 
+    WHERE id = auth.uid() AND platform_role IN ('super_admin', 'company_admin')
+  ) THEN
+    RAISE EXCEPTION 'Access denied to decrypt credentials';
+  END IF;
+
   passphrase := COALESCE(current_setting('app.settings.byos_encryption_key', true), 'fastesthr-byos-prod-key-2026-secure-salt');
   RETURN extensions.pgp_sym_decrypt(encrypted_key, passphrase);
 END;
@@ -162,13 +176,26 @@ BEGIN
   JOIN public.companies c ON c.id = bc.tenant_id
   WHERE bc.tenant_id = p_tenant_id
     AND (
-      -- Verify caller has admin privileges for this company
-      p_tenant_id IN (
-        SELECT company_id FROM public.profiles 
-        WHERE id = auth.uid() AND (platform_role = 'company_admin' OR platform_role = 'super_admin')
+      -- If active, allow any company member (for tenant client switching in BYOSContext)
+      (bc.status = 'active' AND (
+        p_tenant_id IN (SELECT p.company_id FROM public.profiles p WHERE p.id = auth.uid())
+        OR (SELECT p.platform_role FROM public.profiles p WHERE p.id = auth.uid()) = 'super_admin'
+        OR auth.role() = 'service_role'
+      ))
+      -- If not yet active, only company admins or super admins
+      OR (
+        p_tenant_id IN (
+          SELECT p.company_id FROM public.profiles p 
+          WHERE p.id = auth.uid() AND (p.platform_role = 'company_admin' OR p.platform_role = 'super_admin')
+        )
+        OR (SELECT p.platform_role FROM public.profiles p WHERE p.id = auth.uid()) = 'super_admin'
+        OR auth.role() = 'service_role'
       )
-      OR (SELECT platform_role FROM public.profiles WHERE id = auth.uid()) = 'super_admin'
-      OR auth.role() = 'service_role'
     );
 END;
 $$;
+
+-- 11. Explicit Grants
+GRANT EXECUTE ON FUNCTION public.byos_encrypt_key(TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.byos_decrypt_key(BYTEA) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_byos_connection(UUID) TO authenticated, service_role;

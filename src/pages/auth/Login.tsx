@@ -52,6 +52,10 @@ export default function Login() {
       }
 
       toast.success('Welcome back!');
+      // Record login event asynchronously
+      import('@/utils/loginLogger').then(({ recordUserLogin }) => {
+        recordUserLogin('success', 'password');
+      }).catch(() => {});
       navigate('/dashboard');
     } catch {
       toast.error('Something went wrong');

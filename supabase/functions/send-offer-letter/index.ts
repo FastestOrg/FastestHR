@@ -5,17 +5,82 @@ import * as nodemailer from "npm:nodemailer@6.9.8";
 // Polyfill Buffer for nodemailer running in Deno
 (globalThis as any).Buffer = Buffer;
 
-const allowedOrigins = [
-  'https://fastesthr.com',
-  'http://localhost:8080',
-  'https://*.fastesthr.com'
-];
+function getPublicAppUrl(
+  req?: Request,
+  company?: {
+    custom_domain?: string | null;
+    domain_verified?: boolean | null;
+    slug?: string | null;
+  } | null,
+  bodyUrl?: string | null
+): string {
+  const isLocalOrInternal = (url: string | null | undefined): boolean => {
+    if (!url) return true;
+    const lower = url.toLowerCase().trim();
+    return (
+      lower.includes('localhost') ||
+      lower.includes('127.0.0.1') ||
+      lower.includes('0.0.0.0') ||
+      lower.startsWith('capacitor://') ||
+      lower.startsWith('ionic://') ||
+      lower.startsWith('file://')
+    );
+  };
+
+  const sanitizeUrl = (url: string): string => {
+    let clean = url.trim().replace(/\/+$/, '');
+    if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
+      clean = `https://${clean}`;
+    }
+    return clean;
+  };
+
+  if (bodyUrl && !isLocalOrInternal(bodyUrl)) {
+    return sanitizeUrl(bodyUrl);
+  }
+
+  const origin = req?.headers.get('origin');
+  if (origin && !isLocalOrInternal(origin)) {
+    return sanitizeUrl(origin);
+  }
+
+  const referer = req?.headers.get('referer');
+  if (referer && !isLocalOrInternal(referer)) {
+    try {
+      const refUrl = new URL(referer);
+      if (!isLocalOrInternal(refUrl.origin)) {
+        return sanitizeUrl(refUrl.origin);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const envUrl = (globalThis as any).Deno?.env?.get('APP_URL') ||
+                 (globalThis as any).Deno?.env?.get('PUBLIC_APP_URL') ||
+                 (globalThis as any).Deno?.env?.get('SITE_URL');
+  if (envUrl && !isLocalOrInternal(envUrl)) {
+    return sanitizeUrl(envUrl);
+  }
+
+  if (company?.custom_domain && company?.domain_verified && !isLocalOrInternal(company.custom_domain)) {
+    return sanitizeUrl(company.custom_domain);
+  }
+
+  return 'https://fastesthr.com';
+}
 
 const getCorsHeaders = (req: Request) => {
-  const origin = req.headers.get('Origin');
-  const isAllowed = origin && allowedOrigins.includes(origin);
+  const origin = req.headers.get('Origin') || '';
+  const isAllowed =
+    origin === 'https://fastesthr.com' ||
+    origin.endsWith('.fastesthr.com') ||
+    origin.endsWith('.vercel.app') ||
+    /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
+    origin.startsWith('capacitor://');
+
   return {
-    'Access-Control-Allow-Origin': isAllowed ? origin : allowedOrigins[0],
+    'Access-Control-Allow-Origin': isAllowed ? origin : 'https://fastesthr.com',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   };
 };
@@ -42,7 +107,8 @@ Deno.serve(async (req) => {
       pdf_path,
       offer_number,
       template_id,
-      is_predefined_html
+      is_predefined_html,
+      app_url
     } = await req.json();
 
     if (!candidate_id || !job_id || !company_id || !pdf_path || !html_content) {
@@ -145,8 +211,8 @@ Deno.serve(async (req) => {
       currency: company.currency || 'USD' 
     });
     
-    const origin = req.headers.get('origin') || company.website || 'http://localhost:8080';
-    const publicUrl = `${origin}/offer/${savedOffer.token}`;
+    const appUrl = getPublicAppUrl(req, company, app_url);
+    const publicUrl = `${appUrl}/offer/${savedOffer.token}`;
 
     const formatDateString = (dateStr: string) => {
       if (!dateStr) return '';

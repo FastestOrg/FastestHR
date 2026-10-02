@@ -20,3 +20,36 @@ verify_jwt = false
 
 [functions.send-payslip-email]
 verify_jwt = false
+
+[functions.send-candidate-magic-link]
+verify_jwt = false
+
+[functions.delete-employee]
+verify_jwt = false
+
+[functions.byos-manage]
+verify_jwt = false
+
+[functions.fastest-ai-assistant]
+verify_jwt = false
+
+[functions.generate-stage-criteria]
+verify_jwt = false
+
+[functions.get-posthog-config]
+verify_jwt = false
+
+[functions.google-calendar-auth]
+verify_jwt = false
+
+[functions.razorpay-order]
+verify_jwt = false
+
+[functions.send-absconding-email]
+verify_jwt = false
+
+[functions.set-employee-password]
+verify_jwt = false
+
+[functions.send-document]
+verify_jwt = false

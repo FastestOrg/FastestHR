@@ -14,8 +14,7 @@ import { makeBYOSQueryKey } from '@/utils/byosUtils';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useDebounce } from '@/hooks/use-debounce';
-import { EmployeeOrgChart } from '@/components/employees/EmployeeOrgChart';
-import { OrgChartPro } from '@/components/employees/OrgChartPro';
+import { FullScaleOrgChart } from '@/components/org-chart/FullScaleOrgChart';
 import { DeleteEmployeeDialog } from '@/components/employees/DeleteEmployeeDialog';
 
 // ⚡ Bolt: Hoisted static object configuration outside of component body
@@ -206,10 +205,8 @@ export default function Employees() {
       ) : (
         <div className="space-y-2">
           <p className="text-[10px] text-muted-foreground md:hidden text-center italic">✦ Swipe / drag to explore the organization chart</p>
-          <div className="w-full overflow-x-auto pb-4 scrollbar-hide border border-border/40 rounded-xl bg-background/20 p-2">
-            <div className="min-w-[640px]">
-              <OrgChartPro employees={employees} />
-            </div>
+          <div className="w-full">
+            <FullScaleOrgChart employees={employees} canManage={isAdmin} />
           </div>
         </div>
       )}

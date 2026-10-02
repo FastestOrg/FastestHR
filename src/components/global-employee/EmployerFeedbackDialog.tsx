@@ -25,13 +25,13 @@ interface EmployerFeedbackDialogProps {
 export function EmployerFeedbackDialog({
   open, onOpenChange, employeeId, employeeName, onSuccess,
 }: EmployerFeedbackDialogProps) {
-  const { profile } = useAuthStore();
+  const { user, profile } = useAuthStore();
   const [submitting, setSubmitting] = useState(false);
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
   // Reviewer credentials
   const [reviewerName, setReviewerName] = useState(profile?.full_name || '');
-  const [reviewerEmail, setReviewerEmail] = useState(profile?.email || '');
+  const [reviewerEmail, setReviewerEmail] = useState(user?.email || '');
   const [reviewerRole, setReviewerRole] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [companyDomain, setCompanyDomain] = useState('');
@@ -113,7 +113,7 @@ export function EmployerFeedbackDialog({
         p_integrity_score: rating,
         p_strengths: strengths.trim(),
         p_growth_areas: growthAreas.trim(),
-        p_added_by_id: profile?.id || 'anonymous_hr',
+        p_added_by_id: profile?.id || user?.id || 'anonymous_hr',
       });
 
       if (error) throw error;

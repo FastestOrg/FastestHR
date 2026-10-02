@@ -72,8 +72,8 @@ export function NewGroupDialog({ open, onOpenChange, onConversationCreated }: Ne
       onConversationCreated(conversationId);
       handleClose();
       toast.success('Group created successfully');
-    } catch (err) {
-      toast.error('Failed to create group');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to create group');
     }
   };
 
@@ -147,7 +147,9 @@ export function NewGroupDialog({ open, onOpenChange, onConversationCreated }: Ne
                     const isSelected = selectedMembers.some((m) => m.id === member.id);
                     const isOnline = onlineUsers.has(member.id);
                     const initials = member.full_name
-                      ?.split(' ')
+                      ?.trim()
+                      .split(/\s+/)
+                      .filter(Boolean)
                       .map((n: string) => n[0])
                       .join('')
                       .toUpperCase()

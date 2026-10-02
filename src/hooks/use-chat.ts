@@ -333,6 +333,18 @@ export function useCreateDM() {
     mutationFn: async (otherUserId: string) => {
       if (!profile?.id || !profile?.company_id) throw new Error('Not authenticated');
 
+      // Attempt atomic RPC first
+      const { data: rpcConvId, error: rpcErr } = await (supabase.rpc as any)(
+        'create_or_get_dm',
+        { p_other_user_id: otherUserId }
+      );
+
+      if (!rpcErr && rpcConvId) {
+        queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
+        return rpcConvId as string;
+      }
+
+      // Fallback to client-side creation if RPC is unavailable
       // Check if a DM already exists between these two users
       const { data: myConvs } = await supabase
         .from('chat_participants')
@@ -375,7 +387,7 @@ export function useCreateDM() {
         .select()
         .single();
 
-      if (convErr) throw convErr;
+      if (convErr) throw rpcErr || convErr;
 
       // Add both participants
       const { error: pErr } = await supabase
@@ -412,6 +424,21 @@ export function useCreateGroup() {
     }) => {
       if (!profile?.id || !profile?.company_id) throw new Error('Not authenticated');
 
+      // Attempt atomic RPC first
+      const { data: rpcConvId, error: rpcErr } = await (supabase.rpc as any)(
+        'create_chat_group',
+        {
+          p_name: name,
+          p_member_ids: memberIds,
+        }
+      );
+
+      if (!rpcErr && rpcConvId) {
+        queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
+        return rpcConvId as string;
+      }
+
+      // Fallback
       // Create group conversation
       const { data: conv, error: convErr } = await supabase
         .from('chat_conversations')
@@ -424,7 +451,7 @@ export function useCreateGroup() {
         .select()
         .single();
 
-      if (convErr) throw convErr;
+      if (convErr) throw rpcErr || convErr;
 
       // Add creator as admin + all members
       const participants = [
@@ -499,13 +526,14 @@ export function useCompanyMembers(searchQuery?: string) {
         .neq('id', profile.id)
         .order('full_name');
 
-      if (searchQuery) {
-        query = query.ilike('full_name', `%${searchQuery}%`);
+      const trimmed = searchQuery?.trim();
+      if (trimmed) {
+        query = query.ilike('full_name', `%${trimmed}%`);
       }
 
-      const { data, error } = await query.limit(50);
+      const { data, error } = await query.limit(200);
       if (error) throw error;
-      return data || [];
+      return (data || []).filter((m) => !!m.full_name);
     },
     enabled: !!profile?.company_id,
     staleTime: 30_000,

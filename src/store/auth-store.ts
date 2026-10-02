@@ -44,7 +44,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Set up auth listener BEFORE getting session
       supabase.auth.onAuthStateChange(async (event, session) => {
         set({ session, user: session?.user ?? null });
-        
+
         if (event === 'PASSWORD_RECOVERY') {
           if (window.location.pathname !== '/reset-password') {
             window.location.href = '/reset-password';
@@ -52,39 +52,98 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           }
         }
 
+        if (event === 'SIGNED_OUT') {
+          set({ profile: null, session: null, user: null });
+          try {
+            localStorage.removeItem('sb-auth-token');
+          } catch {}
+          return;
+        }
+
         if (session?.user) {
           // Use setTimeout to avoid Supabase deadlock
           setTimeout(async () => {
-            const { data } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', session.user.id)
-              .maybeSingle();
-            if (data) set({ profile: data as unknown as Profile });
+            try {
+              const { data } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', session.user.id)
+                .maybeSingle();
+              if (data) set({ profile: data as unknown as Profile });
+            } catch (err) {
+              console.warn('Error fetching profile in auth change:', err);
+            }
           }, 0);
+
+          if (event === 'SIGNED_IN') {
+            import('@/utils/loginLogger').then(({ recordUserLogin }) => {
+              recordUserLogin('success', 'session_auth');
+            }).catch(() => {});
+          }
         } else {
           set({ profile: null });
         }
       });
 
-      const { data: { session } } = await supabase.auth.getSession();
-      set({ session, user: session?.user ?? null });
+      // Attempt to retrieve session with a timeout to prevent hanging on network/server freeze
+      try {
+        const sessionPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise<{ data: { session: null }; error: Error }>((_, reject) =>
+          setTimeout(() => reject(new Error('Session retrieval timed out')), 8000)
+        );
 
-      if (session?.user) {
-        const { data } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .maybeSingle();
-        if (data) set({ profile: data as unknown as Profile });
+        const { data, error } = await Promise.race([sessionPromise, timeoutPromise]) as {
+          data: { session: Session | null };
+          error?: { message?: string; status?: number } | null;
+        };
+
+        if (error) {
+          console.warn('Session retrieval error:', error.message);
+          try {
+            localStorage.removeItem('sb-auth-token');
+          } catch {}
+          set({ session: null, user: null, profile: null });
+        } else {
+          const session = data?.session ?? null;
+          set({ session, user: session?.user ?? null });
+
+          if (session?.user) {
+            try {
+              const { data: profileData } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', session.user.id)
+                .maybeSingle();
+              if (profileData) set({ profile: profileData as unknown as Profile });
+            } catch (err) {
+              console.warn('Failed to load profile:', err);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Supabase session initialization timed out or failed:', err);
+        try {
+          localStorage.removeItem('sb-auth-token');
+        } catch {}
+        set({ session: null, user: null, profile: null });
       }
+    } catch (err) {
+      console.error('Fatal error during auth initialization:', err);
     } finally {
       set({ loading: false, initialized: true });
     }
   },
 
   signOut: async () => {
-    await supabase.auth.signOut();
-    set({ user: null, session: null, profile: null });
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.warn('Sign out error:', err);
+    } finally {
+      try {
+        localStorage.removeItem('sb-auth-token');
+      } catch {}
+      set({ user: null, session: null, profile: null });
+    }
   },
 }));

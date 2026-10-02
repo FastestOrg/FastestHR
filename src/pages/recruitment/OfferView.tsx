@@ -34,8 +34,10 @@ export default function OfferView() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
+    supabase.auth.getSession().then(({ data }) => {
+      setUser(data?.session?.user ?? null);
+    }).catch(() => {
+      setUser(null);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -92,11 +94,16 @@ export default function OfferView() {
     if (!offer) return;
     setAccepting(true);
     try {
+      const appUrl = (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1'))
+        ? 'https://fastesthr.com'
+        : window.location.origin;
+
       const { data, error: funcError } = await supabase.functions.invoke('send-candidate-magic-link', {
         body: { 
           offer_id: offer.id,
           candidate_email: offer.candidates?.email,
-          token: token
+          token: token,
+          app_url: appUrl
         }
       });
 
@@ -117,11 +124,16 @@ export default function OfferView() {
     if (!offer) return;
     setAccepting(true);
     try {
+      const appUrl = (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1'))
+        ? 'https://fastesthr.com'
+        : window.location.origin;
+
       const { data, error: funcError } = await supabase.functions.invoke('send-candidate-magic-link', {
         body: { 
           offer_id: offer.id,
           candidate_email: offer.candidates?.email,
-          token: token
+          token: token,
+          app_url: appUrl
         }
       });
 

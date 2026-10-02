@@ -327,6 +327,10 @@ export function CandidateActions({
 
         toast.info('Sending offer letter email with attachment...');
         
+        const appUrl = (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1'))
+          ? 'https://fastesthr.com'
+          : window.location.origin;
+
         const { data, error: fnError } = await supabase.functions.invoke('send-offer-letter', {
           body: { 
             candidate_id: candidateId, 
@@ -340,7 +344,8 @@ export function CandidateActions({
             pdf_path: pdfPath,
             offer_number: offerNumberStr,
             template_id: templateId,
-            is_predefined_html: template.is_predefined_html
+            is_predefined_html: template.is_predefined_html,
+            app_url: appUrl
           }
         });
         

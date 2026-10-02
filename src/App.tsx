@@ -80,6 +80,8 @@ const GlobalEmployeeProfile = lazy(() => import('@/pages/public/GlobalEmployeePr
 const GlobalEmployeeVerify = lazy(() => import('@/pages/public/GlobalEmployeeVerify'));
 const Meetings = lazy(() => import('@/pages/Meetings'));
 const PublicBookingPage = lazy(() => import('@/pages/public/PublicBookingPage'));
+const OrgChart = lazy(() => import('@/pages/OrgChart'));
+const HierarchyLogs = lazy(() => import('@/pages/HierarchyLogs'));
 
 // Recruitment sub-pages
 import { RecruitmentPipeline } from '@/pages/recruitment/RecruitmentPipeline';
@@ -204,6 +206,8 @@ function AppRoutes() {
       {/* Core HR modules */}
       <Route path="/dashboard" element={withLayout(<Dashboard />)} />
       <Route path="/profile" element={withLayout(<EmployeeProfile />)} />
+      <Route path="/org-chart" element={withLayout(<OrgChart />)} />
+      <Route path="/hierarchy-logs" element={withLayout(<HierarchyLogs />)} />
       <Route path="/employees" element={withLayout(<Employees />)} />
       <Route path="/employees/new" element={withLayout(<NewEmployee />)} />
       <Route path="/employees/:id" element={withLayout(<EmployeeDetail />)} />

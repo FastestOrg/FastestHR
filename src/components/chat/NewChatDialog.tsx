@@ -36,8 +36,8 @@ export function NewChatDialog({ open, onOpenChange, onConversationCreated }: New
       onConversationCreated(conversationId);
       onOpenChange(false);
       setSearch('');
-    } catch (err) {
-      toast.error('Failed to start conversation');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to start conversation');
     }
   };
 
@@ -95,7 +95,9 @@ export function NewChatDialog({ open, onOpenChange, onConversationCreated }: New
               members.map((member: any) => {
                 const isOnline = onlineUsers.has(member.id);
                 const initials = member.full_name
-                  ?.split(' ')
+                  ?.trim()
+                  .split(/\s+/)
+                  .filter(Boolean)
                   .map((n: string) => n[0])
                   .join('')
                   .toUpperCase()

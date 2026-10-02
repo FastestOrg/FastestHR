@@ -22,10 +22,10 @@ interface RequestConsentDialogProps {
 export function RequestConsentDialog({
   open, onOpenChange, employeeId, employeeName, onSuccess,
 }: RequestConsentDialogProps) {
-  const { profile } = useAuthStore();
+  const { user, profile } = useAuthStore();
   const [submitting, setSubmitting] = useState(false);
   const [companyName, setCompanyName] = useState(profile?.company_id ? 'Current Enterprise' : '');
-  const [requesterEmail, setRequesterEmail] = useState(profile?.email || '');
+  const [requesterEmail, setRequesterEmail] = useState(user?.email || '');
   const [purpose, setPurpose] = useState('Pre-employment background verification and credential audit for candidate recruitment.');
   const [submitted, setSubmitted] = useState(false);
 
@@ -42,7 +42,7 @@ export function RequestConsentDialog({
         p_requester_company_name: companyName.trim(),
         p_requester_email: requesterEmail.trim(),
         p_purpose: purpose.trim(),
-        p_requester_id: profile?.id || 'anonymous_recruiter',
+        p_requester_id: profile?.id || user?.id || 'anonymous_recruiter',
       });
 
       if (error) throw error;
@@ -66,7 +66,7 @@ export function RequestConsentDialog({
   const resetForm = () => {
     setSubmitted(false);
     setCompanyName(profile?.company_id ? 'Current Enterprise' : '');
-    setRequesterEmail(profile?.email || '');
+    setRequesterEmail(user?.email || '');
     setPurpose('Pre-employment background verification and credential audit for candidate recruitment.');
   };
 

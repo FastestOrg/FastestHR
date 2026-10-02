@@ -572,7 +572,7 @@ function OfferTemplateEditor({ isOpen, onClose, template }: { isOpen: boolean, o
                     'Joined Date': new Date().toLocaleDateString(),
                     'Payout': formattedSamplePayout,
                     'Offer Number': 'OFFER-2026-0001',
-                    'Offer Link': 'https://fastesthre.com/offer/sample-token',
+                    'Offer Link': 'https://fastesthr.com/offer/sample-token',
                     'Today': new Date().toLocaleDateString(),
                     ...Object.fromEntries(customVariables.map(v => [
                       v.key, 
