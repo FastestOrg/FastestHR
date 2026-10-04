@@ -114,8 +114,8 @@ export function BulkUploadDialog({ jobId, isOpen, onOpenChange, source = 'bulk_u
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[650px] bg-background/95 backdrop-blur-xl border-border/50 shadow-2xl rounded-2xl p-0 overflow-hidden">
-        <div className="p-6 pb-4 border-b border-border/10 bg-muted/30">
+      <DialogContent className="w-[95vw] sm:max-w-4xl max-h-[90vh] flex flex-col p-0 bg-background/95 backdrop-blur-xl border-border/50 shadow-2xl rounded-2xl overflow-hidden">
+        <div className="p-6 pb-4 border-b border-border/10 bg-muted/30 shrink-0">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
               <div className="p-2 bg-emerald-500/10 rounded-lg">
@@ -129,7 +129,7 @@ export function BulkUploadDialog({ jobId, isOpen, onOpenChange, source = 'bulk_u
           </DialogHeader>
         </div>
         
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-6 overflow-y-auto flex-1">
           {candidates.length === 0 ? (
             <div className="group relative border-2 border-dashed border-border/50 hover:border-emerald-500/50 hover:bg-emerald-500/5 rounded-2xl p-12 transition-all duration-300">
               <div className="flex flex-col items-center justify-center text-center space-y-4">
@@ -176,12 +176,12 @@ export function BulkUploadDialog({ jobId, isOpen, onOpenChange, source = 'bulk_u
                 </Button>
               </div>
 
-                <div className="max-h-[300px] overflow-auto border border-border/50 rounded-xl shadow-inner bg-card/50">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted/50 sticky top-0 z-10">
+                <div className="relative max-h-[380px] w-full overflow-x-auto overflow-y-auto border border-border/50 rounded-xl shadow-inner bg-card/50">
+                  <table className="w-full text-sm border-collapse min-w-max">
+                    <thead className="bg-muted/80 backdrop-blur sticky top-0 z-10 border-b border-border/40">
                       <tr>
                         {headers.map((header, i) => (
-                          <th key={i} className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-widest text-muted-foreground whitespace-nowrap">
+                          <th key={i} className="px-4 py-3 text-left font-bold text-[11px] uppercase tracking-widest text-muted-foreground whitespace-nowrap min-w-[140px]">
                             {header}
                           </th>
                         ))}
@@ -193,7 +193,7 @@ export function BulkUploadDialog({ jobId, isOpen, onOpenChange, source = 'bulk_u
                           {headers.map((header, j) => {
                             const key = header.toLowerCase().replace(/\s+/g, '_');
                             return (
-                              <td key={j} className={`px-4 py-3 whitespace-nowrap ${j === 0 ? 'font-medium' : 'text-muted-foreground'}`}>
+                              <td key={j} className={`px-4 py-3 whitespace-nowrap max-w-[260px] truncate ${j === 0 ? 'font-medium text-foreground' : 'text-muted-foreground'}`} title={String(c[key] || '')}>
                                 {c[key] || '-'}
                               </td>
                             );

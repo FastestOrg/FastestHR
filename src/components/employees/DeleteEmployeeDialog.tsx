@@ -67,6 +67,24 @@ export function DeleteEmployeeDialog({
     confirmationInput.trim() === fullName ||
     confirmationInput.trim().toUpperCase() === 'DELETE';
 
+  // Format database / technical errors gracefully for end users
+  const formatDeleteErrorMessage = (rawMsg?: string): string => {
+    if (!rawMsg) return 'Failed to delete employee and account. Please try again.';
+
+    if (rawMsg.includes('violates foreign key constraint') || rawMsg.includes('foreign key')) {
+      const match = rawMsg.match(/violates foreign key constraint "([^"]+)" on table "([^"]+)"/i);
+      if (match) {
+        return `Cannot delete employee: some records in table "${match[2]}" are still directly linked. Please reassign or remove them first.`;
+      }
+      return 'Unable to delete employee because related records are still linked to this account.';
+    }
+
+    // Clean up technical prefixes
+    return rawMsg
+      .replace(/^Database cleanup failed:\s*/i, '')
+      .replace(/^Error:\s*/i, '');
+  };
+
   const deleteMutation = useMutation({
     mutationFn: async () => {
       if (!employee?.id) throw new Error('No employee selected');
@@ -113,20 +131,25 @@ export function DeleteEmployeeDialog({
       queryClient.invalidateQueries({ queryKey: ['attendance'] });
       queryClient.invalidateQueries({ queryKey: ['payroll'] });
       queryClient.invalidateQueries({ queryKey: ['exits'] });
+      queryClient.invalidateQueries({ queryKey: ['candidates'] });
+      queryClient.invalidateQueries({ queryKey: ['tickets'] });
       onOpenChange(false);
       setConfirmationInput('');
+      deleteMutation.reset();
       if (onDeleted) {
         onDeleted();
       }
     },
     onError: (err: any) => {
-      toast.error(err?.message || 'Failed to delete employee');
+      const friendlyMsg = formatDeleteErrorMessage(err?.message);
+      toast.error(friendlyMsg);
     },
   });
 
   const handleClose = () => {
     if (!deleteMutation.isPending) {
       setConfirmationInput('');
+      deleteMutation.reset();
       onOpenChange(false);
     }
   };
@@ -248,6 +271,17 @@ export function DeleteEmployeeDialog({
               </div>
             </div>
           </div>
+
+          {/* Error Message Alert */}
+          {deleteMutation.isError && (
+            <Alert variant="destructive" className="bg-destructive/10 border-destructive/30 py-3">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle className="text-xs font-semibold">Deletion Blocked</AlertTitle>
+              <AlertDescription className="text-xs text-muted-foreground mt-0.5">
+                {formatDeleteErrorMessage(deleteMutation.error?.message)}
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* Safety Confirmation Input */}
           {!isSelf && isAuthorized && (

@@ -508,8 +508,12 @@ export default function NewJob() {
   });
 
   const handleAddStage = () => {
-    const trimmed = newStageName.trim().toLowerCase().replace(/\s+/g, '_');
-    if (!trimmed) return;
+    const raw = newStageName.trim();
+    if (!raw) {
+      toast.error('Please enter a stage name first');
+      return;
+    }
+    const trimmed = raw.toLowerCase().replace(/\s+/g, '_');
     if (pipelineStages.includes(trimmed)) {
       toast.error('Stage already exists');
       return;
@@ -524,6 +528,7 @@ export default function NewJob() {
     }
     setPipelineStages(newStages);
     setNewStageName('');
+    toast.success(`Stage "${raw}" added to hiring process`);
   };
 
   const handleRemoveStage = (stage: string) => {

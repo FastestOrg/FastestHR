@@ -71,10 +71,11 @@ export function AssignCandidateDialog({
 
   const mutation = useMutation({
     mutationFn: async () => {
+      const assigneeId = selectedRecruiter === 'unassigned' || !selectedRecruiter ? null : selectedRecruiter;
       const { error } = await supabase
         .from('candidates')
         .update({
-          assigned_to: selectedRecruiter || null,
+          assigned_to: assigneeId,
           assigned_by: profile!.id,
           assigned_at: new Date().toISOString(),
           recruiter_notes: notes || null,

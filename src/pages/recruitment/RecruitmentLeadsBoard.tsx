@@ -4,8 +4,10 @@ import { toast } from 'sonner';
 import {
   Users, Search, Filter, UserCheck, Briefcase,
   Star, Clock, ChevronDown, LayoutList, Columns, Loader2,
-  Mail, Phone, UserPlus
+  Mail, Phone, UserPlus, FileSpreadsheet, Linkedin,
+  CheckSquare, X, Check
 } from 'lucide-react';
+import { PasteLeadsDialog } from '@/components/recruitment/PasteLeadsDialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +20,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth-store';
 import { AssignCandidateDialog } from '@/components/recruitment/AssignCandidateDialog';
@@ -55,6 +65,7 @@ export function RecruitmentLeadsBoard() {
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
   const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [pasteDialogOpen, setPasteDialogOpen] = useState(false);
 
   const isAdmin = ['company_admin', 'super_admin'].includes(profile?.platform_role || '');
   const isManager = profile?.platform_role === 'hr_manager';
@@ -210,6 +221,23 @@ export function RecruitmentLeadsBoard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtered]);
 
+  const handleSelectStage = (stage: string) => {
+    const stageLeads = leadsByStage[stage] || [];
+    const stageLeadIds = stageLeads.map((l: any) => l.id);
+    if (stageLeadIds.length === 0) {
+      toast.info(`No leads in ${stage} to select`);
+      return;
+    }
+    const areAllSelected = stageLeadIds.every((id: string) => selectedLeadIds.includes(id));
+    if (areAllSelected) {
+      setSelectedLeadIds((prev) => prev.filter((id) => !stageLeadIds.includes(id)));
+      toast.info(`Deselected all ${stageLeadIds.length} lead${stageLeadIds.length !== 1 ? 's' : ''} in ${stage}`);
+    } else {
+      setSelectedLeadIds((prev) => Array.from(new Set([...prev, ...stageLeadIds])));
+      toast.success(`Selected all ${stageLeadIds.length} lead${stageLeadIds.length !== 1 ? 's' : ''} in ${stage}`);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Toolbar */}
@@ -284,35 +312,114 @@ export function RecruitmentLeadsBoard() {
             <Columns className="h-4 w-4" />
           </Button>
         </div>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setPasteDialogOpen(true)}
+          className="h-9 text-xs gap-1.5 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10 bg-emerald-500/5 shadow-sm rounded-lg"
+        >
+          <FileSpreadsheet className="h-4 w-4" />
+          Paste Leads
+        </Button>
       </div>
 
-      {/* Count and Bulk Actions */}
-      <div className="flex items-center justify-between h-8">
-        <p className="text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">{filtered.length}</span> lead{filtered.length !== 1 ? 's' : ''} found
-        </p>
+      {/* Count and Bulk Actions Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 min-h-[2.5rem] bg-muted/20 border border-border/40 rounded-lg px-3 py-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm text-muted-foreground">
+            <span className="font-semibold text-foreground">{filtered.length}</span> lead{filtered.length !== 1 ? 's' : ''} found
+          </p>
+
+          <div className="h-4 w-px bg-border/60 mx-1 hidden sm:block" />
+
+          {/* Quick Select All Toggle */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground"
+            onClick={toggleSelectAll}
+            disabled={filtered.length === 0}
+          >
+            <CheckSquare className="h-3.5 w-3.5 text-primary" />
+            {selectedLeadIds.length === filtered.length && filtered.length > 0
+              ? 'Deselect All'
+              : `Select All (${filtered.length})`}
+          </Button>
+
+          {/* Select by Stage Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                disabled={filtered.length === 0}
+              >
+                <span>Select by Stage</span>
+                <ChevronDown className="h-3 w-3 opacity-60" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+              <DropdownMenuLabel className="text-xs">Select candidates by stage</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {ALL_STAGES.map((stage) => {
+                const count = (leadsByStage[stage] || []).length;
+                const stageIds = (leadsByStage[stage] || []).map((l: any) => l.id);
+                const isAllSelected = count > 0 && stageIds.every((id: string) => selectedLeadIds.includes(id));
+                const isSomeSelected = count > 0 && !isAllSelected && stageIds.some((id: string) => selectedLeadIds.includes(id));
+
+                return (
+                  <DropdownMenuItem
+                    key={stage}
+                    onClick={() => handleSelectStage(stage)}
+                    disabled={count === 0}
+                    className="flex items-center justify-between text-xs cursor-pointer py-1.5"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className={`h-2 w-2 rounded-full ${
+                        stage === 'hired' ? 'bg-green-500' :
+                        stage === 'rejected' ? 'bg-red-500' :
+                        stage === 'offer' ? 'bg-orange-500' :
+                        stage === 'interview' ? 'bg-purple-500' :
+                        stage === 'assessment' ? 'bg-indigo-500' :
+                        stage === 'screening' ? 'bg-yellow-500' : 'bg-blue-500'
+                      }`} />
+                      <span className="capitalize">{stage}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded font-mono">
+                        {count}
+                      </span>
+                      {isAllSelected && <Check className="h-3.5 w-3.5 text-primary" />}
+                      {isSomeSelected && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+                    </div>
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
 
         {selectedLeadIds.length > 0 && (
           <div className="flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
-            <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-1 rounded-full mr-2">
+            <span className="text-xs font-semibold text-primary bg-primary/10 px-2.5 py-1 rounded-full">
               {selectedLeadIds.length} selected
             </span>
-            {(isAdmin || isManager) && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 text-xs gap-1.5"
-                onClick={() => setBulkAssignOpen(true)}
-              >
-                <UserCheck className="h-3.5 w-3.5" />
-                Bulk Assign
-              </Button>
-            )}
+            <Button
+              variant="default"
+              size="sm"
+              className="h-7 text-xs gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
+              onClick={() => setBulkAssignOpen(true)}
+            >
+              <UserCheck className="h-3.5 w-3.5" />
+              Assign Selected
+            </Button>
             {isAdmin && (
               <Button
                 variant="destructive"
                 size="sm"
-                className="h-8 text-xs gap-1.5"
+                className="h-7 text-xs gap-1.5"
                 onClick={() => setBulkDeleteOpen(true)}
               >
                 <Users className="h-3.5 w-3.5" />
@@ -322,7 +429,7 @@ export function RecruitmentLeadsBoard() {
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 text-xs"
+              className="h-7 text-xs text-muted-foreground hover:text-foreground"
               onClick={() => setSelectedLeadIds([])}
             >
               Clear
@@ -345,15 +452,19 @@ export function RecruitmentLeadsBoard() {
         /* LIST VIEW */
         <div className="space-y-2">
           {/* Header */}
-          <div className="grid grid-cols-12 gap-4 px-4 py-2 text-xs uppercase tracking-wider text-muted-foreground font-medium items-center">
+          <div className="grid grid-cols-12 gap-4 px-4 py-2 text-xs uppercase tracking-wider text-muted-foreground font-medium items-center bg-muted/30 rounded-md">
             <div className="col-span-3 flex items-center gap-3">
-              {(isAdmin || isManager) && (
-                <Checkbox
-                  checked={selectedLeadIds.length === filtered.length && filtered.length > 0}
-                  onCheckedChange={toggleSelectAll}
-                  aria-label="Select all"
-                />
-              )}
+              <Checkbox
+                checked={
+                  filtered.length > 0 && selectedLeadIds.length === filtered.length
+                    ? true
+                    : selectedLeadIds.length > 0 && selectedLeadIds.length < filtered.length
+                    ? 'indeterminate'
+                    : false
+                }
+                onCheckedChange={toggleSelectAll}
+                aria-label="Select all"
+              />
               <span>Candidate</span>
             </div>
             <div className="col-span-1">Ref</div>
@@ -365,19 +476,17 @@ export function RecruitmentLeadsBoard() {
           </div>
 
           {filtered.map((lead: any) => (
-            <Card key={lead.id} className="bg-background/50 border-border/40 hover:border-primary/30 transition-colors">
+            <Card key={lead.id} className={`bg-background/50 border-border/40 hover:border-primary/30 transition-colors ${selectedLeadIds.includes(lead.id) ? 'ring-1 ring-primary border-primary/50 bg-primary/[0.02]' : ''}`}>
               <CardContent className="p-4">
                 <div className="grid grid-cols-12 gap-4 items-center">
                   {/* Candidate */}
                   <div className="col-span-3 flex items-center gap-3 min-w-0">
-                    {(isAdmin || isManager) && (
-                      <Checkbox
-                        checked={selectedLeadIds.includes(lead.id)}
-                        onCheckedChange={() => toggleSelectLead(lead.id)}
-                        aria-label={`Select ${lead.full_name}`}
-                        className="flex-shrink-0"
-                      />
-                    )}
+                    <Checkbox
+                      checked={selectedLeadIds.includes(lead.id)}
+                      onCheckedChange={() => toggleSelectLead(lead.id)}
+                      aria-label={`Select ${lead.full_name}`}
+                      className="flex-shrink-0"
+                    />
                     <Avatar className="h-8 w-8 flex-shrink-0">
                       <AvatarFallback className="bg-primary/5 text-primary text-xs font-bold">
                         {getInitials(lead.full_name)}
@@ -397,6 +506,23 @@ export function RecruitmentLeadsBoard() {
                             <Phone className="h-2.5 w-2.5 text-primary/60" />
                             <a href={`tel:${lead.phone}`} className="hover:text-primary transition-colors">
                               {lead.phone}
+                            </a>
+                          </div>
+                        )}
+                        {((lead.parsed_data as any)?.linkedin || (lead.parsed_data as any)?.linkedin_url) && (
+                          <div className="flex items-center gap-1 text-[11px] text-muted-foreground truncate font-medium">
+                            <Linkedin className="h-2.5 w-2.5 text-[#0A66C2]" />
+                            <a 
+                              href={
+                                ((lead.parsed_data as any).linkedin || (lead.parsed_data as any).linkedin_url).startsWith('http')
+                                  ? ((lead.parsed_data as any).linkedin || (lead.parsed_data as any).linkedin_url)
+                                  : `https://${(lead.parsed_data as any).linkedin || (lead.parsed_data as any).linkedin_url}`
+                              }
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[#0A66C2] hover:underline"
+                            >
+                              LinkedIn
                             </a>
                           </div>
                         )}
@@ -512,24 +638,48 @@ export function RecruitmentLeadsBoard() {
             const stageLeads = leadsByStage[stage] || [];
             return (
               <div key={stage} className="flex-shrink-0 w-72 space-y-3">
-                <div className="flex items-center gap-2 px-1">
-                  <div className={`h-2 w-2 rounded-full ${stage === 'hired' ? 'bg-green-500' : stage === 'rejected' ? 'bg-red-500' : stage === 'offer' ? 'bg-orange-500' : stage === 'interview' ? 'bg-purple-500' : stage === 'screening' ? 'bg-yellow-500' : 'bg-blue-500'}`} />
-                  <h3 className="font-semibold text-sm uppercase tracking-wider capitalize">{stage}</h3>
-                  <Badge variant="secondary" className="text-[10px] bg-muted/50 border-none">{stageLeads.length}</Badge>
+                <div className="flex items-center justify-between px-2 bg-muted/40 p-2 rounded-lg border border-border/40">
+                  <div className="flex items-center gap-2">
+                    {stageLeads.length > 0 && (
+                      <Checkbox
+                        checked={
+                          stageLeads.every((l: any) => selectedLeadIds.includes(l.id))
+                            ? true
+                            : stageLeads.some((l: any) => selectedLeadIds.includes(l.id))
+                            ? 'indeterminate'
+                            : false
+                        }
+                        onCheckedChange={() => handleSelectStage(stage)}
+                        aria-label={`Select all in ${stage}`}
+                        title={`Select / deselect all in ${stage}`}
+                        className="h-3.5 w-3.5 rounded"
+                      />
+                    )}
+                    <div className={`h-2 w-2 rounded-full ${
+                      stage === 'hired' ? 'bg-green-500' :
+                      stage === 'rejected' ? 'bg-red-500' :
+                      stage === 'offer' ? 'bg-orange-500' :
+                      stage === 'interview' ? 'bg-purple-500' :
+                      stage === 'assessment' ? 'bg-indigo-500' :
+                      stage === 'screening' ? 'bg-yellow-500' : 'bg-blue-500'
+                    }`} />
+                    <h3 className="font-semibold text-xs uppercase tracking-wider capitalize">{stage}</h3>
+                  </div>
+                  <Badge variant="secondary" className="text-[10px] bg-muted/70 border-none font-bold">
+                    {stageLeads.length}
+                  </Badge>
                 </div>
                 <div className="min-h-[200px] space-y-2 p-2 rounded-lg bg-muted/20 border border-dashed border-border/40">
                   {stageLeads.map((lead: any) => (
-                    <Card key={lead.id} className={`bg-background border-border/40 shadow-sm transition-all ${selectedLeadIds.includes(lead.id) ? 'ring-1 ring-primary' : ''}`}>
+                    <Card key={lead.id} className={`bg-background border-border/40 shadow-sm transition-all hover:border-primary/40 ${selectedLeadIds.includes(lead.id) ? 'ring-2 ring-primary border-primary bg-primary/[0.02]' : ''}`}>
                       <CardContent className="p-3 space-y-2">
                         <div className="flex items-start gap-2">
-                          {(isAdmin || isManager) && (
-                            <Checkbox
-                              checked={selectedLeadIds.includes(lead.id)}
-                              onCheckedChange={() => toggleSelectLead(lead.id)}
-                              aria-label={`Select ${lead.full_name}`}
-                              className="mt-1"
-                            />
-                          )}
+                          <Checkbox
+                            checked={selectedLeadIds.includes(lead.id)}
+                            onCheckedChange={() => toggleSelectLead(lead.id)}
+                            aria-label={`Select ${lead.full_name}`}
+                            className="mt-1 flex-shrink-0"
+                          />
                           <Avatar className="h-7 w-7 flex-shrink-0">
                             <AvatarFallback className="bg-primary/5 text-primary text-[10px]">
                               {getInitials(lead.full_name)}
@@ -549,6 +699,23 @@ export function RecruitmentLeadsBoard() {
                                   <Phone className="h-2.5 w-2.5 text-primary/60" />
                                   <a href={`tel:${lead.phone}`} className="hover:text-primary transition-colors">
                                     {lead.phone}
+                                  </a>
+                                </div>
+                              )}
+                              {((lead.parsed_data as any)?.linkedin || (lead.parsed_data as any)?.linkedin_url) && (
+                                <div className="flex items-center gap-1 text-[10px] text-muted-foreground truncate font-medium">
+                                  <Linkedin className="h-2.5 w-2.5 text-[#0A66C2]" />
+                                  <a 
+                                    href={
+                                      ((lead.parsed_data as any).linkedin || (lead.parsed_data as any).linkedin_url).startsWith('http')
+                                        ? ((lead.parsed_data as any).linkedin || (lead.parsed_data as any).linkedin_url)
+                                        : `https://${(lead.parsed_data as any).linkedin || (lead.parsed_data as any).linkedin_url}`
+                                    }
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[#0A66C2] hover:underline"
+                                  >
+                                    LinkedIn
                                   </a>
                                 </div>
                               )}
@@ -586,10 +753,21 @@ export function RecruitmentLeadsBoard() {
                           </Select>
                           
                           {lead.assigned_profile ? (
-                            <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                              <UserCheck className="h-3 w-3" />
-                              {lead.assigned_profile.full_name}
-                            </span>
+                            <button
+                              type="button"
+                              className="text-[10px] text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors cursor-pointer group/assign"
+                              title="Click to reassign"
+                              onClick={() => setAssignDialog({
+                                open: true,
+                                candidateId: lead.id,
+                                candidateName: lead.full_name,
+                                currentAssignee: lead.assigned_to,
+                                jobId: lead.job_id,
+                              })}
+                            >
+                              <UserCheck className="h-3 w-3 text-primary group-hover/assign:scale-110 transition-transform" />
+                              <span className="group-hover/assign:underline">{lead.assigned_profile.full_name}</span>
+                            </button>
                           ) : (
                             <Button
                               variant="ghost"
@@ -629,6 +807,51 @@ export function RecruitmentLeadsBoard() {
         </div>
       )}
 
+      {/* Floating Bulk Action Bar */}
+      {selectedLeadIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-foreground text-background dark:bg-card dark:text-foreground dark:border dark:border-border shadow-2xl rounded-full px-5 py-2.5 flex items-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <span className="bg-primary text-primary-foreground h-6 w-6 rounded-full flex items-center justify-center text-xs font-bold">
+              {selectedLeadIds.length}
+            </span>
+            <span>Selected</span>
+          </div>
+
+          <div className="h-4 w-px bg-muted-foreground/30" />
+
+          <Button
+            size="sm"
+            onClick={() => setBulkAssignOpen(true)}
+            className="rounded-full h-8 px-4 text-xs font-bold gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 shadow-md"
+          >
+            <UserCheck className="h-3.5 w-3.5" />
+            Assign Selected
+          </Button>
+
+          {isAdmin && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setBulkDeleteOpen(true)}
+              className="rounded-full h-8 px-3 text-xs font-bold gap-1.5 shadow-md"
+            >
+              <Users className="h-3.5 w-3.5" />
+              Delete
+            </Button>
+          )}
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setSelectedLeadIds([])}
+            className="h-7 w-7 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/20"
+            title="Clear selection"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
       {/* Assign Dialog */}
       {assignDialog.open && (
         <AssignCandidateDialog
@@ -663,6 +886,12 @@ export function RecruitmentLeadsBoard() {
           onSuccess={() => setSelectedLeadIds([])}
         />
       )}
+
+      {/* Paste Leads Dialog */}
+      <PasteLeadsDialog
+        isOpen={pasteDialogOpen}
+        onOpenChange={setPasteDialogOpen}
+      />
     </div>
   );
 }

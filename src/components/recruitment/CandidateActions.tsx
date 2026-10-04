@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { MoreHorizontal, ArrowRight, XCircle, Trash2, Loader2, Send, Star, Sparkles, Bot, ExternalLink } from 'lucide-react';
+import { MoreHorizontal, ArrowRight, XCircle, Trash2, Loader2, Send, Star, Sparkles, Bot, ExternalLink, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { OfferDetailsDialog } from './OfferDetailsDialog';
 import { generateAndUploadOfferPDF } from '@/lib/pdf-generator';
@@ -35,6 +35,7 @@ interface CandidateActionsProps {
   pipelineStages?: string[];
   candidateName: string;
   score: number | null;
+  onAssign?: () => void;
 }
 
 export function CandidateActions({ 
@@ -43,7 +44,8 @@ export function CandidateActions({
   currentStage, 
   pipelineStages = [],
   candidateName,
-  score 
+  score,
+  onAssign
 }: CandidateActionsProps) {
   const queryClient = useQueryClient();
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -596,6 +598,12 @@ export function CandidateActions({
             <Bot className="mr-2 h-4 w-4" />
             Send AI Interview Invite
           </DropdownMenuItem>
+          {onAssign && (
+            <DropdownMenuItem onClick={onAssign}>
+              <UserCheck className="mr-2 h-4 w-4" />
+              Assign Recruiter
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={() => setIsScoreDialogOpen(true)}>
             <Star className="mr-2 h-4 w-4" />
             Edit Score

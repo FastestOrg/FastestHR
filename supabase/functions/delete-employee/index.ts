@@ -108,7 +108,17 @@ Deno.serve(async (req) => {
 
     if (rpcError) {
       console.error('[RPC Delete Error]:', rpcError);
-      throw new Error(`Database cleanup failed: ${rpcError.message}`);
+      let userFriendlyMsg = rpcError.message;
+      if (rpcError.message.includes('violates foreign key constraint')) {
+        const match = rpcError.message.match(/violates foreign key constraint "([^"]+)" on table "([^"]+)"/i);
+        if (match) {
+          const [, constraint, table] = match;
+          userFriendlyMsg = `Referenced records in table "${table}" (${constraint}) prevented deletion. Please remove or reassign them first.`;
+        } else {
+          userFriendlyMsg = 'Database referential integrity constraint prevented deletion of associated records.';
+        }
+      }
+      throw new Error(`Database cleanup failed: ${userFriendlyMsg}`);
     }
 
     // 9. Permanently delete Auth account from Supabase Auth if user_id exists

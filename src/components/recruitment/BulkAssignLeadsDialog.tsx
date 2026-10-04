@@ -30,6 +30,7 @@ interface BulkAssignLeadsDialogProps {
   onOpenChange: (open: boolean) => void;
   leadIds: string[];
   leadNames: string[];
+  jobId?: string;
   onSuccess?: () => void;
 }
 
@@ -38,6 +39,7 @@ export function BulkAssignLeadsDialog({
   onOpenChange,
   leadIds,
   leadNames,
+  jobId,
   onSuccess,
 }: BulkAssignLeadsDialogProps) {
   const { profile } = useAuthStore();
@@ -70,10 +72,11 @@ export function BulkAssignLeadsDialog({
 
   const mutation = useMutation({
     mutationFn: async () => {
+      const assigneeId = selectedRecruiter === 'unassigned' || !selectedRecruiter ? null : selectedRecruiter;
       const { error } = await supabase
         .from('candidates')
         .update({
-          assigned_to: selectedRecruiter || null,
+          assigned_to: assigneeId,
           assigned_by: profile!.id,
           assigned_at: new Date().toISOString(),
           recruiter_notes: notes || null,
@@ -83,13 +86,16 @@ export function BulkAssignLeadsDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads-board', profile?.company_id] });
-      toast.success(`${leadIds.length} leads assigned successfully`);
+      if (jobId) {
+        queryClient.invalidateQueries({ queryKey: ['candidates', jobId] });
+      }
+      toast.success(`${leadIds.length} candidate${leadIds.length !== 1 ? 's' : ''} assigned successfully`);
       onSuccess?.();
       onOpenChange(false);
       setNotes('');
     },
     onError: (err: any) => {
-      toast.error(err.message || 'Failed to assign leads');
+      toast.error(err.message || 'Failed to assign candidates');
     },
   });
 
@@ -113,10 +119,10 @@ export function BulkAssignLeadsDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UserCheck className="h-5 w-5 text-primary" />
-            Bulk Assign Leads
+            Bulk Assign Candidates
           </DialogTitle>
           <DialogDescription>
-            Assign <strong>{leadIds.length} leads</strong> to a recruiter.
+            Assign <strong>{leadIds.length} candidate{leadIds.length !== 1 ? 's' : ''}</strong> to a team member.
           </DialogDescription>
         </DialogHeader>
 

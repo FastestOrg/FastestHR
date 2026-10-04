@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Users, ChevronDown, UserPlus, FileUp, Download, Plus } from 'lucide-react';
+import { Loader2, Users, ChevronDown, UserPlus, FileUp, Download, Plus, ClipboardPaste } from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
@@ -29,6 +29,7 @@ import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth-store';
 import { BulkUploadDialog } from './BulkUploadDialog';
+import { PasteLeadsDialog } from './PasteLeadsDialog';
 import { generateSampleCSV } from '@/lib/csv-parser';
 
 interface AddCandidateDialogProps {
@@ -38,6 +39,7 @@ interface AddCandidateDialogProps {
 
 export function AddCandidateDialog({ jobId, variant = 'full' }: AddCandidateDialogProps) {
   const [isIndividualOpen, setIsIndividualOpen] = useState(false);
+  const [isPasteOpen, setIsPasteOpen] = useState(false);
   const [isBulkOpen, setIsBulkOpen] = useState(false);
   const { profile } = useAuthStore();
   const queryClient = useQueryClient();
@@ -148,7 +150,7 @@ export function AddCandidateDialog({ jobId, variant = 'full' }: AddCandidateDial
         </DropdownMenuTrigger>
         <DropdownMenuContent 
           align="end" 
-          className="w-[200px] p-1 bg-background/80 backdrop-blur-xl border-border/50 shadow-2xl rounded-xl animate-in fade-in slide-in-from-top-2 duration-200"
+          className="w-[220px] p-1 bg-background/80 backdrop-blur-xl border-border/50 shadow-2xl rounded-xl animate-in fade-in slide-in-from-top-2 duration-200"
         >
           <DropdownMenuItem 
             onClick={() => setIsIndividualOpen(true)} 
@@ -162,12 +164,29 @@ export function AddCandidateDialog({ jobId, variant = 'full' }: AddCandidateDial
               <span className="text-[10px] text-muted-foreground">Add manually</span>
             </div>
           </DropdownMenuItem>
+
+          <DropdownMenuItem 
+            onClick={() => setIsPasteOpen(true)} 
+            className="gap-3 cursor-pointer py-2.5 rounded-lg focus:bg-emerald-500/10 data-[highlighted]:bg-emerald-500/10 transition-colors group/paste"
+          >
+            <div className="h-8 w-8 rounded-full bg-emerald-500/10 flex items-center justify-center">
+              <ClipboardPaste className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-sm font-semibold flex items-center gap-1.5">
+                Paste from Excel
+                <span className="text-[9px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 px-1 py-0.2 rounded">Fast</span>
+              </span>
+              <span className="text-[10px] text-muted-foreground">Clipboard grid table</span>
+            </div>
+          </DropdownMenuItem>
+
           <DropdownMenuItem 
             onClick={() => setIsBulkOpen(true)} 
             className="gap-3 cursor-pointer py-2.5 rounded-lg focus:bg-primary/10 data-[highlighted]:bg-primary/10 transition-colors group/bulk"
           >
-            <div className="h-8 w-8 rounded-full bg-emerald-500/10 flex items-center justify-center">
-              <FileUp className="h-4 w-4 text-emerald-500" />
+            <div className="h-8 w-8 rounded-full bg-purple-500/10 flex items-center justify-center">
+              <FileUp className="h-4 w-4 text-purple-500" />
             </div>
             <div className="flex flex-col">
               <span className="text-sm font-semibold">Bulk Upload</span>
@@ -177,7 +196,7 @@ export function AddCandidateDialog({ jobId, variant = 'full' }: AddCandidateDial
               variant="ghost"
               size="icon"
               aria-label="Download sample CSV"
-              className="ml-auto h-7 w-7 rounded-full opacity-0 group-hover/bulk:opacity-100 hover:bg-emerald-500/20 hover:text-emerald-500 transition-all"
+              className="ml-auto h-7 w-7 rounded-full opacity-0 group-hover/bulk:opacity-100 hover:bg-purple-500/20 hover:text-purple-500 transition-all"
               onClick={handleDownloadSample}
               title="Download sample CSV"
             >
@@ -282,6 +301,13 @@ export function AddCandidateDialog({ jobId, variant = 'full' }: AddCandidateDial
         jobId={jobId} 
         isOpen={isBulkOpen} 
         onOpenChange={setIsBulkOpen} 
+      />
+
+      {/* Paste from Excel / Clipboard Dialog */}
+      <PasteLeadsDialog
+        jobId={jobId}
+        isOpen={isPasteOpen}
+        onOpenChange={setIsPasteOpen}
       />
     </>
   );
