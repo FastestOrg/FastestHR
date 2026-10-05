@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProfileSectionCard } from '../components/ProfileSectionCard';
 import { Laptop, Calendar, CheckCircle2, PenTool, AlertCircle, RefreshCw, Type, Eye } from 'lucide-react';
@@ -233,6 +233,11 @@ export default function EmployeeAssets({ employee, refetch }: EmployeeAssetsProp
                           </span>
                           {asset.signature_url && (
                             <Dialog>
+                              <DialogTrigger asChild>
+                                <Button variant="link" className="text-[10px] text-primary h-6 p-0 hover:underline flex items-center gap-1 justify-end">
+                                  <Eye className="w-3 h-3" /> View Signature Proof
+                                </Button>
+                              </DialogTrigger>
                               <DialogContent className="max-w-sm bg-card border-border/50">
                                 <DialogHeader>
                                   <DialogTitle className="text-sm font-medium">Digital Signature Proof</DialogTitle>
@@ -242,9 +247,6 @@ export default function EmployeeAssets({ employee, refetch }: EmployeeAssetsProp
                                   <img src={asset.signature_url} alt="Signature Proof" className="max-h-24 object-contain" />
                                 </div>
                               </DialogContent>
-                              <Button variant="link" className="text-[10px] text-primary h-6 p-0 hover:underline flex items-center gap-1 justify-end">
-                                <Eye className="w-3 h-3" /> View Signature Proof
-                              </Button>
                             </Dialog>
                           )}
                         </div>

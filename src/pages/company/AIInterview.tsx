@@ -198,6 +198,7 @@ export default function AIInterview() {
 
     // 1. Mint ephemeral token
     let token: string;
+    let wsUrl: string;
     try {
       const { data, error } = await supabase.functions.invoke('ai-interviewer', {
         body: { action: 'token', candidateId, jobId: job.id, hash },
@@ -205,6 +206,9 @@ export default function AIInterview() {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       token = data.token;
+      wsUrl = data.wsUrl || (data.endpointType === 'constrained'
+        ? `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=${token}`
+        : `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${token}`);
     } catch (err: any) {
       setErrorMsg('Failed to initialize AI interview: ' + (err.message || 'Unknown error'));
       setStep('error');
@@ -213,7 +217,6 @@ export default function AIInterview() {
     }
 
     // 2. Open WebSocket to Gemini Live
-    const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${token}`;
 
     let ws: WebSocket;
     try {

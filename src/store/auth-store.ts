@@ -27,6 +27,8 @@ interface AuthState {
   signOut: () => Promise<void>;
 }
 
+let authSubscription: { unsubscribe: () => void } | null = null;
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   session: null,
@@ -41,8 +43,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   initialize: async () => {
     try {
+      // Unsubscribe existing listener to prevent duplicate leak
+      if (authSubscription) {
+        authSubscription.unsubscribe();
+        authSubscription = null;
+      }
+
       // Set up auth listener BEFORE getting session
-      supabase.auth.onAuthStateChange(async (event, session) => {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         set({ session, user: session?.user ?? null });
 
         if (event === 'PASSWORD_RECOVERY') {
@@ -84,6 +92,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           set({ profile: null });
         }
       });
+      authSubscription = subscription;
 
       // Attempt to retrieve session with a timeout to prevent hanging on network/server freeze
       try {
@@ -136,6 +145,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   signOut: async () => {
     try {
+      if (authSubscription) {
+        authSubscription.unsubscribe();
+        authSubscription = null;
+      }
       await supabase.auth.signOut();
     } catch (err) {
       console.warn('Sign out error:', err);

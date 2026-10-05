@@ -1,7 +1,7 @@
-import { createContext, useContext, useMemo, ReactNode } from 'react';
+import { createContext, useContext, useMemo, useEffect, ReactNode } from 'react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { useQuery } from '@tanstack/react-query';
-import { supabase, createTenantSupabaseClient } from '@/integrations/supabase/client';
+import { supabase, createTenantSupabaseClient, setActiveBYOSClient } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
 import { useAuthStore } from '@/store/auth-store';
 
@@ -110,6 +110,13 @@ export function BYOSProvider({
     }
     return supabase;
   }, [isBYOSActive, byosConn]);
+
+  useEffect(() => {
+    setActiveBYOSClient(isBYOSActive ? orgClient : null);
+    return () => {
+      setActiveBYOSClient(null);
+    };
+  }, [isBYOSActive, orgClient]);
 
   const contextValue = useMemo<BYOSContextType>(
     () => ({

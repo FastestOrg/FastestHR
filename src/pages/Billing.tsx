@@ -43,8 +43,6 @@ declare global {
   }
 }
 
-const SUPABASE_URL = 'https://swlknrfufxsvpkfulqcx.supabase.co';
-
 // ─── Animated Counter ────────────────────────────────────────────────
 function AnimatedCounter({ value, prefix = '' }: { value: number; prefix?: string }) {
   const [display, setDisplay] = useState(0);
@@ -242,26 +240,19 @@ export default function Billing() {
     }
     setIsProcessingPayment(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/razorpay-order`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
+      const { data: orderData, error: orderErr } = await supabase.functions.invoke('razorpay-order', {
+        body: {
           action: 'create_order',
           amount,
           currency: company?.currency || 'INR',
           company_id: companyId,
           discount_code: discountCode.trim() || undefined,
-        }),
+        },
       });
 
-      const orderData = await res.json();
-      if (!res.ok) throw new Error(orderData.error || 'Failed to create order');
+      if (orderErr || !orderData?.order_id) {
+        throw new Error(orderErr?.message || orderData?.error || 'Failed to create order');
+      }
 
       const options = {
         key: orderData.key_id,
@@ -272,13 +263,8 @@ export default function Billing() {
         order_id: orderData.order_id,
         handler: async (response: any) => {
           try {
-            const verifyRes = await fetch(`${SUPABASE_URL}/functions/v1/razorpay-order`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${session.access_token}`,
-              },
-              body: JSON.stringify({
+            const { data: verifyData, error: verifyErr } = await supabase.functions.invoke('razorpay-order', {
+              body: {
                 action: 'verify_payment',
                 razorpay_order_id: response.razorpay_order_id,
                 razorpay_payment_id: response.razorpay_payment_id,
@@ -286,19 +272,17 @@ export default function Billing() {
                 company_id: companyId,
                 original_amount: amount,
                 discount_code_id: discountInfo?.code_id || undefined,
-              }),
+              },
             });
-            const verifyData = await verifyRes.json();
-            if (verifyData.success) {
-              toast.success(`${currencySymbol}${formatAmount(amount, company?.currency)} credited to wallet!`);
-              setAddCreditsOpen(false);
-              setCreditAmount('');
-              setDiscountCode('');
-              setDiscountInfo(null);
-              refreshAll();
-            } else {
-              throw new Error('Verification failed');
+            if (verifyErr || !verifyData?.success) {
+              throw new Error(verifyErr?.message || verifyData?.error || 'Verification failed');
             }
+            toast.success(`${currencySymbol}${formatAmount(amount, company?.currency)} credited to wallet!`);
+            setAddCreditsOpen(false);
+            setCreditAmount('');
+            setDiscountCode('');
+            setDiscountInfo(null);
+            refreshAll();
           } catch {
             toast.error('Payment verification failed. Please contact support.');
           }

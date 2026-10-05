@@ -7,10 +7,17 @@ import {
 } from '@/lib/google-calendar';
 import { WeeklySchedule, DEFAULT_WEEKLY_SCHEDULE } from '@/types/meeting';
 
+function getNextDayOfWeek(dayOfWeek: number): Date {
+  const d = new Date();
+  d.setDate(d.getDate() + ((7 + dayOfWeek - d.getDay()) % 7 || 7));
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 describe('Meeting Scheduler - Slot Calculation Engine', () => {
   it('should generate available time slots for enabled working days', () => {
-    // Pick a future Monday (e.g. 2026-09-07 is a Monday)
-    const testDate = new Date(2026, 8, 7); // Sep 7, 2026
+    // Pick an upcoming Monday
+    const testDate = getNextDayOfWeek(1);
 
     const schedule: WeeklySchedule = {
       ...DEFAULT_WEEKLY_SCHEDULE,
@@ -36,7 +43,7 @@ describe('Meeting Scheduler - Slot Calculation Engine', () => {
   });
 
   it('should return empty slots if the day is disabled in host schedule', () => {
-    const testDate = new Date(2026, 8, 13); // Sunday
+    const testDate = getNextDayOfWeek(0); // Upcoming Sunday
 
     const schedule: WeeklySchedule = {
       ...DEFAULT_WEEKLY_SCHEDULE,
@@ -57,7 +64,7 @@ describe('Meeting Scheduler - Slot Calculation Engine', () => {
   });
 
   it('should correctly mark slots as conflicted when busy intervals overlap', () => {
-    const testDate = new Date(2026, 8, 7); // Monday
+    const testDate = getNextDayOfWeek(1); // Upcoming Monday
 
     const schedule: WeeklySchedule = {
       ...DEFAULT_WEEKLY_SCHEDULE,
@@ -68,8 +75,10 @@ describe('Meeting Scheduler - Slot Calculation Engine', () => {
     };
 
     // Busy from 09:30 to 10:00
-    const busyStart = new Date(2026, 8, 7, 9, 30, 0, 0);
-    const busyEnd = new Date(2026, 8, 7, 10, 0, 0, 0);
+    const busyStart = new Date(testDate);
+    busyStart.setHours(9, 30, 0, 0);
+    const busyEnd = new Date(testDate);
+    busyEnd.setHours(10, 0, 0, 0);
 
     const slots = calculateAvailableSlots({
       date: testDate,
@@ -95,7 +104,7 @@ describe('Meeting Scheduler - Slot Calculation Engine', () => {
   });
 
   it('should correctly handle external Google Calendar events: 3:00 PM busy, 3:30 PM free, 4:00 PM busy, 4:30 PM free', () => {
-    const testDate = new Date(2026, 8, 2); // Wed, Sep 2, 2026
+    const testDate = getNextDayOfWeek(3); // Upcoming Wednesday
 
     const schedule: WeeklySchedule = {
       ...DEFAULT_WEEKLY_SCHEDULE,
@@ -106,12 +115,16 @@ describe('Meeting Scheduler - Slot Calculation Engine', () => {
     };
 
     // Event 1: 3:00 PM - 3:30 PM (Weskill Interview)
-    const event1Start = new Date(2026, 8, 2, 15, 0, 0, 0).toISOString();
-    const event1End = new Date(2026, 8, 2, 15, 30, 0, 0).toISOString();
+    const event1Start = new Date(testDate);
+    event1Start.setHours(15, 0, 0, 0);
+    const event1End = new Date(testDate);
+    event1End.setHours(15, 30, 0, 0);
 
     // Event 2: 4:00 PM - 4:30 PM (30 Min Meeting with Prashant)
-    const event2Start = new Date(2026, 8, 2, 16, 0, 0, 0).toISOString();
-    const event2End = new Date(2026, 8, 2, 16, 30, 0, 0).toISOString();
+    const event2Start = new Date(testDate);
+    event2Start.setHours(16, 0, 0, 0);
+    const event2End = new Date(testDate);
+    event2End.setHours(16, 30, 0, 0);
 
     const slots = calculateAvailableSlots({
       date: testDate,
@@ -121,8 +134,8 @@ describe('Meeting Scheduler - Slot Calculation Engine', () => {
       bufferAfterMinutes: 0,
       minNoticeHours: 0,
       busyIntervals: [
-        { start: event1Start, end: event1End },
-        { start: event2Start, end: event2End },
+        { start: event1Start.toISOString(), end: event1End.toISOString() },
+        { start: event2Start.toISOString(), end: event2End.toISOString() },
       ],
     });
 
@@ -145,7 +158,7 @@ describe('Meeting Scheduler - Slot Calculation Engine', () => {
   });
 
   it('should correctly generate 15-minute slots for default schedule: Mon-Sat 10:00-14:00 & 15:00-19:00', () => {
-    const saturday = new Date(2026, 8, 5); // Saturday Sep 5, 2026
+    const saturday = getNextDayOfWeek(6); // Upcoming Saturday
 
     const slots = calculateAvailableSlots({
       date: saturday,

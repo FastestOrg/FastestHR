@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createTenantSupabaseClient, clearBYOSClientCache, supabase } from '@/integrations/supabase/client';
+import { createTenantSupabaseClient, clearBYOSClientCache, supabase, setActiveBYOSClient, getActiveBYOSClient } from '@/integrations/supabase/client';
 import { getClientHostUrl, makeBYOSQueryKey } from '@/utils/byosUtils';
 import { BYOS_MIGRATION_SQL, BYOS_SCHEMA_VERSION } from '@/lib/byos-migration-bundle';
 
@@ -58,7 +58,7 @@ describe('BYOS Query Key Partitioning', () => {
 
 describe('BYOS Customer Migration Bundle', () => {
   it('exports valid version string and SQL bundle', () => {
-    expect(BYOS_SCHEMA_VERSION).toBe('1.0.0');
+    expect(BYOS_SCHEMA_VERSION).toBe('1.1.0');
     expect(BYOS_MIGRATION_SQL).toContain('CREATE TABLE IF NOT EXISTS public._byos_meta');
     expect(BYOS_MIGRATION_SQL).toContain('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"');
     expect(BYOS_MIGRATION_SQL).toContain('CREATE TABLE IF NOT EXISTS public.employees');
@@ -66,7 +66,33 @@ describe('BYOS Customer Migration Bundle', () => {
     expect(BYOS_MIGRATION_SQL).toContain('CREATE TABLE IF NOT EXISTS public.payroll_runs');
     expect(BYOS_MIGRATION_SQL).toContain('CREATE TABLE IF NOT EXISTS public.candidates');
     expect(BYOS_MIGRATION_SQL).toContain('CREATE TABLE IF NOT EXISTS public.chat_messages');
+    expect(BYOS_MIGRATION_SQL).toContain('CREATE TABLE IF NOT EXISTS public.meeting_bookings');
+    expect(BYOS_MIGRATION_SQL).toContain('CREATE TABLE IF NOT EXISTS public.employee_login_logs');
+    expect(BYOS_MIGRATION_SQL).toContain('active_break_start TIMESTAMPTZ');
+    expect(BYOS_MIGRATION_SQL).toContain('approval_tiers JSONB');
     expect(BYOS_MIGRATION_SQL).toContain('CREATE POLICY "byos_');
     expect(BYOS_MIGRATION_SQL).toContain('FOR ALL USING (true) WITH CHECK (true)');
+  });
+});
+
+describe('BYOS Transparent Proxy Client', () => {
+  it('delegates .from to active BYOS client when set and reverts when cleared', () => {
+    let calledFrom = '';
+    const mockBYOS = {
+      from: (table: string) => {
+        calledFrom = table;
+        return { select: () => ({ data: [] }) };
+      },
+      rpc: () => {},
+    } as any;
+
+    setActiveBYOSClient(mockBYOS);
+    expect(getActiveBYOSClient()).toBe(mockBYOS);
+
+    supabase.from('employees');
+    expect(calledFrom).toBe('employees');
+
+    setActiveBYOSClient(null);
+    expect(getActiveBYOSClient()).toBeNull();
   });
 });

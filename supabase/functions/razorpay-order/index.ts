@@ -160,16 +160,51 @@ Deno.serve(async (req) => {
         razorpay_payment_id,
         razorpay_signature,
         company_id,
-        original_amount,
         discount_code_id,
       } = body;
 
-      if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-        return jsonResponse({ error: "Missing payment details" }, corsHeaders, 400);
+      if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !company_id) {
+        return jsonResponse({ error: "Missing payment details or company_id" }, corsHeaders, 400);
       }
 
-      // Verify signature using HMAC-SHA256
-      const keySecret = Deno.env.get("RAZORPAY_KEY_SECRET")!;
+      // Check tenant isolation: ensure caller belongs to company_id or is super_admin
+      const { data: callerProfile, error: profileErr } = await supabase
+        .from("profiles")
+        .select("company_id, platform_role")
+        .eq("id", userId)
+        .single();
+
+      if (profileErr || !callerProfile) {
+        return jsonResponse({ error: "Caller profile not found" }, corsHeaders, 403);
+      }
+
+      if (callerProfile.platform_role !== "super_admin" && callerProfile.company_id !== company_id) {
+        return jsonResponse({ error: "Forbidden: You cannot verify payments for another company" }, corsHeaders, 403);
+      }
+
+      // 1. Fetch the pending transaction from DB to get the authorized amount
+      const { data: pendingTx, error: txErr } = await supabase
+        .from("wallet_transactions")
+        .select("*")
+        .eq("razorpay_order_id", razorpay_order_id)
+        .eq("company_id", company_id)
+        .maybeSingle();
+
+      if (txErr || !pendingTx) {
+        return jsonResponse({ error: "Order record not found for this transaction" }, corsHeaders, 404);
+      }
+
+      // Idempotency: if already completed, return success
+      if (pendingTx.status === "completed") {
+        return jsonResponse({ success: true, credited: pendingTx.amount, message: "Payment already verified" }, corsHeaders);
+      }
+
+      // 2. Verify signature using HMAC-SHA256
+      const keySecret = Deno.env.get("RAZORPAY_KEY_SECRET");
+      if (!keySecret) {
+        return jsonResponse({ error: "Razorpay secret key not configured" }, corsHeaders, 500);
+      }
+
       const encoder = new TextEncoder();
       const key = await crypto.subtle.importKey(
         "raw",
@@ -197,26 +232,29 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: "Invalid payment signature" }, corsHeaders, 400);
       }
 
-      // Credit wallet
-      const creditAmount = original_amount || 0;
+      // 3. Reconcile with Razorpay API if keyId and keySecret are present
+      const keyId = Deno.env.get("RAZORPAY_KEY_ID");
+      if (keyId && keySecret) {
+        try {
+          const rzpPaymentRes = await fetch(`https://api.razorpay.com/v1/payments/${razorpay_payment_id}`, {
+            headers: {
+              Authorization: "Basic " + btoa(`${keyId}:${keySecret}`),
+            },
+          });
+          if (rzpPaymentRes.ok) {
+            const paymentData = await rzpPaymentRes.json();
+            if (paymentData.order_id && paymentData.order_id !== razorpay_order_id) {
+              return jsonResponse({ error: "Payment does not match order ID" }, corsHeaders, 400);
+            }
+          }
+        } catch (apiErr) {
+          console.warn("Razorpay API payment fetch notice:", apiErr);
+        }
+      }
+
+      // 4. Securely credit wallet with authorized amount from DB (NEVER client body original_amount)
+      const creditAmount = Number(pendingTx.amount);
       if (creditAmount > 0) {
-        // Update pending transaction to completed
-        await supabase
-          .from("wallet_transactions")
-          .update({
-            status: "completed",
-            razorpay_payment_id,
-          })
-          .eq("razorpay_order_id", razorpay_order_id);
-
-        // Credit the wallet balance
-        await supabase
-          .from("companies")
-          .update({
-            wallet_balance: supabase.rpc ? undefined : undefined,
-          })
-          .eq("id", company_id);
-
         // Use RPC for atomic wallet credit
         const { error: creditErr } = await supabase.rpc("wallet_credit", {
           p_company_id: company_id,
@@ -229,19 +267,22 @@ Deno.serve(async (req) => {
 
         if (creditErr) {
           console.error("wallet_credit error:", creditErr);
+          return jsonResponse({ error: "Failed to credit wallet: " + creditErr.message }, corsHeaders, 500);
         }
 
-        // Apply discount code usage
+        // Update pending transaction status to completed
+        await supabase
+          .from("wallet_transactions")
+          .update({
+            status: "completed",
+            razorpay_payment_id,
+          })
+          .eq("razorpay_order_id", razorpay_order_id);
+
+        // Apply discount code usage if applicable
         if (discount_code_id) {
           await supabase.rpc("apply_discount_code", { p_code_id: discount_code_id });
         }
-
-        // Delete the pending transaction (wallet_credit already created a completed one)
-        await supabase
-          .from("wallet_transactions")
-          .delete()
-          .eq("razorpay_order_id", razorpay_order_id)
-          .eq("status", "pending");
       }
 
       return jsonResponse({ success: true, credited: creditAmount }, corsHeaders);

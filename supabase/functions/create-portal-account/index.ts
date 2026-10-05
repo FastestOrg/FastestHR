@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import * as nodemailer from "npm:nodemailer@6.9.8";
+import { requireCompanyStaff, getCorsHeaders } from "../_shared/auth.ts";
 
 // Polyfill Buffer for nodemailer running in Deno
 (globalThis as any).Buffer = Buffer;
@@ -70,21 +70,6 @@ function getPublicAppUrl(
   return 'https://fastesthr.com';
 }
 
-const getCorsHeaders = (req: Request) => {
-  const origin = req.headers.get('Origin') || '';
-  const isAllowed =
-    origin === 'https://fastesthr.com' ||
-    origin.endsWith('.fastesthr.com') ||
-    origin.endsWith('.vercel.app') ||
-    /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
-    origin.startsWith('capacitor://');
-
-  return {
-    'Access-Control-Allow-Origin': isAllowed ? origin : 'https://fastesthr.com',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  };
-};
-
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
 
@@ -93,18 +78,31 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
-
     const { employee_id, email, password, company_id, first_name, last_name, app_url } = await req.json();
 
     if (!employee_id || !email || !password || !company_id || !first_name || !last_name) {
       throw new Error('Missing required fields for portal account creation');
     }
 
-    // 1. Fetch company details & SMTP settings
+    // 1. Authenticate caller and enforce tenant authorization
+    const { adminClient: supabaseClient } = await requireCompanyStaff(req, company_id, [
+      'super_admin',
+      'company_admin',
+      'hr_manager',
+    ]);
+
+    // Verify employee belongs to the company
+    const { data: empRecord, error: empErr } = await supabaseClient
+      .from('employees')
+      .select('id, company_id')
+      .eq('id', employee_id)
+      .single();
+
+    if (empErr || !empRecord || empRecord.company_id !== company_id) {
+      throw new Error('Employee not found or does not belong to this company');
+    }
+
+    // 2. Fetch company details & SMTP settings
     const { data: company, error: companyError } = await supabaseClient
       .from('companies')
       .select('*')

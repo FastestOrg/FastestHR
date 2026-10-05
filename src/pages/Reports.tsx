@@ -12,6 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth-store';
 import { useState, useMemo } from 'react';
 import { toast } from 'sonner';
+import { sanitizeCsvCell } from '@/lib/csv-parser';
 
 // Custom visual JSON diff viewer component for premium experience
 function JSONDiffViewer({ before, after }: { before: any; after: any }) {
@@ -209,16 +210,16 @@ export default function Reports() {
         ...employees.map((emp: any) => {
           const deptName = deptMap[emp.department_id] || 'N/A';
           return [
-            emp.id,
-            `"${emp.first_name || ''}"`,
-            `"${emp.last_name || ''}"`,
-            `"${emp.work_email || ''}"`,
-            `"${emp.phone || ''}"`,
-            `"${deptName}"`,
-            emp.employment_type || 'N/A',
-            emp.status || 'N/A',
-            emp.gender || 'N/A',
-            emp.date_of_joining || 'N/A'
+            sanitizeCsvCell(emp.id),
+            sanitizeCsvCell(emp.first_name || ''),
+            sanitizeCsvCell(emp.last_name || ''),
+            sanitizeCsvCell(emp.work_email || ''),
+            sanitizeCsvCell(emp.phone || ''),
+            sanitizeCsvCell(deptName),
+            sanitizeCsvCell(emp.employment_type || 'N/A'),
+            sanitizeCsvCell(emp.status || 'N/A'),
+            sanitizeCsvCell(emp.gender || 'N/A'),
+            sanitizeCsvCell(emp.date_of_joining || 'N/A')
           ].join(',');
         })
       ].join('\n');
@@ -263,14 +264,14 @@ export default function Reports() {
           const actorName = log.actor ? `${log.actor.first_name || ''} ${log.actor.last_name || ''}` : 'System';
           const actorEmail = log.actor?.email || 'N/A';
           return [
-            log.created_at,
-            `"${actorName}"`,
-            `"${actorEmail}"`,
-            `"${log.action || ''}"`,
-            `"${log.entity_type || ''}"`,
-            `"${log.entity_id || ''}"`,
-            `"${log.ip_address || ''}"`,
-            `"${(log.user_agent || '').replace(/"/g, '""')}"`
+            sanitizeCsvCell(log.created_at),
+            sanitizeCsvCell(actorName),
+            sanitizeCsvCell(actorEmail),
+            sanitizeCsvCell(log.action || ''),
+            sanitizeCsvCell(log.entity_type || ''),
+            sanitizeCsvCell(log.entity_id || ''),
+            sanitizeCsvCell(log.ip_address || ''),
+            sanitizeCsvCell(log.user_agent || '')
           ].join(',');
         })
       ].join('\n');

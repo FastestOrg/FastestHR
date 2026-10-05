@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 import { initPerformanceMonitoring } from "./lib/performance";
+import { registerServiceWorker } from "./service-worker-registration";
 import posthog from 'posthog-js';
 
 async function bootstrap() {
@@ -41,6 +42,9 @@ async function bootstrap() {
 
   // Initialize state-of-the-art performance monitoring
   initPerformanceMonitoring();
+
+  // Register offline Service Worker for workforce PWA resilience
+  registerServiceWorker();
 
   createRoot(document.getElementById("root")!).render(<App />);
 }

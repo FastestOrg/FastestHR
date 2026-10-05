@@ -2,12 +2,15 @@ import { Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth-store';
 import { Skeleton } from '@/components/ui/skeleton';
 
+export type PlatformRole = 'super_admin' | 'company_admin' | 'hr_manager' | 'recruiter' | 'user';
+
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  requiredRole?: 'super_admin' | 'company_admin' | 'user';
+  requiredRole?: PlatformRole;
+  allowedRoles?: PlatformRole[];
 }
 
-export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, requiredRole, allowedRoles }: ProtectedRouteProps) {
   const { user, profile, loading, initialized } = useAuthStore();
 
   if (!initialized || loading) {
@@ -26,7 +29,11 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
     return <Navigate to="/login" replace />;
   }
 
-  if (requiredRole && profile?.platform_role !== requiredRole && profile?.platform_role !== 'super_admin') {
+  if (allowedRoles && allowedRoles.length > 0) {
+    if (!profile?.platform_role || (!allowedRoles.includes(profile.platform_role) && profile.platform_role !== 'super_admin')) {
+      return <Navigate to="/dashboard" replace />;
+    }
+  } else if (requiredRole && profile?.platform_role !== requiredRole && profile?.platform_role !== 'super_admin') {
     return <Navigate to="/dashboard" replace />;
   }
 

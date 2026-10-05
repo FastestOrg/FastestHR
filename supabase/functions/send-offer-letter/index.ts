@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import * as nodemailer from "npm:nodemailer@6.9.8";
+import { requireCompanyStaff, getCorsHeaders } from "../_shared/auth.ts";
 
 // Polyfill Buffer for nodemailer running in Deno
 (globalThis as any).Buffer = Buffer;
@@ -70,21 +70,6 @@ function getPublicAppUrl(
   return 'https://fastesthr.com';
 }
 
-const getCorsHeaders = (req: Request) => {
-  const origin = req.headers.get('Origin') || '';
-  const isAllowed =
-    origin === 'https://fastesthr.com' ||
-    origin.endsWith('.fastesthr.com') ||
-    origin.endsWith('.vercel.app') ||
-    /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
-    origin.startsWith('capacitor://');
-
-  return {
-    'Access-Control-Allow-Origin': isAllowed ? origin : 'https://fastesthr.com',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  };
-};
-
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
 
@@ -93,11 +78,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
-
     const { 
       candidate_id, 
       job_id, 
@@ -115,6 +95,14 @@ Deno.serve(async (req) => {
       throw new Error('Missing required fields');
     }
 
+    // 0. Authenticate caller and enforce tenant authorization
+    const { adminClient: supabaseClient } = await requireCompanyStaff(req, company_id, [
+      'super_admin',
+      'company_admin',
+      'hr_manager',
+      'recruiter',
+    ]);
+
     // 1. Fetch company settings
     const { data: company, error: companyError } = await supabaseClient
       .from('companies')
@@ -130,25 +118,25 @@ Deno.serve(async (req) => {
       throw new Error(`SMTP is not configured for this company. Please set it up in Company Settings.`);
     }
 
-    // 2. Fetch candidate & job for email
+    // 2. Fetch candidate & job for email, verifying tenant isolation
     const { data: candidate, error: candidateError } = await supabaseClient
       .from('candidates')
-      .select('full_name, email')
+      .select('full_name, email, company_id')
       .eq('id', candidate_id)
       .single();
 
-    if (candidateError || !candidate) {
-      throw new Error('Candidate not found');
+    if (candidateError || !candidate || (candidate.company_id && candidate.company_id !== company_id)) {
+      throw new Error('Candidate not found or does not belong to this company');
     }
 
     const { data: job, error: jobError } = await supabaseClient
       .from('jobs')
-      .select('title')
+      .select('title, company_id')
       .eq('id', job_id)
       .single();
     
-    if (jobError || !job) {
-      throw new Error('Job not found');
+    if (jobError || !job || (job.company_id && job.company_id !== company_id)) {
+      throw new Error('Job not found or does not belong to this company');
     }
 
     // 3. Save to candidate_offers

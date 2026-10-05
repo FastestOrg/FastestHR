@@ -4,7 +4,7 @@
  * for deploying the Data Plane on a customer's dedicated Supabase project.
  */
 
-export const BYOS_SCHEMA_VERSION = '1.0.0';
+export const BYOS_SCHEMA_VERSION = '1.1.0';
 
 export const BYOS_MIGRATION_SQL = `-- ============================================================================
 -- FastestHR Customer BYOS Migration Bundle (Data Plane v${BYOS_SCHEMA_VERSION})
@@ -290,6 +290,7 @@ CREATE TABLE IF NOT EXISTS public.leave_requests (
   approved_by UUID,
   approved_at TIMESTAMPTZ,
   rejection_reason TEXT,
+  approval_tiers JSONB DEFAULT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -306,6 +307,7 @@ CREATE TABLE IF NOT EXISTS public.attendance (
   clock_out_location JSONB,
   total_work_minutes INT DEFAULT 0,
   break_minutes INT DEFAULT 0,
+  active_break_start TIMESTAMPTZ DEFAULT NULL,
   status public.attendance_status DEFAULT 'present',
   is_manual BOOLEAN DEFAULT false,
   notes TEXT,
@@ -910,6 +912,120 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Meeting Scheduler
+CREATE TABLE IF NOT EXISTS public.user_meeting_settings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL UNIQUE,
+  company_id UUID,
+  booking_slug TEXT NOT NULL,
+  title TEXT NOT NULL DEFAULT 'Interview',
+  description TEXT DEFAULT 'Welcome! Please select a convenient time on my calendar for our conversation.',
+  duration_minutes INTEGER NOT NULL DEFAULT 15,
+  location_type TEXT NOT NULL DEFAULT 'google_meet',
+  weekly_schedule JSONB NOT NULL DEFAULT '{
+    "mon": { "enabled": true, "slots": [{"start": "10:00", "end": "14:00"}, {"start": "15:00", "end": "19:00"}] },
+    "tue": { "enabled": true, "slots": [{"start": "10:00", "end": "14:00"}, {"start": "15:00", "end": "19:00"}] },
+    "wed": { "enabled": true, "slots": [{"start": "10:00", "end": "14:00"}, {"start": "15:00", "end": "19:00"}] },
+    "thu": { "enabled": true, "slots": [{"start": "10:00", "end": "14:00"}, {"start": "15:00", "end": "19:00"}] },
+    "fri": { "enabled": true, "slots": [{"start": "10:00", "end": "14:00"}, {"start": "15:00", "end": "19:00"}] },
+    "sat": { "enabled": true, "slots": [{"start": "10:00", "end": "14:00"}, {"start": "15:00", "end": "19:00"}] },
+    "sun": { "enabled": false, "slots": [{"start": "10:00", "end": "14:00"}] }
+  }'::jsonb,
+  timezone TEXT NOT NULL DEFAULT 'UTC',
+  buffer_before_minutes INTEGER NOT NULL DEFAULT 0,
+  buffer_after_minutes INTEGER NOT NULL DEFAULT 0,
+  min_notice_hours INTEGER NOT NULL DEFAULT 2,
+  max_future_days INTEGER NOT NULL DEFAULT 7,
+  google_calendar_connected BOOLEAN NOT NULL DEFAULT false,
+  google_calendar_email TEXT,
+  google_access_token TEXT,
+  google_token_expiry TIMESTAMPTZ,
+  google_refresh_token TEXT,
+  google_calendar_id TEXT DEFAULT 'primary',
+  auto_google_meet BOOLEAN NOT NULL DEFAULT true,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.meeting_event_types (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  company_id UUID,
+  title TEXT NOT NULL,
+  slug TEXT NOT NULL,
+  description TEXT,
+  duration_minutes INTEGER NOT NULL DEFAULT 30,
+  location_type TEXT NOT NULL DEFAULT 'google_meet',
+  color TEXT DEFAULT '#6366f1',
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.meeting_bookings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID,
+  host_user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  event_type_id UUID REFERENCES public.meeting_event_types(id) ON DELETE SET NULL,
+  guest_name TEXT NOT NULL,
+  guest_email TEXT NOT NULL,
+  guest_phone TEXT NOT NULL,
+  guest_linkedin TEXT,
+  notes TEXT,
+  start_time TIMESTAMPTZ NOT NULL,
+  end_time TIMESTAMPTZ NOT NULL,
+  timezone TEXT NOT NULL DEFAULT 'UTC',
+  status TEXT NOT NULL DEFAULT 'confirmed',
+  google_event_id TEXT,
+  meeting_link TEXT,
+  cancellation_reason TEXT,
+  rescheduled_from_id UUID REFERENCES public.meeting_bookings(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Employee Login Logs
+CREATE TABLE IF NOT EXISTS public.employee_login_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID,
+  employee_id UUID REFERENCES public.employees(id) ON DELETE CASCADE,
+  user_id UUID,
+  ip_address TEXT,
+  user_agent TEXT,
+  device_type TEXT DEFAULT 'desktop',
+  browser TEXT,
+  os TEXT,
+  city TEXT,
+  country TEXT,
+  status TEXT NOT NULL DEFAULT 'success',
+  login_method TEXT DEFAULT 'password',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE OR REPLACE FUNCTION public.get_subordinate_employee_ids(p_employee_id UUID)
+RETURNS TABLE (subordinate_id UUID, depth INT, path UUID[])
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF p_employee_id IS NULL THEN RETURN; END IF;
+  RETURN QUERY
+  WITH RECURSIVE subordinates AS (
+    SELECT e.id AS subordinate_id, 1 AS depth, ARRAY[e.id] AS path
+    FROM public.employees e
+    WHERE e.reporting_manager_id = p_employee_id AND e.id <> p_employee_id AND e.deleted_at IS NULL
+    UNION ALL
+    SELECT e.id AS subordinate_id, s.depth + 1 AS depth, s.path || e.id AS path
+    FROM public.employees e
+    JOIN subordinates s ON e.reporting_manager_id = s.subordinate_id
+    WHERE e.deleted_at IS NULL AND NOT (e.id = ANY(s.path))
+  )
+  SELECT s.subordinate_id, s.depth, s.path FROM subordinates s;
+END;
+$$;
+
 -- 5. High-Performance Single-Tenant RLS Policies (USING true)
 DO $$
 DECLARE
@@ -931,7 +1047,8 @@ DECLARE
     'senddesk_templates', 'senddesk_documents', 'senddesk_emails', 
     'sprints', 'tasks', 'task_time_logs', 'daily_reports', 'workflows', 
     'workflow_runs', 'chat_conversations', 'chat_participants', 
-    'chat_messages', 'chat_presence', 'notifications', 'audit_logs'
+    'chat_messages', 'chat_presence', 'notifications', 'audit_logs',
+    'user_meeting_settings', 'meeting_event_types', 'meeting_bookings', 'employee_login_logs'
   ];
 BEGIN
   FOREACH tbl IN ARRAY domain_tables LOOP

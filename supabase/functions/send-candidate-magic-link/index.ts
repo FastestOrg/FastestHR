@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import * as nodemailer from "npm:nodemailer@6.9.8";
+import { authenticateCaller } from "../_shared/auth.ts";
 
 // Polyfill Buffer for nodemailer running in Deno
 (globalThis as any).Buffer = Buffer;
@@ -107,12 +108,43 @@ Deno.serve(async (req) => {
     // 1. Fetch offer and company details
     const { data: offer, error: offerError } = await supabaseClient
       .from('candidate_offers')
-      .select('*, companies(*), candidates(full_name), jobs(title)')
+      .select('*, companies(*), candidates(full_name, email), jobs(title)')
       .eq('id', offer_id)
       .single();
 
     if (offerError || !offer) {
       throw new Error('Offer not found');
+    }
+
+    // Validate authorization: either candidate possessing the secret offer token OR authenticated company staff
+    let isAuthorized = false;
+
+    // Check candidate token authorization
+    if (token && offer.token && String(offer.token).toLowerCase() === String(token).toLowerCase()) {
+      isAuthorized = true;
+    }
+
+    // Check staff Bearer session authorization
+    if (!isAuthorized) {
+      try {
+        const caller = await authenticateCaller(req);
+        if (
+          caller.profile.platform_role === 'super_admin' ||
+          (caller.profile.company_id === offer.company_id &&
+           ['company_admin', 'hr_manager', 'recruiter'].includes(caller.profile.platform_role))
+        ) {
+          isAuthorized = true;
+        }
+      } catch {
+        // Not authorized staff
+      }
+    }
+
+    if (!isAuthorized) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized: Invalid offer token or insufficient permissions' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     const company = offer.companies;

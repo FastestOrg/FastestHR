@@ -1,7 +1,24 @@
 import { supabase } from '@/integrations/supabase/client';
 import { uploadDocumentToStorage, downloadDocument } from '@/lib/storage-provider';
-// @ts-ignore
-import html2pdf from 'html2pdf.js';
+
+// Lazy dynamic loader for html2pdf to prevent bundling heavy PDF libraries in the main chunk
+export async function getHtml2Pdf(): Promise<any> {
+  // @ts-ignore
+  const module = await import('html2pdf.js');
+  return (module && module.default) ? module.default : module;
+}
+
+export async function exportElementToPdf(element: HTMLElement, filename: string): Promise<void> {
+  const html2pdf = await getHtml2Pdf();
+  const opt = {
+    margin: [10, 10, 10, 10] as [number, number, number, number],
+    filename: filename.endsWith('.pdf') ? filename : `${filename}.pdf`,
+    image: { type: 'jpeg' as const, quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true },
+    jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const },
+  };
+  await html2pdf().set(opt).from(element).save();
+}
 
 // Global serialized queue for DOM-heavy PDF operations to prevent concurrent reflows and flicker
 let pdfGenerationQueue: Promise<any> = Promise.resolve();
@@ -367,6 +384,7 @@ async function generateAndUploadPDF(
       pdfElement.style.left = '';
       pdfElement.style.visibility = '';
 
+      const html2pdf = await getHtml2Pdf();
       const blob = await html2pdf().set(opt).from(pdfElement).output('blob');
       return { blob, manipulatedHtml };
     } finally {
@@ -845,6 +863,7 @@ export async function generateAndDownloadPayslipPDF(params: GeneratePayslipPDFPa
       container.style.left = '';
       container.style.visibility = '';
 
+      const html2pdf = await getHtml2Pdf();
       return await html2pdf().set(opt).from(container).output('blob');
     } finally {
       document.body.style.overflow = originalOverflow;

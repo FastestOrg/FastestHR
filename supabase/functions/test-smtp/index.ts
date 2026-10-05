@@ -1,15 +1,12 @@
 import { Buffer } from "node:buffer";
 import * as nodemailer from "npm:nodemailer@6.9.8";
+import { requireCompanyStaff, getCorsHeaders } from "../_shared/auth.ts";
 
 // Polyfill Buffer for nodemailer
 (globalThis as any).Buffer = Buffer;
 
-export const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   console.log("Incoming request:", req.method);
 
   if (req.method === 'OPTIONS') {
@@ -17,6 +14,9 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // 0. Authenticate caller: only administrators / HR managers may test SMTP
+    await requireCompanyStaff(req, null, ['super_admin', 'company_admin', 'hr_manager']);
+
     const { 
       smtp_host, 
       smtp_port, 

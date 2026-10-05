@@ -5,6 +5,7 @@
 
 import { DEFAULT_GOOGLE_CLIENT_ID, loadGoogleIdentityServices } from './google-drive';
 import { DayOfWeek, TimeSlotRange, WeeklySchedule, SlotOption } from '@/types/meeting';
+import { supabase } from '@/integrations/supabase/client';
 
 export const GOOGLE_CALENDAR_SCOPES = [
   'https://www.googleapis.com/auth/calendar',
@@ -82,12 +83,15 @@ export async function requestGoogleCalendarCodeAuth(userId: string, clientId?: s
           }
 
           try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const authToken = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
             const edgeRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-calendar-auth`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
                 apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-                Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+                Authorization: `Bearer ${authToken}`,
               },
               body: JSON.stringify({
                 action: 'exchange_code',

@@ -256,7 +256,7 @@ export default function HelpDesk() {
     }
   };
 
-  const isAdmin = profile?.platform_role === 'company_admin' || profile?.platform_role === 'super_admin';
+  const isAdmin = profile?.platform_role === 'company_admin' || profile?.platform_role === 'super_admin' || profile?.platform_role === 'hr_manager';
 
   return (
     <div className="space-y-6">

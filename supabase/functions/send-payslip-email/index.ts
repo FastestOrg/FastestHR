@@ -1,25 +1,9 @@
 import { Buffer } from "node:buffer";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import * as nodemailer from "npm:nodemailer@6.9.8";
+import { requireCompanyStaff, getCorsHeaders } from "../_shared/auth.ts";
 
 // Polyfill Buffer for nodemailer running in Deno
 (globalThis as any).Buffer = Buffer;
-
-const allowedOrigins = [
-  'https://fastesthr.com',
-  'http://localhost:8080',
-  'http://localhost:5173',
-  'https://*.fastesthr.com'
-];
-
-const getCorsHeaders = (req: Request) => {
-  const origin = req.headers.get('Origin');
-  const isAllowed = origin && (allowedOrigins.includes(origin) || origin.endsWith('.fastesthr.com'));
-  return {
-    'Access-Control-Allow-Origin': isAllowed ? origin : allowedOrigins[0],
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  };
-};
 
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -29,16 +13,19 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
-
     const { payslip_id, company_id, employee_id, pdf_path } = await req.json();
 
     if (!payslip_id || !company_id || !employee_id || !pdf_path) {
       throw new Error('Missing required fields (payslip_id, company_id, employee_id, pdf_path)');
     }
+
+    // 0. Authenticate caller and verify permissions
+    const { adminClient: supabaseClient } = await requireCompanyStaff(req, company_id, [
+      'super_admin',
+      'company_admin',
+      'hr_manager',
+      'payroll_manager',
+    ]);
 
     // 1. Fetch company SMTP details
     const { data: company, error: companyError } = await supabaseClient
@@ -58,12 +45,12 @@ Deno.serve(async (req) => {
     // 2. Fetch employee details
     const { data: employee, error: employeeError } = await supabaseClient
       .from('employees')
-      .select('first_name, last_name, work_email, personal_email')
+      .select('first_name, last_name, work_email, personal_email, company_id')
       .eq('id', employee_id)
       .single();
 
-    if (employeeError || !employee) {
-      throw new Error(`Employee not found: ${employeeError?.message}`);
+    if (employeeError || !employee || (employee.company_id && employee.company_id !== company_id)) {
+      throw new Error(`Employee not found or does not belong to this company`);
     }
 
     const recipientEmail = employee.work_email || employee.personal_email;
@@ -76,12 +63,12 @@ Deno.serve(async (req) => {
     // 3. Fetch payslip details for period info
     const { data: payslip, error: payslipError } = await supabaseClient
       .from('payslips')
-      .select('*, payroll_runs(period_start, period_end)')
+      .select('*, company_id, payroll_runs(period_start, period_end)')
       .eq('id', payslip_id)
       .single();
 
-    if (payslipError || !payslip) {
-      throw new Error(`Payslip not found: ${payslipError?.message}`);
+    if (payslipError || !payslip || (payslip.company_id && payslip.company_id !== company_id)) {
+      throw new Error(`Payslip not found or does not belong to this company`);
     }
 
     const periodStart = payslip.payroll_runs?.period_start || '';

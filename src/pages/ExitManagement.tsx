@@ -67,7 +67,7 @@ const statusColor: Record<string, string> = {
 
 export default function ExitManagement() {
   const { profile } = useAuthStore();
-  const isAdmin = profile?.platform_role === 'company_admin' || profile?.platform_role === 'super_admin';
+  const isAdmin = profile?.platform_role === 'company_admin' || profile?.platform_role === 'super_admin' || profile?.platform_role === 'hr_manager';
   const queryClient = useQueryClient();
 
   const [dialogOpen, setDialogOpen] = useState(false);

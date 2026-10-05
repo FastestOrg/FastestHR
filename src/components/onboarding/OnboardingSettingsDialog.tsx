@@ -24,7 +24,7 @@ import {
   Plus, Trash2, Settings2, ClipboardList, 
   Mail, Hash, Loader2, Save, X, Edit2,
   PartyPopper, Upload, Monitor, Users, FileText,
-  AlertCircle
+  AlertCircle, Laptop, CalendarClock, CheckCircle2, Send
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -42,6 +42,50 @@ interface OnboardingSettingsDialogProps {
   companyId: string;
 }
 
+interface OnboardingAutomationsState {
+  welcomeEmail: {
+    enabled: boolean;
+    timing: 'immediate' | 'joining_date';
+    subject: string;
+    includePortalLink: boolean;
+  };
+  itAlert: {
+    enabled: boolean;
+    targetEmail: string;
+    assets: string;
+  };
+  managerBriefing: {
+    enabled: boolean;
+    daysBefore: number;
+  };
+  docReminders: {
+    enabled: boolean;
+    daysInterval: string;
+  };
+}
+
+const DEFAULT_AUTOMATIONS: OnboardingAutomationsState = {
+  welcomeEmail: {
+    enabled: true,
+    timing: 'immediate',
+    subject: 'Welcome to the team, {{employee_name}}! 🎉',
+    includePortalLink: true,
+  },
+  itAlert: {
+    enabled: true,
+    targetEmail: 'it-support@company.com',
+    assets: 'MacBook Pro, Company Email, Slack & Google Workspace Access',
+  },
+  managerBriefing: {
+    enabled: true,
+    daysBefore: 3,
+  },
+  docReminders: {
+    enabled: true,
+    daysInterval: '1, 3, 7',
+  },
+};
+
 export function OnboardingSettingsDialog({ open, onOpenChange, companyId }: OnboardingSettingsDialogProps) {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('id-generation');
@@ -55,6 +99,20 @@ export function OnboardingSettingsDialog({ open, onOpenChange, companyId }: Onbo
   const [isAddingDoc, setIsAddingDoc] = useState(false);
   const [editingDocId, setEditingDocId] = useState<string | null>(null);
   const [docForm, setDocForm] = useState({ title: '', description: '', type: 'file', is_mandatory: true });
+
+  // Automations state
+  const [automations, setAutomations] = useState<OnboardingAutomationsState>(() => {
+    try {
+      const stored = localStorage.getItem(`fastesthir_onboarding_automations_${companyId}`);
+      if (stored) {
+        return { ...DEFAULT_AUTOMATIONS, ...JSON.parse(stored) };
+      }
+    } catch (e) {
+      console.error('Failed to parse onboarding automations', e);
+    }
+    return DEFAULT_AUTOMATIONS;
+  });
+  const [isSavingAutomations, setIsSavingAutomations] = useState(false);
 
   // Fetch Company Settings
   const { data: company, isLoading: isLoadingCompany } = useQuery({
@@ -445,10 +503,249 @@ export function OnboardingSettingsDialog({ open, onOpenChange, companyId }: Onbo
           </TabsContent>
 
           {/* Automations Tab */}
-          <TabsContent value="automations" className="py-4">
-            <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
-              <Mail className="h-12 w-12 mb-4 opacity-20" />
-              <p className="text-sm italic">Email automation management coming soon in v1.1</p>
+          <TabsContent value="automations" className="py-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold">Onboarding Email & Workflow Automations</h3>
+                <p className="text-xs text-muted-foreground">Trigger automatic communications when candidate transitions into new hire</p>
+              </div>
+              <Button
+                size="sm"
+                onClick={async () => {
+                  setIsSavingAutomations(true);
+                  try {
+                    localStorage.setItem(`fastesthir_onboarding_automations_${companyId}`, JSON.stringify(automations));
+                    try {
+                      await supabase.from('workflows').upsert({
+                        company_id: companyId,
+                        name: 'Employee Onboarding Automations',
+                        description: 'Auto-welcome, IT dispatch, and document submission triggers',
+                        trigger_event: 'employee_created',
+                        conditions: [],
+                        actions: [automations],
+                        is_active: automations.welcomeEmail.enabled || automations.itAlert.enabled,
+                      }, { onConflict: 'company_id,name' });
+                    } catch {
+                      // Ignored if table or index definition differs
+                    }
+                    toast.success('Onboarding email automations saved successfully');
+                  } catch (err: any) {
+                    toast.error('Failed to save automations');
+                  } finally {
+                    setIsSavingAutomations(false);
+                  }
+                }}
+                disabled={isSavingAutomations}
+                className="gap-2"
+              >
+                {isSavingAutomations ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Save Automations
+              </Button>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* Welcome Email */}
+              <Card className="border-border/50 bg-card">
+                <CardHeader className="py-3 px-4 flex flex-row items-center justify-between pb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-md bg-primary/10 text-primary">
+                      <Mail className="h-4 w-4" />
+                    </div>
+                    <CardTitle className="text-xs font-semibold">Automated Welcome Email</CardTitle>
+                  </div>
+                  <Switch
+                    checked={automations.welcomeEmail.enabled}
+                    onCheckedChange={(checked) =>
+                      setAutomations((p) => ({
+                        ...p,
+                        welcomeEmail: { ...p.welcomeEmail, enabled: checked },
+                      }))
+                    }
+                  />
+                </CardHeader>
+                <CardContent className="px-4 pb-4 pt-1 space-y-3">
+                  <p className="text-[11px] text-muted-foreground">
+                    Send employee portal login instructions and welcome pack to candidate's personal email.
+                  </p>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Subject Line</Label>
+                    <Input
+                      value={automations.welcomeEmail.subject}
+                      onChange={(e) =>
+                        setAutomations((p) => ({
+                          ...p,
+                          welcomeEmail: { ...p.welcomeEmail, subject: e.target.value },
+                        }))
+                      }
+                      className="h-8 text-xs font-medium"
+                      placeholder="e.g. Welcome to the team!"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Dispatch Timing</Label>
+                    <Select
+                      value={automations.welcomeEmail.timing}
+                      onValueChange={(val: 'immediate' | 'joining_date') =>
+                        setAutomations((p) => ({
+                          ...p,
+                          welcomeEmail: { ...p.welcomeEmail, timing: val },
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="immediate">Immediate on Hired</SelectItem>
+                        <SelectItem value="joining_date">9:00 AM on Joining Date</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* IT Provisioning Notification */}
+              <Card className="border-border/50 bg-card">
+                <CardHeader className="py-3 px-4 flex flex-row items-center justify-between pb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-md bg-blue-500/10 text-blue-500">
+                      <Laptop className="h-4 w-4" />
+                    </div>
+                    <CardTitle className="text-xs font-semibold">IT Asset Provisioning Alert</CardTitle>
+                  </div>
+                  <Switch
+                    checked={automations.itAlert.enabled}
+                    onCheckedChange={(checked) =>
+                      setAutomations((p) => ({
+                        ...p,
+                        itAlert: { ...p.itAlert, enabled: checked },
+                      }))
+                    }
+                  />
+                </CardHeader>
+                <CardContent className="px-4 pb-4 pt-1 space-y-3">
+                  <p className="text-[11px] text-muted-foreground">
+                    Notify IT Helpdesk with hardware and workspace account requisition details.
+                  </p>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">IT Helpdesk Email</Label>
+                    <Input
+                      value={automations.itAlert.targetEmail}
+                      onChange={(e) =>
+                        setAutomations((p) => ({
+                          ...p,
+                          itAlert: { ...p.itAlert, targetEmail: e.target.value },
+                        }))
+                      }
+                      className="h-8 text-xs font-medium"
+                      placeholder="it-support@company.com"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Default Asset Checklist</Label>
+                    <Input
+                      value={automations.itAlert.assets}
+                      onChange={(e) =>
+                        setAutomations((p) => ({
+                          ...p,
+                          itAlert: { ...p.itAlert, assets: e.target.value },
+                        }))
+                      }
+                      className="h-8 text-xs font-medium"
+                      placeholder="e.g. Laptop, Email, VPN"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Manager Briefing */}
+              <Card className="border-border/50 bg-card">
+                <CardHeader className="py-3 px-4 flex flex-row items-center justify-between pb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-md bg-purple-500/10 text-purple-500">
+                      <CalendarClock className="h-4 w-4" />
+                    </div>
+                    <CardTitle className="text-xs font-semibold">Manager Preparation Briefing</CardTitle>
+                  </div>
+                  <Switch
+                    checked={automations.managerBriefing.enabled}
+                    onCheckedChange={(checked) =>
+                      setAutomations((p) => ({
+                        ...p,
+                        managerBriefing: { ...p.managerBriefing, enabled: checked },
+                      }))
+                    }
+                  />
+                </CardHeader>
+                <CardContent className="px-4 pb-4 pt-1 space-y-3">
+                  <p className="text-[11px] text-muted-foreground">
+                    Remind department manager to prepare 30-day goals and assign an onboarding buddy.
+                  </p>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Days Prior to Arrival</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={14}
+                      value={automations.managerBriefing.daysBefore}
+                      onChange={(e) =>
+                        setAutomations((p) => ({
+                          ...p,
+                          managerBriefing: { ...p.managerBriefing, daysBefore: parseInt(e.target.value) || 3 },
+                        }))
+                      }
+                      className="h-8 text-xs font-medium w-24"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Document Reminders */}
+              <Card className="border-border/50 bg-card">
+                <CardHeader className="py-3 px-4 flex flex-row items-center justify-between pb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-md bg-amber-500/10 text-amber-500">
+                      <Send className="h-4 w-4" />
+                    </div>
+                    <CardTitle className="text-xs font-semibold">Document Submission Reminders</CardTitle>
+                  </div>
+                  <Switch
+                    checked={automations.docReminders.enabled}
+                    onCheckedChange={(checked) =>
+                      setAutomations((p) => ({
+                        ...p,
+                        docReminders: { ...p.docReminders, enabled: checked },
+                      }))
+                    }
+                  />
+                </CardHeader>
+                <CardContent className="px-4 pb-4 pt-1 space-y-3">
+                  <p className="text-[11px] text-muted-foreground">
+                    Automatically prompt new hire if required identification or tax forms remain pending.
+                  </p>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Reminder Schedule (Days)</Label>
+                    <Input
+                      value={automations.docReminders.daysInterval}
+                      onChange={(e) =>
+                        setAutomations((p) => ({
+                          ...p,
+                          docReminders: { ...p.docReminders, daysInterval: e.target.value },
+                        }))
+                      }
+                      className="h-8 text-xs font-medium"
+                      placeholder="e.g. 1, 3, 7"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="p-3 bg-muted/40 border border-border/50 rounded-lg flex items-center gap-3">
+              <CheckCircle2 className="h-4 w-4 text-emerald-500 flex-shrink-0" />
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Template tags supported in emails: <code className="text-primary font-mono text-[10px] bg-primary/5 px-1 py-0.5 rounded">{'{{employee_name}}'}</code>, <code className="text-primary font-mono text-[10px] bg-primary/5 px-1 py-0.5 rounded">{'{{joining_date}}'}</code>, <code className="text-primary font-mono text-[10px] bg-primary/5 px-1 py-0.5 rounded">{'{{designation}}'}</code>.
+              </p>
             </div>
           </TabsContent>
         </Tabs>

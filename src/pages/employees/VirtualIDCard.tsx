@@ -12,11 +12,13 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { substituteVariables } from '@/lib/template-utils';
+import { exportElementToPdf } from '@/lib/pdf-generator';
 
 export default function VirtualIDCard() {
   const { profile } = useAuthStore();
   const queryClient = useQueryClient();
   const [uploading, setUploading] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   const { data: employee, isLoading: loadingEmp } = useQuery({
     queryKey: ['my-id-card-data', profile?.id],
@@ -144,6 +146,25 @@ export default function VirtualIDCard() {
 
   const shareUrl = `${window.location.origin}/id/${employee?.public_id}`;
 
+  const handleDownloadPdf = async () => {
+    const cardEl = document.getElementById('virtual-id-card-render');
+    if (!cardEl) {
+      toast.error('Could not locate ID card to generate PDF');
+      return;
+    }
+    setDownloadingPdf(true);
+    try {
+      const fileName = `ID_Card_${employee?.first_name || 'Employee'}_${employee?.employee_code || 'FastestHR'}.pdf`;
+      await exportElementToPdf(cardEl, fileName);
+      toast.success('Virtual ID Card PDF downloaded successfully');
+    } catch (err: any) {
+      console.error('PDF generation error:', err);
+      toast.error('Failed to generate ID Card PDF: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   return (
     <div className="container max-w-4xl py-10 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -158,8 +179,13 @@ export default function VirtualIDCard() {
           }}>
             <Share2 className="h-4 w-4" /> Share Card
           </Button>
-          <Button className="gap-2 shadow-lg shadow-primary/20">
-            <Download className="h-4 w-4" /> Download PDF
+          <Button 
+            className="gap-2 shadow-lg shadow-primary/20"
+            disabled={downloadingPdf}
+            onClick={handleDownloadPdf}
+          >
+            {downloadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            Download PDF
           </Button>
         </div>
       </div>
@@ -169,6 +195,7 @@ export default function VirtualIDCard() {
         <div className="flex justify-center p-8 bg-muted/30 rounded-3xl border border-border/50 relative overflow-hidden group">
           <div className="absolute inset-0 bg-[radial-gradient(#4f46e5_1px,transparent_1px)] [background-size:24px_24px] opacity-[0.03]"></div>
           <div 
+            id="virtual-id-card-render"
             className="relative z-10 transition-transform duration-500 group-hover:scale-[1.02]"
             dangerouslySetInnerHTML={{ __html: renderCard() }} 
           />

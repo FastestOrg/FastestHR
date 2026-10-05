@@ -1,31 +1,30 @@
 import { Buffer } from "node:buffer";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import * as nodemailer from "npm:nodemailer@6.9.8";
+import { requireCompanyStaff, getCorsHeaders } from "../_shared/auth.ts";
 
 // Polyfill Buffer for nodemailer running in Deno
 (globalThis as any).Buffer = Buffer;
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
-
     const { employee_id, company_id, consecutive_days } = await req.json();
 
     if (!employee_id || !company_id) {
       throw new Error('Missing required employee_id or company_id');
     }
+
+    // 0. Authenticate caller and enforce tenant authorization
+    const { adminClient: supabaseClient } = await requireCompanyStaff(req, company_id, [
+      'super_admin',
+      'company_admin',
+      'hr_manager',
+    ]);
 
     // 1. Fetch company details (SMTP details and attendance_settings)
     const { data: company, error: companyError } = await supabaseClient
@@ -45,12 +44,12 @@ Deno.serve(async (req) => {
     // 2. Fetch employee details (work_email, first_name, last_name)
     const { data: employee, error: employeeError } = await supabaseClient
       .from('employees')
-      .select('first_name, last_name, work_email, personal_email')
+      .select('first_name, last_name, work_email, personal_email, company_id')
       .eq('id', employee_id)
       .single();
 
-    if (employeeError || !employee) {
-      throw new Error('Employee not found');
+    if (employeeError || !employee || (employee.company_id && employee.company_id !== company_id)) {
+      throw new Error('Employee not found or does not belong to this company');
     }
 
     const recipientEmail = employee.work_email || employee.personal_email;

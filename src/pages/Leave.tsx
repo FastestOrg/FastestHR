@@ -27,7 +27,13 @@ interface LeaveTiers {
   }
 }
 
-const parseLeaveTiers = (reasonStr: string | null): LeaveTiers | null => {
+const parseLeaveTiers = (reqOrReason: any): LeaveTiers | null => {
+  if (!reqOrReason) return null;
+  if (typeof reqOrReason === 'object' && reqOrReason !== null) {
+    if (reqOrReason.tiers) return reqOrReason as LeaveTiers;
+    if (reqOrReason.approval_tiers?.tiers) return reqOrReason.approval_tiers as LeaveTiers;
+  }
+  const reasonStr = typeof reqOrReason === 'string' ? reqOrReason : reqOrReason?.rejection_reason;
   if (!reasonStr) return null;
   try {
     if (reasonStr.trim().startsWith('{')) {
@@ -43,7 +49,7 @@ const parseLeaveTiers = (reasonStr: string | null): LeaveTiers | null => {
 };
 
 const renderTiersTracker = (req: any) => {
-  const tiersData = parseLeaveTiers(req.rejection_reason);
+  const tiersData = (req.approval_tiers as LeaveTiers | null) || parseLeaveTiers(req.rejection_reason);
   if (!tiersData) return null;
 
   const managerTier = tiersData.tiers.manager;
@@ -341,10 +347,11 @@ export default function Leave() {
       if (fetchErr) throw fetchErr;
 
       const empRepManagerId = (req.employees as any)?.reporting_manager_id;
-      const tiersData = parseLeaveTiers(req.rejection_reason);
+      const tiersData: LeaveTiers | null = (req as any).approval_tiers || parseLeaveTiers(req.rejection_reason);
 
       let updatedStatus = req.status;
       let updatedReason = req.rejection_reason;
+      let updatedApprovalTiers: LeaveTiers | null = tiersData ? JSON.parse(JSON.stringify(tiersData)) : null;
 
       const userName = `${employee?.first_name || ''} ${employee?.last_name || ''}`.trim();
 
@@ -353,43 +360,43 @@ export default function Leave() {
 
       if (status === 'rejected') {
         updatedStatus = 'rejected';
-        if (tiersData) {
-          if (isApprovingAsManager && tiersData.tiers.manager) {
-            tiersData.tiers.manager.status = 'rejected';
-            tiersData.tiers.manager.approved_by = employee?.id;
-            tiersData.tiers.manager.name = userName;
+        if (updatedApprovalTiers) {
+          if (isApprovingAsManager && updatedApprovalTiers.tiers.manager) {
+            updatedApprovalTiers.tiers.manager.status = 'rejected';
+            updatedApprovalTiers.tiers.manager.approved_by = employee?.id;
+            updatedApprovalTiers.tiers.manager.name = userName;
           }
-          if (isApprovingAsHR && tiersData.tiers.hr) {
-            tiersData.tiers.hr.status = 'rejected';
-            tiersData.tiers.hr.approved_by = employee?.id;
-            tiersData.tiers.hr.name = userName;
+          if (isApprovingAsHR && updatedApprovalTiers.tiers.hr) {
+            updatedApprovalTiers.tiers.hr.status = 'rejected';
+            updatedApprovalTiers.tiers.hr.approved_by = employee?.id;
+            updatedApprovalTiers.tiers.hr.name = userName;
           }
-          updatedReason = JSON.stringify(tiersData);
+          updatedReason = JSON.stringify(updatedApprovalTiers);
         } else {
           updatedReason = comment || 'Rejected';
         }
       } else {
-        if (tiersData) {
-          if (isApprovingAsManager && tiersData.tiers.manager) {
-            tiersData.tiers.manager.status = 'approved';
-            tiersData.tiers.manager.approved_by = employee?.id;
-            tiersData.tiers.manager.name = userName;
+        if (updatedApprovalTiers) {
+          if (isApprovingAsManager && updatedApprovalTiers.tiers.manager) {
+            updatedApprovalTiers.tiers.manager.status = 'approved';
+            updatedApprovalTiers.tiers.manager.approved_by = employee?.id;
+            updatedApprovalTiers.tiers.manager.name = userName;
           }
-          if (isApprovingAsHR && tiersData.tiers.hr) {
-            tiersData.tiers.hr.status = 'approved';
-            tiersData.tiers.hr.approved_by = employee?.id;
-            tiersData.tiers.hr.name = userName;
+          if (isApprovingAsHR && updatedApprovalTiers.tiers.hr) {
+            updatedApprovalTiers.tiers.hr.status = 'approved';
+            updatedApprovalTiers.tiers.hr.approved_by = employee?.id;
+            updatedApprovalTiers.tiers.hr.name = userName;
           }
 
-          const managerApproved = !tiersData.tiers.manager || tiersData.tiers.manager.status === 'approved';
-          const hrApproved = !tiersData.tiers.hr || tiersData.tiers.hr.status === 'approved';
+          const managerApproved = !updatedApprovalTiers.tiers.manager || updatedApprovalTiers.tiers.manager.status === 'approved';
+          const hrApproved = !updatedApprovalTiers.tiers.hr || updatedApprovalTiers.tiers.hr.status === 'approved';
 
           if (managerApproved && hrApproved) {
             updatedStatus = 'approved';
           } else {
             updatedStatus = 'pending';
           }
-          updatedReason = JSON.stringify(tiersData);
+          updatedReason = JSON.stringify(updatedApprovalTiers);
         } else {
           updatedStatus = 'approved';
           updatedReason = comment || null;
@@ -399,6 +406,7 @@ export default function Leave() {
       const { error } = await supabase.from('leave_requests').update({
         status: updatedStatus,
         approved_by: employee?.id,
+        approval_tiers: updatedApprovalTiers as any,
         rejection_reason: updatedReason,
       }).eq('id', id);
 

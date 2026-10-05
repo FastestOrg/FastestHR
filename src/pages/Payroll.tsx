@@ -71,7 +71,7 @@ const statusColor: Record<string, string> = {
 export default function Payroll() {
   const { profile } = useAuthStore();
   const queryClient = useQueryClient();
-  const isAdmin = profile?.platform_role === 'company_admin' || profile?.platform_role === 'super_admin';
+  const isAdmin = profile?.platform_role === 'company_admin' || profile?.platform_role === 'super_admin' || profile?.platform_role === 'hr_manager';
 
   const { data: employee } = useQuery({
     queryKey: ['my-employee', profile?.id],

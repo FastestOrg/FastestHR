@@ -15,50 +15,67 @@ import { Capacitor } from '@capacitor/core';
 import { BYOSProvider } from '@/contexts/BYOSContext';
 
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
+import { ProtectedRoute, type PlatformRole } from '@/components/layout/ProtectedRoute';
 import { PublicRoute } from '@/components/layout/PublicRoute';
 import { MobileSplash } from '@/components/layout/MobileSplash';
-import Landing from '@/pages/Landing';
-import BlogList from '@/pages/BlogList';
-import BlogPost from '@/pages/BlogPost';
-import Login from '@/pages/auth/Login';
-import Register from '@/pages/auth/Register';
-import ForgotPassword from '@/pages/auth/ForgotPassword';
-import ResetPassword from '@/pages/auth/ResetPassword';
-import Dashboard from '@/pages/Dashboard';
-import Employees from '@/pages/Employees';
-import Attendance from '@/pages/Attendance';
-import Leave from '@/pages/Leave';
-import Payroll from '@/pages/Payroll';
-import Performance from '@/pages/Performance';
-import Recruitment from '@/pages/Recruitment';
-import Learning from '@/pages/Learning';
-import HelpDesk from '@/pages/HelpDesk';
-import Announcements from '@/pages/Announcements';
-import Reports from '@/pages/Reports';
-import Settings from '@/pages/Settings';
-import Tasks from '@/pages/Tasks';
-import OfferView from '@/pages/recruitment/OfferView';
-import Documents from '@/pages/Documents';
-import Billing from '@/pages/Billing';
-import Onboarding from '@/pages/Onboarding';
-import ExitManagement from '@/pages/ExitManagement';
-import HolidayCalendar from '@/pages/HolidayCalendar';
-import SendDesk from '@/pages/SendDesk';
-import VirtualIDCard from '@/pages/employees/VirtualIDCard';
-import PublicIDCard from '@/pages/public/PublicIDCard';
-import LegacyCompare from '@/pages/public/LegacyCompare';
-import StartupSolutions from '@/pages/solutions/StartupSolutions';
-import AuthorDetail from '@/pages/AuthorDetail';
 
+// Public & Marketing Pages (lazy loaded)
+const Landing = lazy(() => import('@/pages/Landing'));
+const BlogList = lazy(() => import('@/pages/BlogList'));
+const BlogPost = lazy(() => import('@/pages/BlogPost'));
+const AuthorDetail = lazy(() => import('@/pages/AuthorDetail'));
+const PublicIDCard = lazy(() => import('@/pages/public/PublicIDCard'));
+const LegacyCompare = lazy(() => import('@/pages/public/LegacyCompare'));
+const StartupSolutions = lazy(() => import('@/pages/solutions/StartupSolutions'));
+const CoreEngine = lazy(() => import('@/pages/public/CoreEngine'));
+const PayrollOS = lazy(() => import('@/pages/public/PayrollOS'));
+const TalentPipeline = lazy(() => import('@/pages/public/TalentPipeline'));
+const APIDocs = lazy(() => import('@/pages/public/APIDocs'));
+const About = lazy(() => import('@/pages/public/About'));
+const Careers = lazy(() => import('@/pages/public/Careers'));
+const Changelog = lazy(() => import('@/pages/public/Changelog'));
+const TermsOfService = lazy(() => import('@/pages/public/TermsOfService'));
+const PrivacyPolicy = lazy(() => import('@/pages/public/PrivacyPolicy'));
+const Security = lazy(() => import('@/pages/public/Security'));
+const NotFound = lazy(() => import('@/pages/NotFound'));
 
-import Companies from '@/pages/admin/Companies';
-import Subscriptions from '@/pages/admin/Subscriptions';
-import SystemSettings from '@/pages/admin/SystemSettings';
-import Roles from '@/pages/settings/Roles';
-import AttritionInsights from '@/pages/admin/AttritionInsights';
-import CultureHub from '@/pages/CultureHub';
-import KPI from '@/pages/KPI';
+// Auth Pages (lazy loaded)
+const Login = lazy(() => import('@/pages/auth/Login'));
+const Register = lazy(() => import('@/pages/auth/Register'));
+const ForgotPassword = lazy(() => import('@/pages/auth/ForgotPassword'));
+const ResetPassword = lazy(() => import('@/pages/auth/ResetPassword'));
+
+// Core HR modules (lazy loaded)
+const Dashboard = lazy(() => import('@/pages/Dashboard'));
+const Employees = lazy(() => import('@/pages/Employees'));
+const Attendance = lazy(() => import('@/pages/Attendance'));
+const Leave = lazy(() => import('@/pages/Leave'));
+const Payroll = lazy(() => import('@/pages/Payroll'));
+const Performance = lazy(() => import('@/pages/Performance'));
+const Recruitment = lazy(() => import('@/pages/Recruitment'));
+const Learning = lazy(() => import('@/pages/Learning'));
+const HelpDesk = lazy(() => import('@/pages/HelpDesk'));
+const Announcements = lazy(() => import('@/pages/Announcements'));
+const Reports = lazy(() => import('@/pages/Reports'));
+const Settings = lazy(() => import('@/pages/Settings'));
+const Tasks = lazy(() => import('@/pages/Tasks'));
+const OfferView = lazy(() => import('@/pages/recruitment/OfferView'));
+const Documents = lazy(() => import('@/pages/Documents'));
+const Billing = lazy(() => import('@/pages/Billing'));
+const Onboarding = lazy(() => import('@/pages/Onboarding'));
+const ExitManagement = lazy(() => import('@/pages/ExitManagement'));
+const HolidayCalendar = lazy(() => import('@/pages/HolidayCalendar'));
+const SendDesk = lazy(() => import('@/pages/SendDesk'));
+const VirtualIDCard = lazy(() => import('@/pages/employees/VirtualIDCard'));
+const CultureHub = lazy(() => import('@/pages/CultureHub'));
+const KPI = lazy(() => import('@/pages/KPI'));
+
+// Admin Pages (lazy loaded)
+const Companies = lazy(() => import('@/pages/admin/Companies'));
+const Subscriptions = lazy(() => import('@/pages/admin/Subscriptions'));
+const SystemSettings = lazy(() => import('@/pages/admin/SystemSettings'));
+const Roles = lazy(() => import('@/pages/settings/Roles'));
+const AttritionInsights = lazy(() => import('@/pages/admin/AttritionInsights'));
 
 // Chat module (lazy loaded)
 const Chats = lazy(() => import('@/pages/Chats'));
@@ -83,26 +100,12 @@ const PublicBookingPage = lazy(() => import('@/pages/public/PublicBookingPage'))
 const OrgChart = lazy(() => import('@/pages/OrgChart'));
 const HierarchyLogs = lazy(() => import('@/pages/HierarchyLogs'));
 
-// Recruitment sub-pages
-import { RecruitmentPipeline } from '@/pages/recruitment/RecruitmentPipeline';
-import { RecruitmentLeadsBoard } from '@/pages/recruitment/RecruitmentLeadsBoard';
-import { RecruitmentTeam } from '@/pages/recruitment/RecruitmentTeam';
-import { RecruitmentAnalytics } from '@/pages/recruitment/RecruitmentAnalytics';
-import { OfferTemplateList } from '@/components/recruitment/OfferTemplateEditor';
-
-import PlaceholderPage from '@/pages/PlaceholderPage';
-import NotFound from '@/pages/NotFound';
-
-import CoreEngine from '@/pages/public/CoreEngine';
-import PayrollOS from '@/pages/public/PayrollOS';
-import TalentPipeline from '@/pages/public/TalentPipeline';
-import APIDocs from '@/pages/public/APIDocs';
-import About from '@/pages/public/About';
-import Careers from '@/pages/public/Careers';
-import Changelog from '@/pages/public/Changelog';
-import TermsOfService from '@/pages/public/TermsOfService';
-import PrivacyPolicy from '@/pages/public/PrivacyPolicy';
-import Security from '@/pages/public/Security';
+// Recruitment sub-pages (lazy loaded)
+const RecruitmentPipeline = lazy(() => import('@/pages/recruitment/RecruitmentPipeline').then(m => ({ default: m.RecruitmentPipeline })));
+const RecruitmentLeadsBoard = lazy(() => import('@/pages/recruitment/RecruitmentLeadsBoard').then(m => ({ default: m.RecruitmentLeadsBoard })));
+const RecruitmentTeam = lazy(() => import('@/pages/recruitment/RecruitmentTeam').then(m => ({ default: m.RecruitmentTeam })));
+const RecruitmentAnalytics = lazy(() => import('@/pages/recruitment/RecruitmentAnalytics').then(m => ({ default: m.RecruitmentAnalytics })));
+const OfferTemplateList = lazy(() => import('@/components/recruitment/OfferTemplateEditor').then(m => ({ default: m.OfferTemplateList })));
 
 const queryClient = new QueryClient();
 
@@ -134,8 +137,8 @@ function AppRoutes() {
     </div>
   );
 
-  const withLayout = (component: React.ReactNode, role?: string) => (
-    <ProtectedRoute requiredRole={role as any}>
+  const withLayout = (component: React.ReactNode, role?: PlatformRole, allowedRoles?: PlatformRole[]) => (
+    <ProtectedRoute requiredRole={role} allowedRoles={allowedRoles}>
       <DashboardLayout>
         <Suspense fallback={<LazyFallback />}>
           {component}
@@ -168,110 +171,110 @@ function AppRoutes() {
       <AnimatePresence>
         {!initialized && <MobileSplash />}
       </AnimatePresence>
-      <Routes>
-      {/* Public routes */}
-      <Route path="/" element={Capacitor.isNativePlatform() ? <Navigate to="/login" replace /> : <Landing />} />
-      <Route path="/blog" element={<BlogList />} />
-      <Route path="/blog/:slug" element={<BlogPost />} />
-      <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-      <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
-      <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
-      <Route path="/reset-password" element={<ResetPassword />} />
-      <Route path="/offer/:token" element={<OfferView />} />
-      <Route path="/ai-interview/:hash" element={<Suspense fallback={<LazyFallback />}><AIInterview /></Suspense>} />
-      <Route path="/id/:publicId" element={<PublicIDCard />} />
-      <Route path="/author/:slug" element={<AuthorDetail />} />
+      <Suspense fallback={<LazyFallback />}>
+        <Routes>
+        {/* Public routes */}
+        <Route path="/" element={Capacitor.isNativePlatform() ? <Navigate to="/login" replace /> : <Landing />} />
+        <Route path="/blog" element={<BlogList />} />
+        <Route path="/blog/:slug" element={<BlogPost />} />
+        <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+        <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+        <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/offer/:token" element={<OfferView />} />
+        <Route path="/ai-interview/:hash" element={<AIInterview />} />
+        <Route path="/id/:publicId" element={<PublicIDCard />} />
+        <Route path="/author/:slug" element={<AuthorDetail />} />
 
-      {/* Global Employee Verification - Public Pages */}
-      <Route path="/employeebg/:id" element={<Suspense fallback={<div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] text-white/20 font-mono text-[10px] tracking-[0.2em] uppercase"><div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin mb-4" />LOADING PROFILE</div>}><GlobalEmployeeProfile /></Suspense>} />
-      <Route path="/employeebg/verify/:token" element={<Suspense fallback={<div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] text-white/20 font-mono text-[10px] tracking-[0.2em] uppercase"><div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin mb-4" />VERIFICATION PORTAL</div>}><GlobalEmployeeVerify /></Suspense>} />
+        {/* Global Employee Verification - Public Pages */}
+        <Route path="/employeebg/:id" element={<GlobalEmployeeProfile />} />
+        <Route path="/employeebg/verify/:token" element={<GlobalEmployeeVerify />} />
 
+        {/* Company Career Pages */}
+        <Route path="/company/:companySlug" element={<CompanyPage />} />
+        <Route path="/company/:companySlug/jobs/:jobSlug" element={<JobApply />} />
+        <Route path="/company/:companySlug/jobs/:jobSlug/interview/:candidateId" element={<AIInterview />} />
 
-      {/* Company Career Pages */}
-      <Route path="/company/:companySlug" element={<Suspense fallback={<div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] text-white/20 font-mono text-[10px] tracking-[0.2em] uppercase"><div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin mb-4" />LOADING EXPERIENCE</div>}><CompanyPage /></Suspense>} />
-      <Route path="/company/:companySlug/jobs/:jobSlug" element={<Suspense fallback={<div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] text-white/20 font-mono text-[10px] tracking-[0.2em] uppercase"><div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin mb-4" />LOADING OPPORTUNITIES</div>}><JobApply /></Suspense>} />
-      <Route path="/company/:companySlug/jobs/:jobSlug/interview/:candidateId" element={<Suspense fallback={<div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] text-white/20 font-mono text-[10px] tracking-[0.2em] uppercase"><div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin mb-4" />PREPARING AI INTERVIEW</div>}><AIInterview /></Suspense>} />
+        {/* SEO Comparison Pages */}
+        <Route path="/vs/legacy-hrms" element={<LegacyCompare />} />
 
-      {/* SEO Comparison Pages */}
-      <Route path="/vs/legacy-hrms" element={<LegacyCompare />} />
+        {/* SEO Solution Pages */}
+        <Route path="/solutions/startups" element={<StartupSolutions />} />
 
-      {/* SEO Solution Pages */}
-      <Route path="/solutions/startups" element={<StartupSolutions />} />
+        {/* Candidate Portal */}
+        <Route path="/candidate/login" element={<CandidateLogin />} />
+        <Route path="/candidate/portal" element={<CandidatePortal />} />
 
-      {/* Candidate Portal */}
-      <Route path="/candidate/login" element={<Suspense fallback={<div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] text-white/20 font-mono text-[10px] tracking-[0.2em] uppercase"><div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin mb-4" />SECURE LOGIN</div>}><CandidateLogin /></Suspense>} />
-      <Route path="/candidate/portal" element={<Suspense fallback={<div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] text-white/20 font-mono text-[10px] tracking-[0.2em] uppercase"><div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin mb-4" />OPENING PORTAL</div>}><CandidatePortal /></Suspense>} />
+        {/* Core HR modules */}
+        <Route path="/dashboard" element={withLayout(<Dashboard />)} />
+        <Route path="/profile" element={withLayout(<EmployeeProfile />)} />
+        <Route path="/org-chart" element={withLayout(<OrgChart />)} />
+        <Route path="/hierarchy-logs" element={withLayout(<HierarchyLogs />)} />
+        <Route path="/employees" element={withLayout(<Employees />)} />
+        <Route path="/employees/new" element={withLayout(<NewEmployee />, undefined, ['company_admin', 'super_admin', 'hr_manager'])} />
+        <Route path="/employees/:id" element={withLayout(<EmployeeDetail />)} />
+        <Route path="/attendance" element={withLayout(<Attendance />)} />
+        <Route path="/leave" element={withLayout(<Leave />)} />
+        <Route path="/leave/apply" element={withLayout(<ApplyLeave />)} />
+        <Route path="/payroll" element={withLayout(<Payroll />)} />
+        <Route path="/performance" element={withLayout(<Performance />)} />
+        <Route path="/recruitment" element={withLayout(<Recruitment />)}>
+          <Route index element={<Navigate to="pipeline" replace />} />
+          <Route path="pipeline" element={<RecruitmentPipeline />} />
+          <Route path="leads" element={<RecruitmentLeadsBoard />} />
+          <Route path="analytics" element={<RecruitmentAnalytics />} />
+          <Route path="team" element={<RecruitmentTeam />} />
+          <Route path="templates" element={<OfferTemplateList />} />
+          <Route path="new" element={<NewJob />} />
+          <Route path="edit/:id" element={<NewJob />} />
+        </Route>
+        <Route path="/culture" element={withLayout(<CultureHub />)} />
+        <Route path="/kpi" element={withLayout(<KPI />)} />
+        <Route path="/referrals" element={withLayout(<ReferralPortal />)} />
+        <Route path="/learning" element={withLayout(<Learning />)} />
+        <Route path="/helpdesk" element={withLayout(<HelpDesk />)} />
+        <Route path="/announcements" element={withLayout(<Announcements />)} />
+        <Route path="/reports" element={withLayout(<Reports />)} />
+        <Route path="/documents" element={withLayout(<Documents />)} />
+        <Route path="/onboarding" element={withLayout(<Onboarding />)} />
+        <Route path="/exit-management" element={withLayout(<ExitManagement />)} />
+        <Route path="/holidays" element={withLayout(<HolidayCalendar />)} />
+        <Route path="/tasks" element={withLayout(<Tasks />)} />
+        <Route path="/chats" element={withLayout(<Chats />)} />
+        <Route path="/meetings" element={withLayout(<Meetings />)} />
+        <Route path="/senddesk" element={withLayout(<SendDesk />)} />
+        <Route path="/global-verification" element={withLayout(<GlobalEmployeeVerification />)} />
+        <Route path="/id-card" element={withLayout(<VirtualIDCard />)} />
+        <Route path="/billing" element={withLayout(<Billing />, 'company_admin')} />
+        <Route path="/roles" element={withLayout(<Roles />, 'company_admin')} />
+        <Route path="/settings/*" element={withLayout(<Settings />, 'company_admin')} />
 
+        {/* Super Admin routes */}
+        <Route path="/admin" element={withLayout(<Dashboard />, 'super_admin')} />
+        <Route path="/admin/companies" element={withLayout(<Companies />, 'super_admin')} />
+        <Route path="/admin/subscriptions" element={withLayout(<Subscriptions />, 'super_admin')} />
+        <Route path="/admin/system" element={withLayout(<SystemSettings />, 'super_admin')} />
+        <Route path="/admin/attrition" element={withLayout(<AttritionInsights />, undefined, ['company_admin', 'super_admin', 'hr_manager'])} />
 
-      {/* Core HR modules */}
-      <Route path="/dashboard" element={withLayout(<Dashboard />)} />
-      <Route path="/profile" element={withLayout(<EmployeeProfile />)} />
-      <Route path="/org-chart" element={withLayout(<OrgChart />)} />
-      <Route path="/hierarchy-logs" element={withLayout(<HierarchyLogs />)} />
-      <Route path="/employees" element={withLayout(<Employees />)} />
-      <Route path="/employees/new" element={withLayout(<NewEmployee />)} />
-      <Route path="/employees/:id" element={withLayout(<EmployeeDetail />)} />
-      <Route path="/attendance" element={withLayout(<Attendance />)} />
-      <Route path="/leave" element={withLayout(<Leave />)} />
-      <Route path="/leave/apply" element={withLayout(<ApplyLeave />)} />
-      <Route path="/payroll" element={withLayout(<Payroll />)} />
-      <Route path="/performance" element={withLayout(<Performance />)} />
-      <Route path="/recruitment" element={withLayout(<Recruitment />)}>
-        <Route index element={<Navigate to="pipeline" replace />} />
-        <Route path="pipeline" element={<RecruitmentPipeline />} />
-        <Route path="leads" element={<RecruitmentLeadsBoard />} />
-        <Route path="analytics" element={<RecruitmentAnalytics />} />
-        <Route path="team" element={<RecruitmentTeam />} />
-        <Route path="templates" element={<OfferTemplateList />} />
-        <Route path="new" element={<Suspense fallback={<div />}><NewJob /></Suspense>} />
-        <Route path="edit/:id" element={<Suspense fallback={<div />}><NewJob /></Suspense>} />
-      </Route>
-      <Route path="/culture" element={withLayout(<CultureHub />)} />
-      <Route path="/kpi" element={withLayout(<KPI />)} />
-      <Route path="/referrals" element={withLayout(<ReferralPortal />)} />
-      <Route path="/learning" element={withLayout(<Learning />)} />
-      <Route path="/helpdesk" element={withLayout(<HelpDesk />)} />
-      <Route path="/announcements" element={withLayout(<Announcements />)} />
-      <Route path="/reports" element={withLayout(<Reports />)} />
-      <Route path="/documents" element={withLayout(<Documents />)} />
-      <Route path="/onboarding" element={withLayout(<Onboarding />)} />
-      <Route path="/exit-management" element={withLayout(<ExitManagement />)} />
-      <Route path="/holidays" element={withLayout(<HolidayCalendar />)} />
-      <Route path="/tasks" element={withLayout(<Tasks />)} />
-      <Route path="/chats" element={withLayout(<Chats />)} />
-      <Route path="/meetings" element={withLayout(<Meetings />)} />
-      <Route path="/senddesk" element={withLayout(<SendDesk />)} />
-      <Route path="/global-verification" element={withLayout(<GlobalEmployeeVerification />)} />
-      <Route path="/id-card" element={withLayout(<VirtualIDCard />)} />
-      <Route path="/billing" element={withLayout(<Billing />, 'company_admin')} />
-      <Route path="/roles" element={withLayout(<Roles />, 'company_admin')} />
-      <Route path="/settings/*" element={withLayout(<Settings />, 'company_admin')} />
+        {/* Footer Pages */}
+        <Route path="/platform/core-engine" element={<CoreEngine />} />
+        <Route path="/platform/payroll-os" element={<PayrollOS />} />
+        <Route path="/platform/talent-pipeline" element={<TalentPipeline />} />
+        <Route path="/platform/api-docs" element={<APIDocs />} />
+        <Route path="/company/about" element={<About />} />
+        <Route path="/company/careers" element={<Careers />} />
+        <Route path="/company/changelog" element={<Changelog />} />
+        <Route path="/legal/terms" element={<TermsOfService />} />
+        <Route path="/legal/privacy" element={<PrivacyPolicy />} />
+        <Route path="/legal/security" element={<Security />} />
 
-      {/* Super Admin routes */}
-      <Route path="/admin" element={withLayout(<Dashboard />, 'super_admin')} />
-      <Route path="/admin/companies" element={withLayout(<Companies />, 'super_admin')} />
-      <Route path="/admin/subscriptions" element={withLayout(<Subscriptions />, 'super_admin')} />
-      <Route path="/admin/system" element={withLayout(<SystemSettings />, 'super_admin')} />
-      <Route path="/admin/attrition" element={withLayout(<AttritionInsights />, 'company_admin')} />
+        {/* Public Booking routes */}
+        <Route path="/book/:companySlug/:bookingSlug" element={<PublicBookingPage />} />
+        <Route path="/:companySlug/:bookingSlug" element={<PublicBookingPage />} />
 
-      {/* Footer Pages */}
-      <Route path="/platform/core-engine" element={<CoreEngine />} />
-      <Route path="/platform/payroll-os" element={<PayrollOS />} />
-      <Route path="/platform/talent-pipeline" element={<TalentPipeline />} />
-      <Route path="/platform/api-docs" element={<APIDocs />} />
-      <Route path="/company/about" element={<About />} />
-      <Route path="/company/careers" element={<Careers />} />
-      <Route path="/company/changelog" element={<Changelog />} />
-      <Route path="/legal/terms" element={<TermsOfService />} />
-      <Route path="/legal/privacy" element={<PrivacyPolicy />} />
-      <Route path="/legal/security" element={<Security />} />
-
-      {/* Public Booking routes: /book/:companySlug/:bookingSlug and /:companySlug/:bookingSlug */}
-      <Route path="/book/:companySlug/:bookingSlug" element={<Suspense fallback={<LazyFallback />}><PublicBookingPage /></Suspense>} />
-      <Route path="/:companySlug/:bookingSlug" element={<Suspense fallback={<LazyFallback />}><PublicBookingPage /></Suspense>} />
-
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+      </Suspense>
     </>
   );
 }

@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Clock, MapPin, Play, Square, Coffee, Building, Home, Globe, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { Clock, MapPin, Play, Square, Coffee, Building, Home, Globe, AlertTriangle, CheckCircle2, XCircle, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth-store';
@@ -12,6 +12,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  queueAttendancePunch,
+  subscribeToQueueChanges,
+  registerAutoSyncOnReconnect,
+  flushOfflineAttendanceQueue,
+  isBrowserOnline,
+} from '@/lib/offline-sync';
 
 interface RegularizationRequest {
   status: 'pending' | 'approved' | 'rejected';
@@ -114,6 +121,10 @@ export default function Attendance() {
   const [geoStatus, setGeoStatus] = useState<string | null>(null);
   const [showGpsTroubleshooting, setShowGpsTroubleshooting] = useState<boolean>(false);
 
+  const [isOnline, setIsOnline] = useState<boolean>(isBrowserOnline());
+  const [offlineQueueCount, setOfflineQueueCount] = useState<number>(0);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+
   // Keep live clock, work timer, and active break duration ticking every second
   useEffect(() => {
     const timer = setInterval(() => {
@@ -121,6 +132,79 @@ export default function Attendance() {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Offline workforce network detection and auto-sync queue
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    const unsubQueue = subscribeToQueueChanges((count) => {
+      setOfflineQueueCount(count);
+    });
+
+    const unregisterAutoSync = registerAutoSyncOnReconnect(async (punch) => {
+      try {
+        if (punch.action === 'clock_in') {
+          const { error } = await supabase.from('attendance').insert([punch.payload]);
+          if (!error) {
+            queryClient.invalidateQueries({ queryKey: ['attendance-today'] });
+            toast.success('Offline clock-in auto-synced successfully');
+            return true;
+          }
+        } else if (punch.action === 'clock_out') {
+          const { error } = await supabase.from('attendance').update(punch.payload).eq('id', (punch.payload as any).id);
+          if (!error) {
+            queryClient.invalidateQueries({ queryKey: ['attendance-today'] });
+            toast.success('Offline clock-out auto-synced successfully');
+            return true;
+          }
+        }
+        return false;
+      } catch {
+        return false;
+      }
+    });
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      unsubQueue();
+      unregisterAutoSync();
+    };
+  }, [queryClient]);
+
+  const handleManualSync = async () => {
+    if (!navigator.onLine) {
+      toast.error('Device is currently offline. Please reconnect to sync.');
+      return;
+    }
+    setIsSyncing(true);
+    toast.loading('Syncing offline attendance punches...');
+    try {
+      const res = await flushOfflineAttendanceQueue(async (punch) => {
+        if (punch.action === 'clock_in') {
+          const { error } = await supabase.from('attendance').insert([punch.payload]);
+          return !error;
+        } else if (punch.action === 'clock_out') {
+          const { error } = await supabase.from('attendance').update(punch.payload).eq('id', (punch.payload as any).id);
+          return !error;
+        }
+        return true;
+      });
+      queryClient.invalidateQueries({ queryKey: ['attendance-today'] });
+      queryClient.invalidateQueries({ queryKey: ['attendance'] });
+      toast.dismiss();
+      if (res.syncedCount > 0) {
+        toast.success(`Successfully synced ${res.syncedCount} offline record(s)`);
+      } else {
+        toast.info('All offline punches already synced');
+      }
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const fetchPublicIP = async (): Promise<string | null> => {
     try {
@@ -195,23 +279,26 @@ export default function Attendance() {
     queryFn: async () => {
       if (!employee?.id) return null;
       
-      // 0. Auto-process timeout logouts and absconding rules for the company
-      try {
-        await supabase.rpc('process_auto_clock_outs', { p_company_id: employee.company_id });
-        const { data: abscondedList } = await supabase.rpc('check_and_process_absconding', { p_company_id: employee.company_id });
-        if (abscondedList && abscondedList.length > 0) {
-          for (const abscondedEmp of abscondedList) {
-            supabase.functions.invoke('send-absconding-email', {
-              body: {
-                employee_id: abscondedEmp.r_employee_id,
-                company_id: employee.company_id,
-                consecutive_days: abscondedEmp.r_consecutive_days
-              }
-            }).catch(e => console.error("Failed to send absconding email:", e));
+      // 0. Auto-process timeout logouts and absconding rules for company staff/admins
+      const isAdminOrHr = profile?.platform_role && ['super_admin', 'company_admin', 'hr_manager'].includes(profile.platform_role);
+      if (isAdminOrHr && employee.company_id) {
+        try {
+          await supabase.rpc('process_auto_clock_outs', { p_company_id: employee.company_id });
+          const { data: abscondedList } = await supabase.rpc('check_and_process_absconding', { p_company_id: employee.company_id });
+          if (abscondedList && abscondedList.length > 0) {
+            for (const abscondedEmp of abscondedList) {
+              supabase.functions.invoke('send-absconding-email', {
+                body: {
+                  employee_id: abscondedEmp.r_employee_id,
+                  company_id: employee.company_id,
+                  consecutive_days: abscondedEmp.r_consecutive_days
+                }
+              }).catch(e => console.error("Failed to send absconding email:", e));
+            }
           }
+        } catch (e) {
+          console.warn('Auto logout/absconding processing error:', e);
         }
-      } catch (e) {
-        console.warn('Auto logout/absconding processing error:', e);
       }
 
       // 1. Fetch active open check-in first (handles crossover night shifts)
@@ -581,6 +668,20 @@ export default function Attendance() {
       if (todayRecord?.clock_in) throw new Error('Already clocked in today');
       
       const clockInTime = new Date();
+
+      if (!navigator.onLine) {
+        await queueAttendancePunch('clock_in', {
+          employee_id: employee.id,
+          company_id: employee.company_id,
+          date: today,
+          clock_in: clockInTime.toISOString(),
+          status: 'present',
+          clock_in_location: { work_type: workType, offline_queued: true }
+        });
+        toast.info('You are offline. Clock-in saved locally and will auto-sync once connected.');
+        return;
+      }
+
       const shiftStartStr = activeShift?.start_time || '09:00:00';
       const shiftEndStr = activeShift?.end_time || '18:00:00';
       
@@ -720,24 +821,59 @@ export default function Attendance() {
         else statusToSet = 'late';
       }
 
-      const { error } = await supabase
-        .from('attendance')
-        .insert([{
-          employee_id: employee.id,
-          company_id: employee.company_id,
-          date: shiftDateStr,
-          clock_in: clockInTime.toISOString(),
-          status: statusToSet as any,
-          clock_in_ip: clientIP,
-          clock_in_location: { 
+      // 1. Try server-side RPC first for authoritative timestamping
+      let rpcSucceeded = false;
+      try {
+        const { data: rpcRes, error: rpcErr } = await (supabase.rpc as any)('record_clock_in', {
+          p_employee_id: employee.id,
+          p_location: { 
             work_type: workType,
             ip_address: clientIP || 'unknown',
             ...(gpsCoords ? { gps: gpsCoords } : {})
           },
-          location_id: gpsCoords?.location_id || null
-        }]);
+          p_ip_address: clientIP,
+          p_device_info: { userAgent: navigator.userAgent }
+        });
+        if (!rpcErr && rpcRes && rpcRes.success) {
+          rpcSucceeded = true;
+          // If a custom status was calculated by client policies (late / absent / half_day) or location_id set, apply it
+          const updates: any = {};
+          if (statusToSet !== 'present') updates.status = statusToSet;
+          if (gpsCoords?.location_id) updates.location_id = gpsCoords.location_id;
+          if (Object.keys(updates).length > 0) {
+            await supabase.from('attendance').update(updates).eq('id', rpcRes.id);
+          }
+        } else if (rpcRes && !rpcRes.success) {
+          throw new Error(rpcRes.error || 'Server rejected clock-in');
+        }
+      } catch (err: any) {
+        if (err.message && (err.message.includes('Already clocked in') || err.message.includes('Forbidden') || err.message.includes('Late login is not allowed'))) {
+          throw err;
+        }
+        console.warn('RPC record_clock_in unavailable or errored, falling back to direct insert:', err);
+      }
 
-      if (error) throw error;
+      // 2. Resilient fallback to direct insert if RPC failed
+      if (!rpcSucceeded) {
+        const { error } = await supabase
+          .from('attendance')
+          .insert([{
+            employee_id: employee.id,
+            company_id: employee.company_id,
+            date: shiftDateStr,
+            clock_in: clockInTime.toISOString(),
+            status: statusToSet as any,
+            clock_in_ip: clientIP,
+            clock_in_location: { 
+              work_type: workType,
+              ip_address: clientIP || 'unknown',
+              ...(gpsCoords ? { gps: gpsCoords } : {})
+            },
+            location_id: gpsCoords?.location_id || null
+          }]);
+
+        if (error) throw error;
+      }
       if (isLate) toast.warning(`You clocked in late. Shift starts at ${shiftStartStr.substring(0, 5)}.`);
     },
     onSuccess: () => {
@@ -782,7 +918,20 @@ export default function Attendance() {
 
       // Calculate total working hours excluding finalized break minutes
       const totalHours = Math.max(0, (clockOutTime.getTime() - clockInTime.getTime()) / (1000 * 60 * 60) - (finalBreakMinutes / 60));
-      
+
+      if (!navigator.onLine) {
+        await queueAttendancePunch('clock_out', {
+          id: todayRecord.id,
+          clock_out: clockOutTime.toISOString(),
+          total_hours: parseFloat(totalHours.toFixed(2)),
+          break_minutes: finalBreakMinutes,
+          active_break_start: null,
+          status: todayRecord.status || 'present',
+        });
+        toast.info('You are offline. Clock-out saved locally and will auto-sync once connected.');
+        return;
+      }
+
       const shiftStartStr = activeShift?.start_time || '09:00:00';
       const shiftEndStr = activeShift?.end_time || '18:00:00';
       
@@ -923,30 +1072,66 @@ export default function Attendance() {
         }
       }
 
-      const { data, error } = await supabase
-        .from('attendance')
-        .update({
-          clock_out: clockOutTime.toISOString(),
-          total_hours: parseFloat(totalHours.toFixed(2)),
-          status: statusToSet as any,
-          break_minutes: finalBreakMinutes,
-          clock_in_location: clockInLoc,
-          clock_out_location: {
+      // 1. Try server-side RPC first for authoritative timestamping
+      let rpcSucceeded = false;
+      let rpcBreakMins = finalBreakMinutes;
+      try {
+        const { data: rpcRes, error: rpcErr } = await (supabase.rpc as any)('record_clock_out', {
+          p_attendance_id: todayRecord.id,
+          p_location: {
             work_type: workTypeUsed,
             ip_address: clientIP || 'unknown',
             ...(gpsCoords ? { gps: gpsCoords } : {})
-          },
-          location_id: gpsCoords?.location_id || todayRecord.location_id || null
-        })
-        .eq('id', todayRecord.id)
-        .select();
+          }
+        });
+        if (!rpcErr && rpcRes && rpcRes.success) {
+          rpcSucceeded = true;
+          rpcBreakMins = rpcRes.break_minutes ?? finalBreakMinutes;
+          // Apply custom status or location_id if needed
+          const updates: any = {};
+          if (statusToSet !== 'present') updates.status = statusToSet;
+          if (gpsCoords?.location_id || todayRecord.location_id) updates.location_id = gpsCoords?.location_id || todayRecord.location_id;
+          if (Object.keys(updates).length > 0) {
+            await supabase.from('attendance').update(updates).eq('id', todayRecord.id);
+          }
+        } else if (rpcRes && !rpcRes.success) {
+          throw new Error(rpcRes.error || 'Server rejected clock-out');
+        }
+      } catch (err: any) {
+        if (err.message && (err.message.includes('Already clocked out') || err.message.includes('Forbidden'))) {
+          throw err;
+        }
+        console.warn('RPC record_clock_out unavailable or errored, falling back to direct update:', err);
+      }
 
-      if (error) throw error;
-      if (!data || data.length === 0) {
-        throw new Error('Could not record clock out. Your session may not have permission to update attendance.');
+      // 2. Resilient fallback to direct update if RPC failed
+      if (!rpcSucceeded) {
+        const { data, error } = await supabase
+          .from('attendance')
+          .update({
+            clock_out: clockOutTime.toISOString(),
+            total_hours: parseFloat(totalHours.toFixed(2)),
+            status: statusToSet as any,
+            break_minutes: finalBreakMinutes,
+            active_break_start: null,
+            clock_in_location: clockInLoc,
+            clock_out_location: {
+              work_type: workTypeUsed,
+              ip_address: clientIP || 'unknown',
+              ...(gpsCoords ? { gps: gpsCoords } : {})
+            },
+            location_id: gpsCoords?.location_id || todayRecord.location_id || null
+          })
+          .eq('id', todayRecord.id)
+          .select();
+
+        if (error) throw error;
+        if (!data || data.length === 0) {
+          throw new Error('Could not record clock out. Your session may not have permission to update attendance.');
+        }
       }
       if (isEarlyLeave) toast.info(`Early leave recorded. Shift ends at ${shiftEndStr.substring(0, 5)}.`);
-      return { gpsFailed, wasOnBreak, finalBreakMinutes };
+      return { gpsFailed, wasOnBreak, finalBreakMinutes: rpcBreakMins };
     },
     onSuccess: (data) => {
       setGeoStatus(null);
@@ -975,16 +1160,36 @@ export default function Attendance() {
   const breakMutation = useMutation({
     mutationFn: async () => {
       if (!todayRecord?.id) throw new Error('No clock-in record found for today');
+
+      // 1. Try server-side RPC first
+      try {
+        const { data: rpcRes, error: rpcErr } = await (supabase.rpc as any)('toggle_attendance_break', {
+          p_attendance_id: todayRecord.id
+        });
+        if (!rpcErr && rpcRes && rpcRes.success) {
+          return { startedBreak: rpcRes.startedBreak, breakMinutes: rpcRes.breakMinutes };
+        } else if (rpcRes && !rpcRes.success) {
+          throw new Error(rpcRes.error || 'Server rejected break update');
+        }
+      } catch (err: any) {
+        if (err.message && (err.message.includes('Forbidden') || err.message.includes('not found'))) {
+          throw err;
+        }
+        console.warn('RPC toggle_attendance_break unavailable or errored, falling back to direct update:', err);
+      }
+
+      // 2. Resilient fallback to direct update
       const clockInLoc = (todayRecord.clock_in_location && typeof todayRecord.clock_in_location === 'object') 
         ? { ...todayRecord.clock_in_location } 
         : {};
       
-      const currentlyOnBreak = !!(clockInLoc as any).active_break_start;
+      const currentlyOnBreak = !!((todayRecord as any)?.active_break_start || (clockInLoc as any).active_break_start);
       const now = new Date();
       
       let updatedBreakMinutes = todayRecord.break_minutes || 0;
       if (currentlyOnBreak) {
-        const start = new Date((clockInLoc as any).active_break_start);
+        const startRaw = (todayRecord as any)?.active_break_start || (clockInLoc as any).active_break_start;
+        const start = new Date(startRaw);
         const diffMins = Math.max(1, Math.round((now.getTime() - start.getTime()) / (1000 * 60)));
         updatedBreakMinutes += diffMins;
         delete (clockInLoc as any).active_break_start;
@@ -996,6 +1201,7 @@ export default function Attendance() {
         .from('attendance')
         .update({
           break_minutes: updatedBreakMinutes,
+          active_break_start: currentlyOnBreak ? null : now.toISOString(),
           clock_in_location: clockInLoc,
         })
         .eq('id', todayRecord.id)
@@ -1020,12 +1226,14 @@ export default function Attendance() {
 
   const isClockedIn = !!todayRecord?.clock_in && !todayRecord?.clock_out;
   const isClockedOut = !!todayRecord?.clock_out;
-  const isOnBreak = !!(todayRecord?.clock_in_location && typeof todayRecord.clock_in_location === 'object' && (todayRecord.clock_in_location as any).active_break_start);
+  const rawActiveBreak = (todayRecord as any)?.active_break_start || 
+    (todayRecord?.clock_in_location && typeof todayRecord.clock_in_location === 'object' && (todayRecord.clock_in_location as any).active_break_start);
+  const isOnBreak = !!rawActiveBreak;
 
   // Calculate live active break elapsed duration
   let activeBreakElapsedSeconds = 0;
-  if (isOnBreak && (todayRecord?.clock_in_location as any)?.active_break_start) {
-    const start = new Date((todayRecord.clock_in_location as any).active_break_start);
+  if (isOnBreak && rawActiveBreak) {
+    const start = new Date(rawActiveBreak);
     activeBreakElapsedSeconds = Math.max(0, Math.floor((currentTime.getTime() - start.getTime()) / 1000));
   }
   const activeBreakMins = Math.floor(activeBreakElapsedSeconds / 60);
@@ -1064,6 +1272,37 @@ export default function Attendance() {
 
   return (
     <div className="space-y-6">
+      {(!isOnline || offlineQueueCount > 0) && (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200">
+          <div className="flex items-center gap-3">
+            {!isOnline ? (
+              <WifiOff className="h-5 w-5 text-amber-600 dark:text-amber-400 animate-pulse shrink-0" />
+            ) : (
+              <RefreshCw className={`h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 ${isSyncing ? 'animate-spin' : ''}`} />
+            )}
+            <div>
+              <p className="text-sm font-semibold">
+                {!isOnline ? 'Offline Workforce Mode Active' : 'Offline Attendance Punches Pending'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {offlineQueueCount} punch{offlineQueueCount === 1 ? '' : 'es'} saved locally. {!isOnline ? 'Punches will automatically sync once your internet connection is restored.' : 'Ready to synchronize queued punches with the server.'}
+              </p>
+            </div>
+          </div>
+          {isOnline && offlineQueueCount > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isSyncing}
+              onClick={handleManualSync}
+              className="border-amber-500/40 hover:bg-amber-500/10 text-xs shrink-0"
+            >
+              {isSyncing ? 'Syncing...' : 'Sync Now'}
+            </Button>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Attendance Tracking</h1>
@@ -1136,7 +1375,7 @@ export default function Attendance() {
               <div className="flex flex-col items-center justify-center gap-1">
                 <Badge variant="outline" className="border-warning text-warning bg-warning/10 gap-1.5 text-xs font-semibold px-3 py-1">
                   <span className="w-2 h-2 rounded-full bg-warning animate-ping"></span>
-                  On Break: {activeBreakDurationStr} (Started {new Date((todayRecord?.clock_in_location as any).active_break_start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})})
+                  On Break: {activeBreakDurationStr} (Started {rawActiveBreak ? new Date(rawActiveBreak).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '—'})
                 </Badge>
                 <span className="text-[11px] text-warning/80 font-medium">Work timer paused &bull; Clock Out will automatically conclude your break</span>
               </div>

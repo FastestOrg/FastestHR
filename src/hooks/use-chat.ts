@@ -106,17 +106,19 @@ export function useConversations() {
 
       if (apErr) throw apErr;
 
-      // Fetch last message for each conversation
+      // Batch fetch recent messages across all user's conversations (O(1) roundtrip)
       const lastMessages: Record<string, ChatMessage> = {};
-      for (const convId of conversationIds) {
-        const { data: msgs } = await supabase
-          .from('chat_messages')
-          .select('*, sender:sender_id(id, full_name, avatar_url)')
-          .eq('conversation_id', convId)
-          .order('created_at', { ascending: false })
-          .limit(1);
-        if (msgs?.[0]) {
-          lastMessages[convId] = msgs[0] as unknown as ChatMessage;
+      const { data: recentMsgs } = await supabase
+        .from('chat_messages')
+        .select('*, sender:sender_id(id, full_name, avatar_url)')
+        .in('conversation_id', conversationIds)
+        .order('created_at', { ascending: false });
+
+      if (recentMsgs) {
+        for (const msg of recentMsgs) {
+          if (!lastMessages[msg.conversation_id]) {
+            lastMessages[msg.conversation_id] = msg as unknown as ChatMessage;
+          }
         }
       }
 
@@ -158,18 +160,31 @@ export function useConversations() {
     refetchInterval: 30_000,
   });
 
-  // Subscribe to new messages to refresh the list
+  // Subscribe to updates scoped to current user's participant channel and company conversations
   useEffect(() => {
     if (!profile?.id) return;
 
     const channel = supabase
-      .channel('chat-conversations-live')
+      .channel(`chat-user-${profile.id}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
+          table: 'chat_participants',
+          filter: `user_id=eq.${profile.id}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
           table: 'chat_conversations',
+          filter: profile.company_id ? `company_id=eq.${profile.company_id}` : undefined,
         },
         () => {
           queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
@@ -180,7 +195,7 @@ export function useConversations() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [profile?.id, queryClient]);
+  }, [profile?.id, profile?.company_id, queryClient]);
 
   return query;
 }
@@ -289,6 +304,13 @@ export function useSendMessage() {
         .single();
 
       if (error) throw error;
+
+      // Touch chat_conversations updated_at so all members' conversation lists sort accurately
+      await supabase
+        .from('chat_conversations')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', conversationId);
+
       return data;
     },
     onSuccess: (data) => {

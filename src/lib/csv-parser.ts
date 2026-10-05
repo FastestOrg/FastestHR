@@ -59,3 +59,18 @@ export function parseCandidatesCSV(csvText: string): ParsedCandidates {
 export function generateSampleCSV(): string {
   return "Name, Email, Phone, Location, Experience, Education\nJohn Doe, john@example.com, +1234567890, New York, 5 years, B.Tech CS";
 }
+
+/**
+ * Sanitizes a cell for CSV export to prevent CSV formula injection (CWE-1236).
+ * Prepend a single quote if the value starts with =, +, -, @, \t, or \r.
+ */
+export function sanitizeCsvCell(value: any): string {
+  if (value === null || value === undefined) return '""';
+  const str = String(value);
+  const formulaChars = ['=', '+', '-', '@', '\t', '\r'];
+  const safeStr = formulaChars.some(char => str.startsWith(char))
+    ? `'${str}`
+    : str;
+  return `"${safeStr.replace(/"/g, '""')}"`;
+}
+

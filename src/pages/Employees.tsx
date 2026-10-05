@@ -31,7 +31,7 @@ const statusColor: Record<string, string> = {
 export default function Employees() {
   const navigate = useNavigate();
   const { profile } = useAuthStore();
-  const isAdmin = profile?.platform_role === 'company_admin' || profile?.platform_role === 'super_admin';
+  const isAdmin = profile?.platform_role === 'company_admin' || profile?.platform_role === 'super_admin' || profile?.platform_role === 'hr_manager';
   const { orgClient, isBYOS } = useOrgClient();
   const [search, setSearch] = useState('');
   const [employeeToDelete, setEmployeeToDelete] = useState<any | null>(null);

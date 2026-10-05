@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, CalendarDays, Loader2, Send, Clock, CheckCircle, XCircle, FileText, Upload, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { differenceInDays } from 'date-fns';
+import { useSecureUpload } from '@/hooks/use-secure-upload';
 
 interface LeaveType {
   id: string;
@@ -47,6 +48,7 @@ export default function ApplyLeave() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { profile } = useAuthStore();
+  const { validateFile } = useSecureUpload();
 
   const [form, setForm] = useState({
     leave_type_id: '',
@@ -267,6 +269,18 @@ export default function ApplyLeave() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const isValid = await validateFile(file, {
+      allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg'],
+      allowedMimeTypes: ['application/pdf', 'image/png', 'image/jpeg'],
+      maxSizeBytes: 10 * 1024 * 1024,
+      checkMagicBytes: true,
+    });
+
+    if (!isValid) {
+      e.target.value = '';
+      return;
+    }
+
     setUploadingDoc(true);
     try {
       const fileExt = file.name.split('.').pop();
@@ -350,6 +364,7 @@ export default function ApplyLeave() {
           reason: form.reason || null,
           document_url: form.document_url || null,
           status: 'pending' as const,
+          approval_tiers: tiersObj,
           rejection_reason: JSON.stringify(tiersObj)
         }])
         .select()

@@ -5,13 +5,25 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   Users, Plus, Loader2, Send, Star, Pencil,
   Share2, Sparkles, Bot, Zap, Layers, BrainCircuit,
-  Mail, Phone, UserCheck, UserPlus, FileSpreadsheet, ClipboardPaste, Linkedin, X
+  Mail, Phone, UserCheck, UserPlus, FileSpreadsheet, ClipboardPaste, Linkedin, X, GripVertical
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth-store';
 import { useState, useMemo, useEffect } from 'react';
+import {
+  DndContext,
+  DragOverlay,
+  useDraggable,
+  useDroppable,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragStartEvent,
+} from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
 import { AddCandidateDialog } from '@/components/recruitment/AddCandidateDialog';
 import { PasteLeadsDialog } from '@/components/recruitment/PasteLeadsDialog';
 import { CandidateActions } from '@/components/recruitment/CandidateActions';
@@ -47,6 +59,317 @@ const DEFAULT_STAGES = [
   'offer',
   'hired'
 ];
+
+interface KanbanColumnProps {
+  stage: { id: string; name: string; color: string };
+  stageCandidates: any[];
+  selectedCandidateIds: string[];
+  canManageJobs: boolean;
+  onSelectAll: (candidates: any[]) => void;
+  activeJob: string;
+  setStageAIConfig: (config: any) => void;
+  children: React.ReactNode;
+}
+
+function KanbanColumn({
+  stage,
+  stageCandidates,
+  selectedCandidateIds,
+  canManageJobs,
+  onSelectAll,
+  activeJob,
+  setStageAIConfig,
+  children,
+}: KanbanColumnProps) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: stage.id,
+    data: { stageId: stage.id },
+  });
+
+  const areAllStageSelected =
+    stageCandidates.length > 0 &&
+    stageCandidates.every((c) => selectedCandidateIds.includes(c.id));
+
+  return (
+    <div className="flex-shrink-0 w-80 space-y-4">
+      <div className="flex items-center justify-between px-3 bg-muted/40 p-2 rounded-xl border border-border/50 backdrop-blur-sm">
+        <div className="flex items-center gap-2">
+          {canManageJobs && stageCandidates.length > 0 && (
+            <Checkbox
+              checked={areAllStageSelected}
+              onCheckedChange={() => onSelectAll(stageCandidates)}
+              aria-label={`Select all in ${stage.name}`}
+              className="h-3.5 w-3.5 rounded"
+            />
+          )}
+          <div className={`h-2.5 w-2.5 rounded-full ${stage.color} shadow-[0_0_8px_rgba(0,0,0,0.2)]`} />
+          <h3 className="font-bold text-[11px] uppercase tracking-widest text-foreground/80">{stage.name}</h3>
+          <div className="bg-primary/10 text-primary text-[10px] font-black px-2 py-0.5 rounded-full border border-primary/10">
+            {stageCandidates.length}
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {stage.id === 'applied' && canManageJobs && (
+            <AddCandidateDialog jobId={activeJob} variant="icon" />
+          )}
+          {canManageJobs && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/5 transition-all rounded-lg"
+              onClick={() =>
+                setStageAIConfig({
+                  open: true,
+                  stageId: stage.id,
+                  stageName: stage.name,
+                })
+              }
+            >
+              <Bot className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div
+        ref={setNodeRef}
+        className={`space-y-3 min-h-[500px] p-2 rounded-2xl transition-all duration-200 border border-dashed ${
+          isOver
+            ? 'bg-primary/10 border-primary/60 ring-2 ring-primary/30 shadow-inner'
+            : 'bg-muted/20 border-border/30'
+        }`}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+interface KanbanCandidateCardProps {
+  candidate: any;
+  stageId: string;
+  canManageJobs: boolean;
+  isSelected: boolean;
+  onToggleSelect: (id: string) => void;
+  activeJob: string;
+  currentPipelineStages: string[];
+  onOpenScore: (candidate: any) => void;
+  onOpenAssign: (candidate: any) => void;
+}
+
+function KanbanCandidateCard({
+  candidate,
+  stageId,
+  canManageJobs,
+  isSelected,
+  onToggleSelect,
+  activeJob,
+  currentPipelineStages,
+  onOpenScore,
+  onOpenAssign,
+}: KanbanCandidateCardProps) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: candidate.id,
+    data: { candidate, stageId },
+    disabled: !canManageJobs,
+  });
+
+  const style = {
+    transform: CSS.Translate.toString(transform),
+    opacity: isDragging ? 0.35 : 1,
+    cursor: canManageJobs ? 'grab' : 'default',
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        whileHover={!isDragging ? { y: -2 } : {}}
+      >
+        <Card
+          className={`bg-background border-border/40 shadow-sm hover:border-primary/40 hover:shadow-md transition-all group relative rounded-xl overflow-hidden ${
+            isSelected ? 'ring-2 ring-primary border-primary bg-primary/[0.02]' : ''
+          }`}
+        >
+          <CardContent className="p-4">
+            <div className="flex justify-between items-start mb-3">
+              <div className="flex items-center gap-3 min-w-0">
+                {canManageJobs && (
+                  <div
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Checkbox
+                      checked={isSelected}
+                      onCheckedChange={() => onToggleSelect(candidate.id)}
+                      aria-label={`Select ${candidate.full_name}`}
+                      className="h-4 w-4 rounded flex-shrink-0"
+                    />
+                  </div>
+                )}
+                <Avatar className="h-10 w-10 border-2 border-primary/10 shadow-sm flex-shrink-0">
+                  <AvatarImage src={(candidate as any).avatar_url} />
+                  <AvatarFallback className="bg-primary/5 text-primary text-xs font-black uppercase">
+                    {candidate.full_name?.split(' ').map((n: string) => n[0]).join('')}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0">
+                  <p className="font-bold text-sm text-foreground leading-none mb-1 truncate">{candidate.full_name}</p>
+                  <div className="flex flex-col gap-0.5 mb-1">
+                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-medium">
+                      <Mail className="h-2.5 w-2.5 text-primary/60 flex-shrink-0" />
+                      <a
+                        href={`mailto:${candidate.email}`}
+                        className="truncate max-w-[130px] hover:text-primary transition-colors"
+                        onPointerDown={(e) => e.stopPropagation()}
+                      >
+                        {candidate.email}
+                      </a>
+                    </div>
+                    {candidate.phone && (
+                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-medium">
+                        <Phone className="h-2.5 w-2.5 text-primary/60 flex-shrink-0" />
+                        <a
+                          href={`tel:${candidate.phone}`}
+                          className="hover:text-primary transition-colors"
+                          onPointerDown={(e) => e.stopPropagation()}
+                        >
+                          {candidate.phone}
+                        </a>
+                      </div>
+                    )}
+                    {((candidate.parsed_data as any)?.linkedin || (candidate.parsed_data as any)?.linkedin_url) && (
+                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-medium">
+                        <Linkedin className="h-2.5 w-2.5 text-[#0A66C2] flex-shrink-0" />
+                        <a
+                          href={
+                            ((candidate.parsed_data as any).linkedin || (candidate.parsed_data as any).linkedin_url).startsWith('http')
+                              ? ((candidate.parsed_data as any).linkedin || (candidate.parsed_data as any).linkedin_url)
+                              : `https://${(candidate.parsed_data as any).linkedin || (candidate.parsed_data as any).linkedin_url}`
+                          }
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="truncate max-w-[130px] text-[#0A66C2] hover:underline"
+                          onPointerDown={(e) => e.stopPropagation()}
+                        >
+                          LinkedIn
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground flex items-center gap-1 font-medium">
+                    <Send className="h-2.5 w-2.5 flex-shrink-0" />
+                    {candidate.source || 'Direct'}
+                  </p>
+                </div>
+              </div>
+
+              <div
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <CandidateActions
+                  candidateId={candidate.id}
+                  jobId={activeJob}
+                  currentStage={candidate.stage}
+                  pipelineStages={currentPipelineStages}
+                  candidateName={candidate.full_name}
+                  score={candidate.score}
+                  onAssign={canManageJobs ? () => onOpenAssign(candidate) : undefined}
+                />
+              </div>
+            </div>
+
+            {/* Assigned To chip */}
+            {(candidate as any).assigned_profile ? (
+              canManageJobs ? (
+                <button
+                  type="button"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => onOpenAssign(candidate)}
+                  className="flex items-center gap-1.5 mb-3 bg-primary/5 hover:bg-primary/10 p-1 px-2 rounded-lg border border-primary/10 transition-colors group/assign"
+                  title="Click to reassign"
+                >
+                  <UserCheck className="h-3 w-3 text-primary" />
+                  <span className="text-[9px] font-bold text-primary/80 group-hover/assign:text-primary uppercase tracking-tight">
+                    {(candidate as any).assigned_profile.full_name}
+                  </span>
+                </button>
+              ) : (
+                <div className="flex items-center gap-1.5 mb-3 bg-primary/5 p-1 px-2 rounded-lg border border-primary/10">
+                  <UserCheck className="h-3 w-3 text-primary" />
+                  <span className="text-[9px] font-bold text-primary/80 uppercase tracking-tight">
+                    {(candidate as any).assigned_profile.full_name}
+                  </span>
+                </div>
+              )
+            ) : canManageJobs && (
+              <button
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                className="text-[9px] text-muted-foreground hover:text-primary flex items-center gap-1 mb-3 transition-colors uppercase font-bold tracking-tight"
+                onClick={() => onOpenAssign(candidate)}
+              >
+                <UserCheck className="h-3 w-3" />
+                Assign Recruiter
+              </button>
+            )}
+
+            {/* Referrer chip */}
+            {(candidate as any).referrer && (
+              <div className="flex items-center gap-1.5 mb-3 bg-emerald-500/5 p-1 px-2 rounded-lg border border-emerald-500/10">
+                <UserPlus className="h-3 w-3 text-emerald-500" />
+                <span className="text-[9px] font-bold text-emerald-500/80 uppercase tracking-tight">
+                  Added by {(candidate as any).referrer.full_name}
+                </span>
+              </div>
+            )}
+
+            <div
+              className="flex flex-wrap gap-1.5"
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              {candidate.score !== null ? (
+                <Badge
+                  variant="secondary"
+                  className="text-[9px] font-bold border-none bg-primary/10 text-primary cursor-pointer hover:bg-primary/20 transition-colors px-2 py-0.5"
+                  onClick={() => onOpenScore(candidate)}
+                >
+                  <Star className="h-3 w-3 mr-1 text-primary fill-primary" />
+                  {candidate.score}
+                </Badge>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-[9px] text-muted-foreground hover:text-primary gap-1 uppercase font-bold"
+                  onClick={() => onOpenScore(candidate)}
+                >
+                  <Plus className="h-3 w-3" />
+                  Score
+                </Button>
+              )}
+              {/* AI Analysis badges */}
+              {(candidate as any).ai_analysis && (
+                <Badge variant="secondary" className="text-[9px] font-bold border-none bg-indigo-500/10 text-indigo-500 gap-1 px-2 py-0.5">
+                  <Sparkles className="h-2.5 w-2.5" />
+                  AI Match
+                </Badge>
+              )}
+              {(candidate as any).ai_interview_result && (
+                <Badge variant="secondary" className="text-[9px] font-bold border-none bg-violet-500/10 text-violet-500 gap-1 px-2 py-0.5 shadow-sm">
+                  <Bot className="h-2.5 w-2.5" />
+                  AI IV: {(candidate as any).ai_interview_result.ai_score}
+                </Badge>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+    </div>
+  );
+}
 
 export function RecruitmentPipeline() {
   const navigate = useNavigate();
@@ -199,6 +522,56 @@ export function RecruitmentPipeline() {
     });
     return grouped;
   }, [candidates]);
+
+  const [activeDragCandidate, setActiveDragCandidate] = useState<any>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveDragCandidate(event.active.data.current?.candidate || null);
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveDragCandidate(null);
+    if (!over) return;
+
+    const candidateId = active.id as string;
+    const currentStage = active.data.current?.stageId;
+    const targetStage = (over.data.current?.stageId || over.id) as string;
+
+    if (!targetStage || targetStage === currentStage || !currentPipelineStages.includes(targetStage)) {
+      return;
+    }
+
+    const candidate = candidates.find((c: any) => c.id === candidateId);
+    const targetStageName = targetStage.charAt(0).toUpperCase() + targetStage.slice(1).replace(/_/g, ' ');
+
+    // Optimistically update candidate stage in React Query cache
+    queryClient.setQueryData(['candidates', activeJob], (old: any[] = []) =>
+      old.map((c) => (c.id === candidateId ? { ...c, stage: targetStage } : c))
+    );
+
+    try {
+      const { error } = await supabase
+        .from('candidates')
+        .update({ stage: targetStage })
+        .eq('id', candidateId);
+
+      if (error) throw error;
+      toast.success(`Moved ${candidate?.full_name || 'Candidate'} to ${targetStageName}`);
+      queryClient.invalidateQueries({ queryKey: ['candidates', activeJob] });
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update candidate stage');
+      queryClient.invalidateQueries({ queryKey: ['candidates', activeJob] });
+    }
+  };
 
   return (
     <>
@@ -397,256 +770,93 @@ export function RecruitmentPipeline() {
 
           {/* Pipeline Kanban */}
           <div className="lg:col-span-3">
-            <div className="flex gap-4 overflow-x-auto pb-6 scrollbar-hide">
-              {loadingCandidates ? (
-                [1, 2, 3].map(i => (
-                  <div key={i} className="flex-shrink-0 w-80 space-y-4">
-                    <Skeleton className="h-10 w-full rounded-xl" />
-                    <Skeleton className="h-64 w-full rounded-xl" />
-                  </div>
-                ))
-              ) : (
-                pipelineStages.map((stage: any) => {
-                  const stageCandidates = candidatesByStage[stage.id] || [];
-                  const areAllStageSelected = stageCandidates.length > 0 && stageCandidates.every((c) => selectedCandidateIds.includes(c.id));
-                  return (
-                    <div key={stage.id} className="flex-shrink-0 w-80 space-y-4">
-                      <div className="flex items-center justify-between px-3 bg-muted/40 p-2 rounded-xl border border-border/50 backdrop-blur-sm">
-                        <div className="flex items-center gap-2">
-                          {canManageJobs && stageCandidates.length > 0 && (
-                            <Checkbox
-                              checked={areAllStageSelected}
-                              onCheckedChange={() => handleSelectAll(stageCandidates)}
-                              aria-label={`Select all in ${stage.name}`}
-                              className="h-3.5 w-3.5 rounded"
-                            />
-                          )}
-                          <div className={`h-2.5 w-2.5 rounded-full ${stage.color} shadow-[0_0_8px_rgba(0,0,0,0.2)]`} />
-                          <h3 className="font-bold text-[11px] uppercase tracking-widest text-foreground/80">{stage.name}</h3>
-                          <div className="bg-primary/10 text-primary text-[10px] font-black px-2 py-0.5 rounded-full border border-primary/10">
-                            {stageCandidates.length}
+            <DndContext
+              sensors={sensors}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onDragCancel={() => setActiveDragCandidate(null)}
+            >
+              <div className="flex gap-4 overflow-x-auto pb-6 scrollbar-hide">
+                {loadingCandidates ? (
+                  [1, 2, 3].map(i => (
+                    <div key={i} className="flex-shrink-0 w-80 space-y-4">
+                      <Skeleton className="h-10 w-full rounded-xl" />
+                      <Skeleton className="h-64 w-full rounded-xl" />
+                    </div>
+                  ))
+                ) : (
+                  pipelineStages.map((stage: any) => {
+                    const stageCandidates = candidatesByStage[stage.id] || [];
+                    return (
+                      <KanbanColumn
+                        key={stage.id}
+                        stage={stage}
+                        stageCandidates={stageCandidates}
+                        selectedCandidateIds={selectedCandidateIds}
+                        canManageJobs={canManageJobs}
+                        onSelectAll={handleSelectAll}
+                        activeJob={activeJob!}
+                        setStageAIConfig={setStageAIConfig}
+                      >
+                        {stageCandidates.map((candidate: any) => (
+                          <KanbanCandidateCard
+                            key={candidate.id}
+                            candidate={candidate}
+                            stageId={stage.id}
+                            canManageJobs={canManageJobs}
+                            isSelected={selectedCandidateIds.includes(candidate.id)}
+                            onToggleSelect={toggleSelectCandidate}
+                            activeJob={activeJob!}
+                            currentPipelineStages={currentPipelineStages}
+                            onOpenScore={(cand) => {
+                              setSelectedCandidate(cand);
+                              setIsScoreDialogOpen(true);
+                            }}
+                            onOpenAssign={(cand) => {
+                              setAssignDialog({
+                                open: true,
+                                candidateId: cand.id,
+                                candidateName: cand.full_name,
+                                currentAssignee: cand.assigned_to,
+                                jobId: activeJob!,
+                              });
+                            }}
+                          />
+                        ))}
+                        {stageCandidates.length === 0 && (
+                          <div className="h-32 flex flex-col items-center justify-center text-muted-foreground/20 border-2 border-dashed border-muted-foreground/5 rounded-2xl">
+                            <Users className="h-6 w-6 mb-1" />
+                            <p className="text-[9px] font-bold uppercase tracking-widest">Empty</p>
+                          </div>
+                        )}
+                      </KanbanColumn>
+                    );
+                  })
+                )}
+              </div>
+
+              {activeDragCandidate && (
+                <DragOverlay>
+                  <div className="w-72 pointer-events-none opacity-95 shadow-2xl rotate-1 scale-105">
+                    <Card className="bg-background border-primary/50 shadow-2xl rounded-xl">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-9 w-9 border-2 border-primary/20">
+                            <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
+                              {activeDragCandidate.full_name?.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <p className="font-bold text-sm text-foreground truncate">{activeDragCandidate.full_name}</p>
+                            <p className="text-[10px] text-muted-foreground truncate">{activeDragCandidate.email}</p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          {stage.id === 'applied' && canManageJobs && (
-                            <AddCandidateDialog jobId={activeJob!} variant="icon" />
-                          )}
-                          {canManageJobs && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/5 transition-all rounded-lg"
-                              onClick={() => setStageAIConfig({ 
-                                open: true, 
-                                stageId: stage.id, 
-                                stageName: stage.name 
-                              })}
-                            >
-                              <Bot className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="space-y-3 min-h-[500px] p-2 rounded-2xl bg-muted/20 border border-dashed border-border/30">
-                        {stageCandidates
-                          .map((candidate: any) => {
-                            const isSelected = selectedCandidateIds.includes(candidate.id);
-                            return (
-                              <motion.div
-                                key={candidate.id}
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                whileHover={{ y: -2 }}
-                              >
-                                <Card className={`bg-background border-border/40 shadow-sm hover:border-primary/40 hover:shadow-md transition-all group relative rounded-xl overflow-hidden ${isSelected ? 'ring-2 ring-primary border-primary bg-primary/[0.02]' : ''}`}>
-                                  <CardContent className="p-4">
-                                    <div className="flex justify-between items-start mb-3">
-                                      <div className="flex items-center gap-3 min-w-0">
-                                        {canManageJobs && (
-                                          <Checkbox
-                                            checked={isSelected}
-                                            onCheckedChange={() => toggleSelectCandidate(candidate.id)}
-                                            aria-label={`Select ${candidate.full_name}`}
-                                            className="h-4 w-4 rounded flex-shrink-0"
-                                          />
-                                        )}
-                                        <Avatar className="h-10 w-10 border-2 border-primary/10 shadow-sm flex-shrink-0">
-                                          <AvatarImage src={(candidate as any).avatar_url} />
-                                          <AvatarFallback className="bg-primary/5 text-primary text-xs font-black uppercase">
-                                            {candidate.full_name?.split(' ').map((n: string) => n[0]).join('')}
-                                          </AvatarFallback>
-                                        </Avatar>
-                                        <div className="min-w-0">
-                                          <p className="font-bold text-sm text-foreground leading-none mb-1 truncate">{candidate.full_name}</p>
-                                          <div className="flex flex-col gap-0.5 mb-1">
-                                            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-medium">
-                                              <Mail className="h-2.5 w-2.5 text-primary/60 flex-shrink-0" />
-                                              <a href={`mailto:${candidate.email}`} className="truncate max-w-[130px] hover:text-primary transition-colors">
-                                                {candidate.email}
-                                              </a>
-                                            </div>
-                                            {candidate.phone && (
-                                              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-medium">
-                                                <Phone className="h-2.5 w-2.5 text-primary/60 flex-shrink-0" />
-                                                <a href={`tel:${candidate.phone}`} className="hover:text-primary transition-colors">
-                                                  {candidate.phone}
-                                                </a>
-                                              </div>
-                                            )}
-                                            {((candidate.parsed_data as any)?.linkedin || (candidate.parsed_data as any)?.linkedin_url) && (
-                                              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-medium">
-                                                <Linkedin className="h-2.5 w-2.5 text-[#0A66C2] flex-shrink-0" />
-                                                <a 
-                                                  href={
-                                                    ((candidate.parsed_data as any).linkedin || (candidate.parsed_data as any).linkedin_url).startsWith('http')
-                                                      ? ((candidate.parsed_data as any).linkedin || (candidate.parsed_data as any).linkedin_url)
-                                                      : `https://${(candidate.parsed_data as any).linkedin || (candidate.parsed_data as any).linkedin_url}`
-                                                  }
-                                                  target="_blank"
-                                                  rel="noopener noreferrer"
-                                                  className="truncate max-w-[130px] text-[#0A66C2] hover:underline"
-                                                >
-                                                  LinkedIn
-                                                </a>
-                                              </div>
-                                            )}
-                                          </div>
-                                          <p className="text-[10px] text-muted-foreground flex items-center gap-1 font-medium">
-                                            <Send className="h-2.5 w-2.5 flex-shrink-0" />
-                                            {candidate.source || 'Direct'}
-                                          </p>
-                                        </div>
-                                      </div>
-                                  <CandidateActions
-                                    candidateId={candidate.id}
-                                    jobId={activeJob}
-                                    currentStage={candidate.stage}
-                                    pipelineStages={currentPipelineStages}
-                                    candidateName={candidate.full_name}
-                                    score={candidate.score}
-                                    onAssign={canManageJobs ? () => setAssignDialog({
-                                      open: true,
-                                      candidateId: candidate.id,
-                                      candidateName: candidate.full_name,
-                                      currentAssignee: candidate.assigned_to,
-                                      jobId: activeJob,
-                                    }) : undefined}
-                                  />
-                                </div>
-
-                                {/* Assigned To chip */}
-                                {(candidate as any).assigned_profile ? (
-                                  canManageJobs ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => setAssignDialog({
-                                        open: true,
-                                        candidateId: candidate.id,
-                                        candidateName: candidate.full_name,
-                                        currentAssignee: candidate.assigned_to,
-                                        jobId: activeJob,
-                                      })}
-                                      className="flex items-center gap-1.5 mb-3 bg-primary/5 hover:bg-primary/10 p-1 px-2 rounded-lg border border-primary/10 transition-colors group/assign"
-                                      title="Click to reassign"
-                                    >
-                                      <UserCheck className="h-3 w-3 text-primary" />
-                                      <span className="text-[9px] font-bold text-primary/80 group-hover/assign:text-primary uppercase tracking-tight">
-                                        {(candidate as any).assigned_profile.full_name}
-                                      </span>
-                                    </button>
-                                  ) : (
-                                    <div className="flex items-center gap-1.5 mb-3 bg-primary/5 p-1 px-2 rounded-lg border border-primary/10">
-                                      <UserCheck className="h-3 w-3 text-primary" />
-                                      <span className="text-[9px] font-bold text-primary/80 uppercase tracking-tight">
-                                        {(candidate as any).assigned_profile.full_name}
-                                      </span>
-                                    </div>
-                                  )
-                                ) : canManageJobs && (
-                                  <button
-                                    className="text-[9px] text-muted-foreground hover:text-primary flex items-center gap-1 mb-3 transition-colors uppercase font-bold tracking-tight"
-                                    onClick={() => setAssignDialog({
-                                      open: true,
-                                      candidateId: candidate.id,
-                                      candidateName: candidate.full_name,
-                                      currentAssignee: null,
-                                      jobId: activeJob,
-                                    })}
-                                  >
-                                    <UserCheck className="h-3 w-3" />
-                                    Assign Recruiter
-                                  </button>
-                                )}
-
-                                {/* Referrer chip */}
-                                {(candidate as any).referrer && (
-                                  <div className="flex items-center gap-1.5 mb-3 bg-emerald-500/5 p-1 px-2 rounded-lg border border-emerald-500/10">
-                                    <UserPlus className="h-3 w-3 text-emerald-500" />
-                                    <span className="text-[9px] font-bold text-emerald-500/80 uppercase tracking-tight">
-                                      Added by {(candidate as any).referrer.full_name}
-                                    </span>
-                                  </div>
-                                )}
-
-                                <div className="flex flex-wrap gap-1.5">
-                                  {candidate.score !== null ? (
-                                    <Badge
-                                      variant="secondary"
-                                      className="text-[9px] font-bold border-none bg-primary/10 text-primary cursor-pointer hover:bg-primary/20 transition-colors px-2 py-0.5"
-                                      onClick={() => {
-                                        setSelectedCandidate(candidate);
-                                        setIsScoreDialogOpen(true);
-                                      }}
-                                    >
-                                      <Star className="h-3 w-3 mr-1 text-primary fill-primary" />
-                                      {candidate.score}
-                                    </Badge>
-                                  ) : (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-6 px-2 text-[9px] text-muted-foreground hover:text-primary gap-1 uppercase font-bold"
-                                      onClick={() => {
-                                        setSelectedCandidate(candidate);
-                                        setIsScoreDialogOpen(true);
-                                      }}
-                                    >
-                                      <Plus className="h-3 w-3" />
-                                      Score
-                                    </Button>
-                                  )}
-                                  {/* AI Analysis badges */}
-                                  {(candidate as any).ai_analysis && (
-                                    <Badge variant="secondary" className="text-[9px] font-bold border-none bg-indigo-500/10 text-indigo-500 gap-1 px-2 py-0.5">
-                                      <Sparkles className="h-2.5 w-2.5" />
-                                      AI Match
-                                    </Badge>
-                                  )}
-                                  {(candidate as any).ai_interview_result && (
-                                    <Badge variant="secondary" className="text-[9px] font-bold border-none bg-violet-500/10 text-violet-500 gap-1 px-2 py-0.5 shadow-sm">
-                                      <Bot className="h-2.5 w-2.5" />
-                                      AI IV: {(candidate as any).ai_interview_result.ai_score}
-                                    </Badge>
-                                  )}
-                                </div>
-                              </CardContent>
-                            </Card>
-                          </motion.div>
-                        );
-                      })}
-                      {(candidatesByStage[stage.id] || []).length === 0 && (
-                        <div className="h-32 flex flex-col items-center justify-center text-muted-foreground/20 border-2 border-dashed border-muted-foreground/5 rounded-2xl">
-                          <Users className="h-6 w-6 mb-1" />
-                          <p className="text-[9px] font-bold uppercase tracking-widest">Empty</p>
-                        </div>
-                      )}
-                    </div>
+                      </CardContent>
+                    </Card>
                   </div>
-                );
-              })
-            )}
-            </div>
+                </DragOverlay>
+              )}
+            </DndContext>
           </div>
         </div>
       )}

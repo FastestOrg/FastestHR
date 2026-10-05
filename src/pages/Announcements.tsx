@@ -28,7 +28,7 @@ const emptyForm: AnnouncementForm = { title: '', content: '', target_audience: '
 export default function Announcements() {
   const { profile } = useAuthStore();
   const queryClient = useQueryClient();
-  const isAdmin = profile?.platform_role === 'company_admin' || profile?.platform_role === 'super_admin';
+  const isAdmin = profile?.platform_role === 'company_admin' || profile?.platform_role === 'super_admin' || profile?.platform_role === 'hr_manager';
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);

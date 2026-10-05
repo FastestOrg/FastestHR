@@ -468,7 +468,7 @@ export default function OfferView() {
                 />
               </div>
               
-              {generatedOtpMock && (
+              {import.meta.env.DEV && generatedOtpMock && (
                 <div className="p-3 bg-muted/40 rounded-lg border border-dashed border-border/50 text-[10px] text-muted-foreground text-center">
                   <span><strong>Developer Debug Mode:</strong> OTP sent is: <span className="font-mono text-primary font-bold text-xs select-all bg-background px-1.5 py-0.5 rounded border border-border/30">{generatedOtpMock}</span></span>
                 </div>

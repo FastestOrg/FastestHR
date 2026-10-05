@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { authenticateCaller } from "../_shared/auth.ts";
 
 const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID");
 const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET");
@@ -50,6 +51,22 @@ Deno.serve(async (req) => {
         return new Response(
           JSON.stringify({ success: false, error: 'Missing code or user_id' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Enforce caller authorization: caller can only exchange code for their own user account
+      try {
+        const caller = await authenticateCaller(req);
+        if (caller.user.id !== user_id && caller.profile.platform_role !== 'super_admin') {
+          return new Response(
+            JSON.stringify({ success: false, error: 'Forbidden: You cannot connect calendar for another user' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      } catch (authErr: any) {
+        return new Response(
+          JSON.stringify({ success: false, error: authErr.message || 'Unauthorized: Authentication required to connect calendar' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
@@ -138,8 +155,25 @@ Deno.serve(async (req) => {
     if (action === 'get_valid_token') {
       const { user_id, company_slug, booking_slug } = body;
 
+      // Enforce caller authorization: token retrieval is strictly restricted to authenticated users
+      let caller: any;
+      try {
+        caller = await authenticateCaller(req);
+      } catch (authErr: any) {
+        return new Response(
+          JSON.stringify({ success: false, error: authErr.message || 'Unauthorized: Token retrieval requires authentication' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       let query = supabaseClient.from('user_meeting_settings').select('*');
       if (user_id) {
+        if (caller.user.id !== user_id && caller.profile.platform_role !== 'super_admin') {
+          return new Response(
+            JSON.stringify({ success: false, error: 'Forbidden: Unauthorized to retrieve another user token' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
         query = query.eq('user_id', user_id);
       } else if (company_slug && booking_slug) {
         // Lookup by company_slug and booking_slug
@@ -155,6 +189,14 @@ Deno.serve(async (req) => {
             { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
+
+        if (caller.profile.company_id !== comp.id && caller.profile.platform_role !== 'super_admin') {
+          return new Response(
+            JSON.stringify({ success: false, error: 'Forbidden: Unauthorized for this company' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
         query = query.eq('company_id', comp.id).ilike('booking_slug', booking_slug);
       } else {
         return new Response(

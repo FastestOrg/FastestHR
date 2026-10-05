@@ -6,10 +6,10 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const VERCEL_TOKEN = Deno.env.get("VERCEL_API_TOKEN")!;
-const VERCEL_TEAM_ID = "team_xfZlqEvDqHPUyAK28HchmSxA";
-const VERCEL_PROJECT_ID = "prj_31kRA3C1gScvpNcNWGwfkW4vBIhJ";
-const BASE_DOMAIN = "fastesthr.com";
+const VERCEL_TOKEN = Deno.env.get("VERCEL_API_TOKEN") || Deno.env.get("VERCEL_TOKEN") || "";
+const VERCEL_TEAM_ID = Deno.env.get("VERCEL_TEAM_ID") || "team_xfZlqEvDqHPUyAK28HchmSxA";
+const VERCEL_PROJECT_ID = Deno.env.get("VERCEL_PROJECT_ID") || "prj_31kRA3C1gScvpNcNWGwfkW4vBIhJ";
+const BASE_DOMAIN = Deno.env.get("BASE_DOMAIN") || "fastesthr.com";
 
 async function vercelFetch(path: string, options: RequestInit = {}) {
   const url = `https://api.vercel.com${path}${path.includes("?") ? "&" : "?"}teamId=${VERCEL_TEAM_ID}`;

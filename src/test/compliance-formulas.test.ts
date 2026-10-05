@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calculateIndiaTaxes, calculateUSTaxes, calculatePayrollTaxAndNet } from "../utils/compliance-formulas";
+import { calculateIndiaTaxes, calculateUSTaxes, calculatePayrollTaxAndNet, getComplianceSlabs } from "../utils/compliance-formulas";
 
 describe("Compliance Formulas - Statutory Tax & Payroll Calculations", () => {
   describe("India Income Tax (IND) - New Tax Regime & 87A Rebate", () => {
@@ -168,6 +168,53 @@ describe("Compliance Formulas - Statutory Tax & Payroll Calculations", () => {
 
       expect(indRes.details.regime).toBeDefined();
       expect(usRes.details.additionalMedicareAnnual).toBeDefined();
+    });
+  });
+
+  describe("Versioned Statutory Compliance Slabs (Historical vs Modern)", () => {
+    it("should return correct statutory slabs for India across different fiscal years", () => {
+      const slabs23 = getComplianceSlabs("IND", "FY2023_2024", "new");
+      const slabs25 = getComplianceSlabs("IND", "FY2025_2026", "new");
+
+      // In FY23-24 New Regime standard deduction was ₹50,000
+      expect(slabs23.standardDeduction).toBe(50000);
+      // In FY24-25 & FY25-26 Budget revision increased it to ₹75,000
+      expect(slabs25.standardDeduction).toBe(75000);
+    });
+
+    it("should return correct statutory slabs for USA across different fiscal years", () => {
+      const slabs23 = getComplianceSlabs("USA", "FY2023_2024");
+      const slabs25 = getComplianceSlabs("USA", "FY2025_2026");
+
+      expect(slabs23.standardDeduction).toBe(13850);
+      expect(slabs23.socialSecurityWageCap).toBe(160200);
+
+      expect(slabs25.standardDeduction).toBe(15000);
+      expect(slabs25.socialSecurityWageCap).toBe(168600);
+    });
+
+    it("should accurately recalculate historical India payroll runs with FY2023_2024 rules", () => {
+      // Monthly gross: ₹60,000 => Annual: ₹7,20,000
+      // In FY23-24 (Standard Deduction ₹50,000), taxable income is ₹6,70,000 (<= 7L)
+      // Both get rebate, but taxable income reflects the historical standard deduction
+      const histRes = calculateIndiaTaxes(60000, { regime: "new", fiscal_year: "FY2023_2024" });
+      const currRes = calculateIndiaTaxes(60000, { regime: "new", fiscal_year: "FY2025_2026" });
+
+      expect(histRes.taxableIncome).toBe(670000); // 720k - 50k
+      expect(currRes.taxableIncome).toBe(645000); // 720k - 75k
+    });
+
+    it("should accurately recalculate historical US payroll runs with FY2023_2024 rules", () => {
+      // Annual Gross: $200,000 ($16,666.67/mo)
+      // FY23-24 cap: $160,200 => SS annual = $160,200 * 6.2% = $9,932.40 => monthly = $827.70
+      // FY25-26 cap: $168,600 => SS annual = $168,600 * 6.2% = $10,453.20 => monthly = $871.10
+      const histRes = calculateUSTaxes(200000 / 12, { fiscal_year: "FY2023_2024" });
+      const currRes = calculateUSTaxes(200000 / 12, { fiscal_year: "FY2025_2026" });
+
+      expect(histRes.details.socialSecurityMonthly).toBeCloseTo(9932.4 / 12, 1);
+      expect(currRes.details.socialSecurityMonthly).toBeCloseTo(10453.2 / 12, 1);
+      expect(histRes.details.standardDeduction).toBe(13850);
+      expect(currRes.details.standardDeduction).toBe(15000);
     });
   });
 });

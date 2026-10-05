@@ -1,20 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-
-const allowedOrigins = [
-  'https://fastesthr.com',
-  'http://localhost:8080',
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'http://localhost:3000'
-];
-
-const getCorsHeaders = (req: Request) => {
-  const origin = req.headers.get('Origin');
-  return {
-    'Access-Control-Allow-Origin': origin || allowedOrigins[0],
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  };
-};
+import { requireCompanyStaff, authenticateCaller, getCorsHeaders } from "../_shared/auth.ts";
 
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -24,27 +8,17 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
-
-    // Verify Authorization Header
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      throw new Error('Missing Authorization header');
-    }
-    const token = authHeader.replace('Bearer ', '');
-    const { data: userData, error: authError } = await supabaseClient.auth.getUser(token);
-
-    if (authError || !userData.user) {
-      throw new Error('Unauthorized');
-    }
-
     const { query, history = [], companyId } = await req.json();
 
     if (!query || !companyId) {
       throw new Error('Missing query or companyId');
+    }
+
+    // 0. Authenticate caller and verify tenant boundary (Prevent BOLA/IDOR)
+    const { user, profile, adminClient: supabaseClient } = await authenticateCaller(req);
+
+    if (profile.platform_role !== 'super_admin' && profile.company_id !== companyId) {
+      throw new Error('Forbidden: You are not authorized to query AI assistant for this company');
     }
 
     // 1. Fetch Company Information including AI Memory, Culture, etc.
@@ -62,7 +36,7 @@ Deno.serve(async (req) => {
     const { data: employee } = await supabaseClient
       .from('employees')
       .select('first_name, last_name, work_email, employment_type')
-      .eq('user_id', userData.user.id)
+      .eq('user_id', user.id)
       .maybeSingle();
 
     const employeeContext = employee 
