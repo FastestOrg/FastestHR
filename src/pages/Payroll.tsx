@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Download, DollarSign, FileText, Activity, Plus, Percent, Save, AlertTriangle, CheckCircle2, ShieldCheck, Clock, ExternalLink, XCircle, Search, ChevronDown, ChevronUp, Mail, Loader2 } from 'lucide-react';
+import { Download, DollarSign, FileText, Activity, Plus, Percent, Save, AlertTriangle, CheckCircle2, ShieldCheck, Clock, ExternalLink, XCircle, Search, ChevronDown, ChevronUp, Mail, Loader2, Building2, Sparkles, Zap, ArrowRight } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth-store';
@@ -16,6 +16,10 @@ import { calculatePayrollTaxAndNet } from '@/utils/compliance-formulas';
 import { generateAndDownloadPayslipPDF } from '@/lib/pdf-generator';
 import { isDrivePath, extractDriveFileId } from '@/lib/storage-provider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { BankDisbursementDialog } from '@/components/payroll/BankDisbursementDialog';
+import { PrePayrollAnomalyRadar } from '@/components/payroll/PrePayrollAnomalyRadar';
+import { TakeHomeMaximizer } from '@/components/payroll/TakeHomeMaximizer';
+import { EarnedWageAccessDialog } from '@/components/payroll/EarnedWageAccessDialog';
 
 
 const DEFAULT_COMPENSATION: CompensationStructure = {
@@ -108,6 +112,8 @@ export default function Payroll() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
+  const [bankDialogOpen, setBankDialogOpen] = useState(false);
+  const [bankExportPayslips, setBankExportPayslips] = useState<any[]>([]);
 
   // Manual Payslip states
   const [manualDialogOpen, setManualDialogOpen] = useState(false);
@@ -334,9 +340,11 @@ export default function Payroll() {
 
 
   // Phase 4: Tax Audit panel states
-  const [activeTab, setActiveTab] = useState<'payroll' | 'tax-audit'>('payroll');
+  const [activeTab, setActiveTab] = useState<'payroll' | 'tax-audit' | 'take-home'>('payroll');
   const [auditSearch, setAuditSearch] = useState('');
   const [auditFilter, setAuditFilter] = useState<'all' | 'pending' | 'verified' | 'rejected'>('all');
+  const [prePayrollRadarOpen, setPrePayrollRadarOpen] = useState<boolean>(false);
+  const [ewaDialogOpen, setEwaDialogOpen] = useState<boolean>(false);
 
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
   const [bulkEmailing, setBulkEmailing] = useState<boolean>(false);
@@ -735,6 +743,24 @@ export default function Payroll() {
         </div>
         {isAdmin && activeTab === 'payroll' && (
           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            {/* Pre-Payroll Anomaly Radar Trigger */}
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto gap-2 border-primary/50 text-primary hover:bg-primary/10 h-9 px-3"
+              onClick={() => {
+                if (!periodStart || !periodEnd) {
+                  const now = new Date();
+                  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+                  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+                  setPeriodStart(firstDay);
+                  setPeriodEnd(lastDay);
+                }
+                setPrePayrollRadarOpen(true);
+              }}
+            >
+              <Sparkles className="h-4 w-4 text-primary animate-pulse" /> Pre-Payroll Radar
+            </Button>
+
             {/* Run Payroll Cycle Dialog */}
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
@@ -990,10 +1016,26 @@ export default function Payroll() {
           >
             Statutory & Tax Audit
           </button>
+          <button
+            onClick={() => setActiveTab('take-home')}
+            className={`px-4 py-2 text-xs font-semibold uppercase tracking-wider rounded-lg transition-all flex items-center gap-1.5 ${
+              activeTab === 'take-home' 
+                ? 'bg-primary text-primary-foreground shadow-sm' 
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Sparkles className="h-3.5 w-3.5" /> Take-Home Maximizer
+          </button>
         </div>
       )}
 
-      {isAdmin && activeTab === 'tax-audit' ? (
+      {isAdmin && activeTab === 'take-home' ? (
+        <TakeHomeMaximizer
+          initialSalary={75000}
+          jurisdiction={companyProfile?.currency === 'INR' ? 'IND' : 'USA'}
+          currencySymbol={currencySymbol}
+        />
+      ) : isAdmin && activeTab === 'tax-audit' ? (
         <Card className="border border-border/40 shadow-sm overflow-hidden animate-in fade-in duration-300">
           <CardHeader className="bg-muted/10 pb-4 border-b border-border/10">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -1250,28 +1292,43 @@ export default function Payroll() {
                                     <FileText className="w-3.5 h-3.5 text-primary" /> Employees Included in Run
                                   </h4>
                                   {runPayslips.length > 0 && (
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      disabled={bulkEmailing || emailPayslipMutation.isPending}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleBulkEmail(run.id);
-                                      }}
-                                      className="h-8 text-xs font-semibold gap-1.5 border-primary/40 text-primary hover:bg-primary/10"
-                                    >
-                                      {bulkEmailing ? (
-                                        <>
-                                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                          <span className="animate-pulse">{bulkEmailStatus || 'Emailing...'}</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Mail className="h-3.5 w-3.5" />
-                                          <span>Email All Payslips</span>
-                                        </>
-                                      )}
-                                    </Button>
+                                    <div className="flex items-center gap-2">
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setBankExportPayslips(runPayslips);
+                                          setBankDialogOpen(true);
+                                        }}
+                                        className="h-8 text-xs font-semibold gap-1.5 border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10"
+                                      >
+                                        <Building2 className="h-3.5 w-3.5" />
+                                        <span>Export Bank File</span>
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={bulkEmailing || emailPayslipMutation.isPending}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleBulkEmail(run.id);
+                                        }}
+                                        className="h-8 text-xs font-semibold gap-1.5 border-primary/40 text-primary hover:bg-primary/10"
+                                      >
+                                        {bulkEmailing ? (
+                                          <>
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                            <span className="animate-pulse">{bulkEmailStatus || 'Emailing...'}</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Mail className="h-3.5 w-3.5" />
+                                            <span>Email All Payslips</span>
+                                          </>
+                                        )}
+                                      </Button>
+                                    </div>
                                   )}
                                 </div>
 
@@ -1394,6 +1451,35 @@ export default function Payroll() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Employee Instant Earned Wage Access Banner */}
+            {!isAdmin && (
+              <Card className="border border-amber-500/30 bg-amber-500/5 overflow-hidden col-span-full">
+                <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0">
+                      <Zap className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
+                        Instant Earned Wage Access (On-Demand Pay)
+                        <Badge variant="outline" className="border-amber-500/40 text-amber-600 bg-amber-500/5 text-[9px]">
+                          0% Interest
+                        </Badge>
+                      </h4>
+                      <p className="text-xs text-muted-foreground">Access up to 50% of your accrued earnings before payday with zero credit impact.</p>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs h-8 px-3 shrink-0"
+                    onClick={() => setEwaDialogOpen(true)}
+                  >
+                    Request Advance <ArrowRight className="h-3.5 w-3.5 ml-1" />
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
 
             <Card className="overflow-hidden">
               <CardHeader>
@@ -1578,6 +1664,37 @@ export default function Payroll() {
           )}
         </>
       )}
+
+      {/* Bank Disbursement Export Dialog */}
+      <BankDisbursementDialog
+        open={bankDialogOpen}
+        onOpenChange={setBankDialogOpen}
+        companyName={companyProfile?.name}
+        currency={companyProfile?.currency}
+        payslips={bankExportPayslips}
+      />
+
+      {/* FastestAI Pre-Payroll Anomaly Radar Dialog */}
+      <PrePayrollAnomalyRadar
+        companyId={companyIdToUse || ''}
+        periodStart={periodStart}
+        periodEnd={periodEnd}
+        currencySymbol={currencySymbol}
+        isOpen={prePayrollRadarOpen}
+        onOpenChange={setPrePayrollRadarOpen}
+        onProceedToRun={() => {
+          setDialogOpen(true);
+        }}
+      />
+
+      {/* Instant Earned Wage Access Dialog */}
+      <EarnedWageAccessDialog
+        isOpen={ewaDialogOpen}
+        onOpenChange={setEwaDialogOpen}
+        employeeName={`${employee?.first_name || ''} ${employee?.last_name || ''}`.trim() || 'Employee'}
+        monthlySalary={salaryStructure?.gross_salary ? Math.round(Number(salaryStructure.gross_salary) / 12) : 50000}
+        currencySymbol={currencySymbol}
+      />
     </div>
   );
 }

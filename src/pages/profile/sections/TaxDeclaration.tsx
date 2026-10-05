@@ -10,6 +10,7 @@ import { Landmark, ArrowRight, ShieldCheck, DollarSign, Receipt, Info, Sparkles,
 import { toast } from 'sonner';
 import { calculatePayrollTaxAndNet } from '@/utils/compliance-formulas';
 import { isSafeUrl } from '@/lib/utils';
+import { TakeHomeMaximizer } from '@/components/payroll/TakeHomeMaximizer';
 
 interface TaxDeclarationProps {
   employee: any;
@@ -353,8 +354,25 @@ export default function TaxDeclaration({ employee, refetch }: TaxDeclarationProp
             </div>
 
           </div>
+
+          {/* Interactive Take-Home Maximizer & Flexi-Benefits Simulator */}
+          <div className="mt-8 pt-6 border-t border-border/60">
+            <TakeHomeMaximizer
+              initialSalary={baseSalary}
+              jurisdiction={jurisdiction === 'IND' ? 'IND' : 'USA'}
+              currencySymbol={currencySymbol}
+              onApplyDeclaration={(decl) => {
+                if (decl.regime) setRegime(decl.regime);
+                if (decl.section_80c !== undefined) setSection80c(String(decl.section_80c));
+                if (decl.section_80d !== undefined) setSection80d(String(decl.section_80d));
+                if (decl.pre_tax_deductions !== undefined) setPreTaxDeductions(String(decl.pre_tax_deductions));
+                toast.success('Optimized regime and deductions loaded into declaration form. Click "Save Declaration" to submit.');
+              }}
+            />
+          </div>
         </div>
       )}
     </ProfileSectionCard>
   );
 }
+

@@ -8,13 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { UserMinus, ClipboardCheck, DollarSign, MessageSquare, Package, Plus, AlertTriangle, Loader2, Trash2 } from 'lucide-react';
+import { UserMinus, ClipboardCheck, DollarSign, MessageSquare, Package, Plus, AlertTriangle, Loader2, Trash2, ShieldAlert } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth-store';
 import { useState, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import { DeleteEmployeeDialog } from '@/components/employees/DeleteEmployeeDialog';
+import { ITKillswitchDialog } from '@/components/exit/ITKillswitchDialog';
 
 const assetChecklist = [
   'Laptop / Desktop',
@@ -74,6 +75,7 @@ export default function ExitManagement() {
   const [form, setForm] = useState({ employee_id: '', resignation_date: '', last_working_day: '', reason: '' });
   const [selectedExit, setSelectedExit] = useState<string | null>(null);
   const [employeeToDelete, setEmployeeToDelete] = useState<any | null>(null);
+  const [killswitchEmployee, setKillswitchEmployee] = useState<any | null>(null);
   const [interviewAnswers, setInterviewAnswers] = useState<string[]>(['', '', '', '']);
 
   // Fetch Exits
@@ -658,14 +660,25 @@ export default function ExitManagement() {
                        <Button size="sm" variant="outline" className="h-7 text-xs border-success/50 text-success hover:bg-success hover:text-success-foreground" onClick={() => updateMutation.mutate({id: selectedRecord.id, updates: {status: 'in_progress'}})}>Mark In Progress</Button>
                     )}
                     {isAdmin && selectedRecord.employees && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors"
-                        onClick={() => setEmployeeToDelete(selectedRecord.employees)}
-                      >
-                        <Trash2 className="h-3 w-3 mr-1" /> Delete Employee
-                      </Button>
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs border-rose-500/40 text-rose-500 hover:bg-rose-500 hover:text-white transition-colors gap-1 shadow-sm"
+                          onClick={() => setKillswitchEmployee(selectedRecord.employees)}
+                          title="Execute Instant IT Deprovisioning & Killswitch"
+                        >
+                          <ShieldAlert className="h-3 w-3" /> IT Killswitch
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors"
+                          onClick={() => setEmployeeToDelete(selectedRecord.employees)}
+                        >
+                          <Trash2 className="h-3 w-3 mr-1" /> Delete Employee
+                        </Button>
+                      </>
                     )}
                   </div>
                 </CardTitle>
@@ -1053,6 +1066,20 @@ export default function ExitManagement() {
           queryClient.invalidateQueries({ queryKey: ['exits'] });
           queryClient.invalidateQueries({ queryKey: ['activeEmployees'] });
           queryClient.invalidateQueries({ queryKey: ['employees'] });
+        }}
+      />
+
+      {/* IT Deprovisioning & Killswitch Dialog */}
+      <ITKillswitchDialog
+        open={!!killswitchEmployee}
+        onOpenChange={(open) => {
+          if (!open) setKillswitchEmployee(null);
+        }}
+        employee={killswitchEmployee}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['exits'] });
+          queryClient.invalidateQueries({ queryKey: ['employees'] });
+          queryClient.invalidateQueries({ queryKey: ['activeEmployees'] });
         }}
       />
     </div>
