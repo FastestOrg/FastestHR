@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   ArrowLeft, Save, Pencil, X, Loader2,
   Mail, Phone, Building2, Briefcase, CalendarDays,
-  Clock, UserCheck, AlertTriangle, Trash2, KeyRound, MapPin, ShieldCheck
+  Clock, UserCheck, AlertTriangle, Trash2, KeyRound, MapPin, ShieldCheck, Plus
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -40,7 +40,7 @@ const EMPLOYMENT_TYPES = ['full_time', 'part_time', 'contract', 'intern'] as con
 const STATUS_OPTIONS = ['active', 'probation', 'on_leave', 'resigned', 'terminated', 'absconded'] as const;
 const GENDERS = ['male', 'female', 'other', 'prefer_not_to_say'] as const;
 
-type Tab = 'profile' | 'login_logs';
+type Tab = 'profile' | 'attendance' | 'leaves' | 'payroll' | 'shifts' | 'login_logs';
 
 interface EmployeeRecord {
   id: string;
@@ -481,6 +481,15 @@ export default function EmployeeDetail() {
 
   const initials = `${employee.first_name?.[0] || ''}${employee.last_name?.[0] || ''}`.toUpperCase();
 
+  const tabs: { id: Tab; label: string; icon?: React.ComponentType<{ className?: string }> }[] = [
+    { id: 'profile', label: 'Profile' },
+    { id: 'attendance', label: 'Attendance' },
+    { id: 'leaves', label: 'Leave History' },
+    { id: 'shifts', label: 'Shift Allocation' },
+    { id: 'payroll', label: 'Payroll' },
+    { id: 'login_logs', label: 'Login History', icon: ShieldCheck },
+  ];
+
   return (
     <div className="space-y-8 max-w-5xl mx-auto animate-in fade-in duration-500 pb-20">
       {/* Header */}
@@ -564,40 +573,8 @@ export default function EmployeeDetail() {
         </div>
       )}
 
-      {/* Module Navigation Tabs */}
-      <div className="flex border-b border-border/40 gap-2">
-        <Button
-          variant={activeTab === 'profile' ? 'default' : 'ghost'}
-          size="sm"
-          onClick={() => setActiveTab('profile')}
-          className="rounded-b-none text-xs h-9"
-        >
-          Profile Details
-        </Button>
-        <Button
-          variant={activeTab === 'login_logs' ? 'default' : 'ghost'}
-          size="sm"
-          onClick={() => setActiveTab('login_logs')}
-          className="rounded-b-none gap-2 text-xs h-9"
-        >
-          <ShieldCheck className="w-3.5 h-3.5 text-primary" /> Login History
-        </Button>
-      </div>
-
-      {activeTab === 'login_logs' ? (
-        <Card className="p-6 border-border/60 bg-card/60 backdrop-blur-sm shadow-sm">
-          <HierarchyLoginLogsTable
-            employeeId={employee.id}
-            employeeName={`${employee.first_name} ${employee.last_name}`}
-            title="Employee Login Audit Trail"
-            description="Historical login attempts, devices, and IP addresses recorded for this employee as per hierarchy permissions."
-            showSubordinateSelect={false}
-          />
-        </Card>
-      ) : (
-        <>
-          {/* Profile Card */}
-          <Card className="overflow-hidden border-border/40 shadow-sm transition-all hover:shadow-md">
+      {/* Profile Card */}
+      <Card className="overflow-hidden border-border/40 shadow-sm transition-all hover:shadow-md">
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row gap-6 items-start">
             <Avatar className="h-20 w-20 border-2 border-border/50">
@@ -641,20 +618,24 @@ export default function EmployeeDetail() {
       </Card>
 
       {/* Tabs */}
-      <div className="flex gap-0 border-b border-border/50">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2 text-xs font-medium uppercase tracking-wider transition-colors border-b-2 ${
-              activeTab === tab.id
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border/50'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="flex gap-2 border-b border-border/50 overflow-x-auto">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium uppercase tracking-wider transition-colors border-b-2 whitespace-nowrap ${
+                activeTab === tab.id
+                  ? 'border-primary text-primary font-semibold'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border/50'
+              }`}
+            >
+              {Icon && <Icon className="w-3.5 h-3.5" />}
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Profile tab */}
@@ -1002,6 +983,19 @@ export default function EmployeeDetail() {
         </Card>
       )}
 
+      {/* Login History tab */}
+      {activeTab === 'login_logs' && (
+        <Card className="p-6 border-border/60 bg-card/60 backdrop-blur-sm shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <HierarchyLoginLogsTable
+            employeeId={employee.id}
+            employeeName={`${employee.first_name} ${employee.last_name}`}
+            title="Employee Login Audit Trail"
+            description="Historical login attempts, devices, and IP addresses recorded for this employee as per hierarchy permissions."
+            showSubordinateSelect={false}
+          />
+        </Card>
+      )}
+
       {/* Danger Zone */}
       <Card className="border-destructive/30 bg-destructive/5 backdrop-blur-sm shadow-none animate-in fade-in duration-500">
         <CardHeader className="pb-2">
@@ -1073,8 +1067,6 @@ export default function EmployeeDetail() {
           </CardContent>
         )}
       </Card>
-      </>
-    )}
 
       <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
