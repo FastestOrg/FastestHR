@@ -192,19 +192,19 @@ html {
     padding-bottom: env(safe-area-inset-bottom);
   }
 
-  /* Mobile responsive typography */
-  h1 {
+  /* Mobile responsive typography - fallback when not explicitly styled by Tailwind */
+  h1:not([class*="text-"]) {
     font-size: clamp(1.5rem, 5vw, 2rem) !important;
   }
-  h2 {
+  h2:not([class*="text-"]) {
     font-size: clamp(1.25rem, 4vw, 1.75rem) !important;
   }
-  h3 {
+  h3:not([class*="text-"]) {
     font-size: clamp(1.1rem, 3.5vw, 1.5rem) !important;
   }
 
-  /* Mobile card spacing */
-  .grid {
+  /* Mobile card spacing - fallback when not explicitly styled by Tailwind */
+  .grid:not([class*="gap-"]) {
     gap: 0.75rem;
   }
 

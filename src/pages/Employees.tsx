@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Users, Plus, Search, Grid3X3, List, Network, Trash2 } from 'lucide-react';
+import { Users, Plus, Search, Grid3X3, List, Network, Trash2, RotateCcw } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth-store';
@@ -16,6 +16,7 @@ import { useState } from 'react';
 import { useDebounce } from '@/hooks/use-debounce';
 import { FullScaleOrgChart } from '@/components/org-chart/FullScaleOrgChart';
 import { DeleteEmployeeDialog } from '@/components/employees/DeleteEmployeeDialog';
+import { DirectRestorationDialog } from '@/components/exit/DirectRestorationDialog';
 
 // ⚡ Bolt: Hoisted static object configuration outside of component body
 // to prevent unnecessary memory reallocation on every render.
@@ -35,18 +36,30 @@ export default function Employees() {
   const { orgClient, isBYOS } = useOrgClient();
   const [search, setSearch] = useState('');
   const [employeeToDelete, setEmployeeToDelete] = useState<any | null>(null);
+  const [employeeToRestore, setEmployeeToRestore] = useState<any | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'terminated'>('active');
   // ⚡ Bolt: Debounce search input to prevent firing an API call on every keystroke.
   // This reduces Supabase queries and React Query cache invalidations significantly.
   const debouncedSearch = useDebounce(search, 300);
   const [view, setView] = useState<'grid' | 'list' | 'org'>('grid');
 
   const { data: employees = [], isLoading } = useQuery({
-    queryKey: makeBYOSQueryKey('employees', orgClient, profile?.company_id, [debouncedSearch, view]),
+    queryKey: makeBYOSQueryKey('employees', orgClient, profile?.company_id, [debouncedSearch, view, statusFilter]),
     queryFn: async () => {
       let query = orgClient
         .from('employees')
-        .select('*, departments(name), designations(title)')
-        .is('deleted_at', null);
+        .select('*, departments(name), designations(title)');
+
+      if (statusFilter === 'active') {
+        query = query.is('deleted_at', null).neq('status', 'terminated');
+      } else if (statusFilter === 'terminated') {
+        query = query.or('status.eq.terminated,deleted_at.not.is.null');
+      } else {
+        // 'all'
+        if (!isAdmin) {
+          query = query.is('deleted_at', null);
+        }
+      }
 
       if (!isBYOS) {
         query = query.eq('company_id', profile!.company_id!);
@@ -89,6 +102,32 @@ export default function Employees() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+        </div>
+        <div className="flex items-center gap-1 bg-background/50 p-1 rounded-md border border-border/50 backdrop-blur-sm">
+          <Button
+            variant={statusFilter === 'active' ? 'secondary' : 'ghost'}
+            size="sm"
+            className="text-xs h-8 px-2.5"
+            onClick={() => setStatusFilter('active')}
+          >
+            Active
+          </Button>
+          <Button
+            variant={statusFilter === 'terminated' ? 'secondary' : 'ghost'}
+            size="sm"
+            className="text-xs h-8 px-2.5"
+            onClick={() => setStatusFilter('terminated')}
+          >
+            Terminated
+          </Button>
+          <Button
+            variant={statusFilter === 'all' ? 'secondary' : 'ghost'}
+            size="sm"
+            className="text-xs h-8 px-2.5"
+            onClick={() => setStatusFilter('all')}
+          >
+            All
+          </Button>
         </div>
         <div className="flex justify-between sm:justify-start rounded-md border border-border/50 bg-background/50 p-1 backdrop-blur-sm">
           <Button variant={view === 'grid' ? 'secondary' : 'ghost'} size="icon" onClick={() => setView('grid')} title="Grid View" aria-label="Grid view" className="flex-1 sm:flex-none">
@@ -146,6 +185,21 @@ export default function Employees() {
                     <Badge className={statusColor[emp.status || 'active'] || ''} variant="secondary">
                       {emp.status || 'active'}
                     </Badge>
+                    {isAdmin && (emp.status === 'terminated' || emp.deleted_at) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs border-emerald-500/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500 hover:text-white transition-colors gap-1 shadow-sm px-2"
+                        title="Direct Restoration: Reactivate Employee"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEmployeeToRestore(emp);
+                        }}
+                      >
+                        <RotateCcw className="h-3 w-3" />
+                        Restore
+                      </Button>
+                    )}
                     {isAdmin && (
                       <Button
                         variant="ghost"
@@ -181,23 +235,40 @@ export default function Employees() {
                   <p className="font-medium text-foreground">{emp.first_name} {emp.last_name}</p>
                   <p className="text-sm text-muted-foreground mt-1">{(emp as any).designations?.title || '—'} · {(emp as any).departments?.name || '—'}</p>
                 </div>
-                <Badge className={statusColor[emp.status || 'active'] || ''} variant="secondary">
-                  {emp.status || 'active'}
-                </Badge>
-                {isAdmin && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 shrink-0"
-                    title="Permanently Delete Employee & Account"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEmployeeToDelete(emp);
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                )}
+                <div className="flex items-center gap-2">
+                  <Badge className={statusColor[emp.status || 'active'] || ''} variant="secondary">
+                    {emp.status || 'active'}
+                  </Badge>
+                  {isAdmin && (emp.status === 'terminated' || emp.deleted_at) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs border-emerald-500/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500 hover:text-white transition-colors gap-1 shadow-sm px-2 shrink-0"
+                      title="Direct Restoration: Reactivate Employee"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEmployeeToRestore(emp);
+                      }}
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                      Restore
+                    </Button>
+                  )}
+                  {isAdmin && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 shrink-0"
+                      title="Permanently Delete Employee & Account"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEmployeeToDelete(emp);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -218,6 +289,15 @@ export default function Employees() {
           if (!open) setEmployeeToDelete(null);
         }}
         employee={employeeToDelete}
+      />
+
+      {/* Direct Restoration Dialog - Admin Only */}
+      <DirectRestorationDialog
+        open={!!employeeToRestore}
+        onOpenChange={(open) => {
+          if (!open) setEmployeeToRestore(null);
+        }}
+        employee={employeeToRestore}
       />
     </div>
   );

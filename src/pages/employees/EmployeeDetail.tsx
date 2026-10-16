@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   ArrowLeft, Save, Pencil, X, Loader2,
   Mail, Phone, Building2, Briefcase, CalendarDays,
-  Clock, UserCheck, AlertTriangle, Trash2, KeyRound, MapPin, ShieldCheck, Plus
+  Clock, UserCheck, AlertTriangle, Trash2, KeyRound, MapPin, ShieldCheck, Plus, RotateCcw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -25,6 +25,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { DeleteEmployeeDialog } from '@/components/employees/DeleteEmployeeDialog';
+import { DirectRestorationDialog } from '@/components/exit/DirectRestorationDialog';
 import { HierarchyLoginLogsTable } from '@/components/hierarchy-logs/HierarchyLoginLogsTable';
 
 const STATUS_BADGE: Record<string, string> = {
@@ -83,17 +84,22 @@ export default function EmployeeDetail() {
   const [newDesignationName, setNewDesignationName] = useState('');
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isRestoreDialogOpen, setIsRestoreDialogOpen] = useState(false);
   const [newPassword, setNewPassword] = useState('');
 
   const { data: employee, isLoading } = useQuery<EmployeeRecord>({
     queryKey: ['employee', id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('employees')
         .select('*, departments(name), designations(title), company_locations(name)')
-        .eq('id', id!)
-        .is('deleted_at', null)
-        .single();
+        .eq('id', id!);
+
+      if (!isAdmin) {
+        query = query.is('deleted_at', null);
+      }
+
+      const { data, error } = await query.single();
       if (error) throw error;
       const record = data as any;
       return {
@@ -517,6 +523,16 @@ export default function EmployeeDetail() {
         >
           {employee.status}
         </Badge>
+        {isAdmin && (employee.status === 'terminated' || employee.deleted_at) && (
+          <Button
+            size="sm"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 shadow-sm"
+            onClick={() => setIsRestoreDialogOpen(true)}
+          >
+            <RotateCcw className="h-4 w-4" />
+            Direct Restoration
+          </Button>
+        )}
         <div className="flex items-center gap-3">
           {!editing ? (
             <Button
@@ -570,6 +586,35 @@ export default function EmployeeDetail() {
               <span> Please contact an HR Manager or Administrator to restore their status.</span>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Terminated Employee Alert & Direct Restoration Banner */}
+      {(employee.status === 'terminated' || employee.deleted_at) && (
+        <div className="p-4 rounded-xl border border-destructive/30 bg-destructive/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-full bg-destructive/10 text-destructive flex items-center justify-center shrink-0">
+              <AlertTriangle className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                Employee Profile Terminated / Offboarded
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                This employee was marked as terminated{employee.deleted_at ? ` on ${new Date(employee.deleted_at).toLocaleDateString()}` : ''}. Portal authentication and active directory presence are paused.
+              </p>
+            </div>
+          </div>
+          {isAdmin && (
+            <Button
+              size="sm"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 shrink-0 shadow-sm"
+              onClick={() => setIsRestoreDialogOpen(true)}
+            >
+              <RotateCcw className="h-4 w-4" />
+              Direct Restoration
+            </Button>
+          )}
         </div>
       )}
 
@@ -1023,26 +1068,50 @@ export default function EmployeeDetail() {
             {employee.user_id ? 'Set Password' : 'Create Account'}
           </Button>
         </CardContent>
-        <CardContent className={`flex items-center justify-between py-4 ${isAdmin ? 'border-b border-destructive/10' : ''}`}>
-          <div>
-            <p className="text-sm font-medium text-foreground">Terminate Employee</p>
-            <p className="text-xs text-muted-foreground">Marks the employee as terminated and soft-deletes their record.</p>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground"
-            onClick={() => {
-              if (confirm('CONFIRM::Terminate this employee? This action cannot be undone easily.')) {
-                terminateMutation.mutate();
-              }
-            }}
-            disabled={terminateMutation.isPending}
-          >
-            {terminateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
-            TERMINATE
-          </Button>
-        </CardContent>
+        {/* Direct Restoration Card for Terminated Employee */}
+        {(employee.status === 'terminated' || employee.deleted_at) ? (
+          <CardContent className={`flex items-center justify-between py-4 bg-emerald-500/5 ${isAdmin ? 'border-b border-emerald-500/20' : ''}`}>
+            <div>
+              <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+                <RotateCcw className="h-4 w-4" /> Direct Restoration (Admin)
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Reactivates this employee, resets their status to Active, removes termination timestamp, and clears exit holds.
+              </p>
+            </div>
+            {isAdmin && (
+              <Button
+                size="sm"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 shadow-sm"
+                onClick={() => setIsRestoreDialogOpen(true)}
+              >
+                <RotateCcw className="h-4 w-4" />
+                RESTORE EMPLOYEE
+              </Button>
+            )}
+          </CardContent>
+        ) : (
+          <CardContent className={`flex items-center justify-between py-4 ${isAdmin ? 'border-b border-destructive/10' : ''}`}>
+            <div>
+              <p className="text-sm font-medium text-foreground">Terminate Employee</p>
+              <p className="text-xs text-muted-foreground">Marks the employee as terminated and soft-deletes their record.</p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+              onClick={() => {
+                if (confirm('CONFIRM::Terminate this employee? This action cannot be undone easily.')) {
+                  terminateMutation.mutate();
+                }
+              }}
+              disabled={terminateMutation.isPending}
+            >
+              {terminateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              TERMINATE
+            </Button>
+          </CardContent>
+        )}
 
         {/* Permanent Hard Deletion - Admins Only */}
         {isAdmin && (
@@ -1108,6 +1177,16 @@ export default function EmployeeDetail() {
         onOpenChange={setIsDeleteDialogOpen}
         employee={employee}
         onDeleted={() => navigate('/employees')}
+      />
+
+      {/* Direct Restoration Modal - Admin Only */}
+      <DirectRestorationDialog
+        open={isRestoreDialogOpen}
+        onOpenChange={setIsRestoreDialogOpen}
+        employee={employee}
+        onRestored={() => {
+          queryClient.invalidateQueries({ queryKey: ['employee', id] });
+        }}
       />
     </div>
   );

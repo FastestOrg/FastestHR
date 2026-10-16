@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { UserMinus, ClipboardCheck, DollarSign, MessageSquare, Package, Plus, AlertTriangle, Loader2, Trash2, ShieldAlert } from 'lucide-react';
+import { UserMinus, ClipboardCheck, DollarSign, MessageSquare, Package, Plus, AlertTriangle, Loader2, Trash2, ShieldAlert, RotateCcw } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth-store';
@@ -16,6 +16,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import { DeleteEmployeeDialog } from '@/components/employees/DeleteEmployeeDialog';
 import { ITKillswitchDialog } from '@/components/exit/ITKillswitchDialog';
+import { DirectRestorationDialog } from '@/components/exit/DirectRestorationDialog';
 
 const assetChecklist = [
   'Laptop / Desktop',
@@ -76,6 +77,7 @@ export default function ExitManagement() {
   const [selectedExit, setSelectedExit] = useState<string | null>(null);
   const [employeeToDelete, setEmployeeToDelete] = useState<any | null>(null);
   const [killswitchEmployee, setKillswitchEmployee] = useState<any | null>(null);
+  const [employeeToRestore, setEmployeeToRestore] = useState<{ employee: any; exitId?: string } | null>(null);
   const [interviewAnswers, setInterviewAnswers] = useState<string[]>(['', '', '', '']);
 
   // Fetch Exits
@@ -621,18 +623,32 @@ export default function ExitManagement() {
                     <div className="flex items-center gap-1.5 shrink-0">
                       <Badge variant="outline" className={`text-[10px] uppercase ${statusColor[exit.status]}`}>{exit.status.replace('_', ' ')}</Badge>
                       {isAdmin && exit.employees && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-colors"
-                          title="Permanently Delete Employee & Account"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEmployeeToDelete(exit.employees);
-                          }}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-muted-foreground/40 hover:text-emerald-600 hover:bg-emerald-500/10 transition-colors"
+                            title="Direct Restoration (Reactivate Employee)"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEmployeeToRestore({ employee: exit.employees, exitId: exit.id });
+                            }}
+                          >
+                            <RotateCcw className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                            title="Permanently Delete Employee & Account"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEmployeeToDelete(exit.employees);
+                            }}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -661,6 +677,15 @@ export default function ExitManagement() {
                     )}
                     {isAdmin && selectedRecord.employees && (
                       <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs border-emerald-500/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500 hover:text-white transition-colors gap-1 shadow-sm"
+                          onClick={() => setEmployeeToRestore({ employee: selectedRecord.employees, exitId: selectedRecord.id })}
+                          title="Direct Restoration: Reactivate and restore employee"
+                        >
+                          <RotateCcw className="h-3 w-3" /> Direct Restoration
+                        </Button>
                         <Button
                           size="sm"
                           variant="outline"
@@ -719,6 +744,28 @@ export default function ExitManagement() {
                         <DollarSign className="w-3 h-3 mr-1" /> Settlement {selectedRecord.settlement_done ? '✓' : '—'}
                       </Badge>
                     </div>
+
+                    {/* Direct Restoration Action in Overview for Admin */}
+                    {isAdmin && selectedRecord.employees && (
+                      <div className="p-4 rounded-lg border border-emerald-500/30 bg-emerald-500/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-6">
+                        <div>
+                          <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                            <RotateCcw className="h-3.5 w-3.5" /> Direct Restoration (Admin Reinstatement)
+                          </p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            Directly restore this terminated or offboarded employee back to Active status, remove exit clearance locks, and reinstate their FastestHR portal access.
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          className="text-xs font-semibold shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm gap-1.5"
+                          onClick={() => setEmployeeToRestore({ employee: selectedRecord.employees, exitId: selectedRecord.id })}
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          DIRECT RESTORATION
+                        </Button>
+                      </div>
+                    )}
 
                     {/* Permanent Deletion Action in Overview for Admin */}
                     {isAdmin && selectedRecord.employees && (
@@ -1080,6 +1127,19 @@ export default function ExitManagement() {
           queryClient.invalidateQueries({ queryKey: ['exits'] });
           queryClient.invalidateQueries({ queryKey: ['employees'] });
           queryClient.invalidateQueries({ queryKey: ['activeEmployees'] });
+        }}
+      />
+
+      {/* Direct Restoration Dialog - Admin Only */}
+      <DirectRestorationDialog
+        open={!!employeeToRestore}
+        onOpenChange={(open) => {
+          if (!open) setEmployeeToRestore(null);
+        }}
+        employee={employeeToRestore?.employee}
+        exitId={employeeToRestore?.exitId}
+        onRestored={() => {
+          setSelectedExit(null);
         }}
       />
     </div>
