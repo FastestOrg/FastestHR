@@ -24,7 +24,9 @@ export function OfferLetterRenderer({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const finalHtml = useMemo(() => {
-    let content = substituteVariables(htmlContent, variables);
+    let content = substituteVariables(htmlContent, variables)
+      .replace(/data:image\/png;base64,[A-Za-z0-9+/=]{195000,}/g, '/templates/offer-letterhead-fulltime.png')
+      .replace(/data:image\/png;base64,[A-Za-z0-9+/=]{190000,}/g, '/templates/offer-letterhead-parttime.png');
     // Sanitize the HTML using the clean DOMPurify instance to prevent XSS while allowing styling rules
     return purify.sanitize(content, {
       ADD_TAGS: ['style'],

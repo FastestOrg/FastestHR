@@ -107,7 +107,27 @@ const RecruitmentTeam = lazy(() => import('@/pages/recruitment/RecruitmentTeam')
 const RecruitmentAnalytics = lazy(() => import('@/pages/recruitment/RecruitmentAnalytics').then(m => ({ default: m.RecruitmentAnalytics })));
 const OfferTemplateList = lazy(() => import('@/components/recruitment/OfferTemplateEditor').then(m => ({ default: m.OfferTemplateList })));
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 2 * 60 * 1000, // 2 minutes default freshness (prevents redundant fetches across routes)
+      gcTime: 10 * 60 * 1000,    // 10 minutes memory retention for dormant caches
+      refetchOnWindowFocus: false, // Prevents hammering Supabase when users switch browser tabs
+      refetchOnReconnect: 'always', // Auto-resync when internet connection is restored
+      retry: (failureCount, error: any) => {
+        // Do not retry client auth/forbidden/not found or PostgREST empty result errors
+        const status = error?.status || error?.statusCode || error?.code;
+        if (status === 401 || status === 403 || status === 404 || status === 'PGRST116') {
+          return false;
+        }
+        return failureCount < 1;
+      },
+    },
+    mutations: {
+      retry: false, // Never auto-retry mutations to prevent accidental duplicate inserts or payments
+    },
+  },
+});
 
 function AppRoutes() {
   const { initialize, initialized } = useAuthStore();

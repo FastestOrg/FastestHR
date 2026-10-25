@@ -304,7 +304,7 @@ export default function Attendance() {
       // 1. Fetch active open check-in first (handles crossover night shifts)
       const { data: openRecord } = await supabase
         .from('attendance')
-        .select('*, companies(attendance_settings)')
+        .select('id, employee_id, company_id, date, status, clock_in, clock_out, break_minutes, total_hours, overtime_hours, is_regularized, regularization_reason, clock_in_location, clock_out_location, active_break_start, companies(attendance_settings)')
         .eq('employee_id', employee.id)
         .is('clock_out', null)
         .order('clock_in', { ascending: false })
@@ -316,7 +316,7 @@ export default function Attendance() {
       // 2. Fallback to physical today's record
       const { data } = await supabase
         .from('attendance')
-        .select('*')
+        .select('id, employee_id, company_id, date, status, clock_in, clock_out, break_minutes, total_hours, overtime_hours, is_regularized, regularization_reason, clock_in_location, clock_out_location, active_break_start')
         .eq('employee_id', employee.id)
         .eq('date', today)
         .maybeSingle();
@@ -355,7 +355,7 @@ export default function Attendance() {
       if (!profile?.company_id || !isAdmin) return [];
       const { data, error } = await supabase
         .from('attendance')
-        .select('*, employees(first_name, last_name)')
+        .select('id, employee_id, company_id, date, status, clock_in, clock_out, regularization_reason, employees(first_name, last_name)')
         .eq('company_id', profile.company_id)
         .like('regularization_reason', '%"status":"pending"%')
         .order('date', { ascending: false });
@@ -653,7 +653,7 @@ export default function Attendance() {
     queryFn: async () => {
       const { data } = await supabase
         .from('attendance')
-        .select(`*, employees (first_name, last_name)`)
+        .select('id, employee_id, company_id, date, status, clock_in, clock_out, break_minutes, total_hours, is_regularized, regularization_reason, clock_in_location, employees(first_name, last_name)')
         .eq('company_id', employee!.company_id)
         .order('date', { ascending: false })
         .limit(20);

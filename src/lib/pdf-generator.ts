@@ -373,6 +373,33 @@ async function generateAndUploadPDF(
         await new Promise(resolve => setTimeout(resolve, 50));
       }
 
+      // Preload all img tags and CSS background images so html2canvas renders them with 100% fidelity
+      try {
+        const imgElements = Array.from(pdfElement.querySelectorAll('img'));
+        const bgMatches = Array.from(pdfElement.innerHTML.matchAll(/url\(['"]?([^'")]+)['"]?\)/g))
+          .map(m => m[1])
+          .filter(u => !u.startsWith('data:'));
+
+        await Promise.all([
+          ...imgElements.map(img => {
+            if (img.complete) return Promise.resolve();
+            return new Promise<void>(resolve => {
+              img.onload = () => resolve();
+              img.onerror = () => resolve();
+            });
+          }),
+          ...bgMatches.map(url => new Promise<void>(resolve => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => resolve();
+            img.onerror = () => resolve();
+            img.src = url;
+          }))
+        ]);
+      } catch (err) {
+        console.warn('Image preloading warning in pdf-generator:', err);
+      }
+
       const manipulatedHtml = pdfElement.innerHTML;
       
       // Remove from DOM and reset styles so html2pdf can render it correctly without viewport scaling/clipping bugs.

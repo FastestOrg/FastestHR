@@ -156,8 +156,7 @@ export function useConversations() {
       });
     },
     enabled: !!profile?.id,
-    staleTime: 10_000,
-    refetchInterval: 30_000,
+    staleTime: 30_000,
   });
 
   // Subscribe to updates scoped to current user's participant channel and company conversations
@@ -563,7 +562,7 @@ export function useCompanyMembers(searchQuery?: string) {
 }
 
 // ============================================================
-// usePresence — Online presence tracking
+// usePresence — Online presence tracking (In-Memory Supabase Presence)
 // ============================================================
 
 export function usePresence() {
@@ -574,77 +573,51 @@ export function usePresence() {
   useEffect(() => {
     if (!profile?.id || !profile?.company_id) return;
 
-    // Set self as online
-    supabase.rpc('chat_upsert_presence', {
-      p_user_id: profile.id,
-      p_company_id: profile.company_id,
-      p_is_online: true,
+    // Use Supabase Realtime in-memory Presence (zero DB writes, zero WAL churn)
+    const presenceChannel = supabase.channel(`presence-company-${profile.company_id}`, {
+      config: {
+        presence: { key: profile.id },
+      },
     });
 
-    // Fetch initial online users
-    supabase
-      .from('chat_presence')
-      .select('user_id')
-      .eq('company_id', profile.company_id)
-      .eq('is_online', true)
-      .then(({ data }) => {
-        if (data) {
-          setOnlineUsers(new Set(data.map((d: any) => d.user_id)));
+    presenceChannel
+      .on('presence', { event: 'sync' }, () => {
+        const state = presenceChannel.presenceState();
+        const onlineUserIds = Object.keys(state);
+        setOnlineUsers(new Set(onlineUserIds));
+      })
+      .on('presence', { event: 'join' }, ({ key }) => {
+        if (key) {
+          addOnlineUser(key);
         }
-      });
-
-    // Subscribe to presence changes
-    const channel = supabase
-      .channel('chat-presence-track')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'chat_presence',
-          filter: `company_id=eq.${profile.company_id}`,
-        },
-        (payload) => {
-          const record = payload.new as any;
-          if (record?.is_online) {
-            addOnlineUser(record.user_id);
-          } else if (record?.user_id) {
-            removeOnlineUser(record.user_id);
+      })
+      .on('presence', { event: 'leave' }, ({ key }) => {
+        if (key) {
+          const state = presenceChannel.presenceState();
+          // Remove from online list if this user has no other active sessions
+          if (!state[key] || state[key].length === 0) {
+            removeOnlineUser(key);
           }
         }
-      )
-      .subscribe();
-
-    channelRef.current = channel;
-
-    // Heartbeat every 60s
-    const heartbeat = setInterval(() => {
-      supabase.rpc('chat_upsert_presence', {
-        p_user_id: profile.id,
-        p_company_id: profile.company_id,
-        p_is_online: true,
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await presenceChannel.track({
+            user_id: profile.id,
+            online_at: new Date().toISOString(),
+          });
+        }
       });
-    }, 60_000);
 
-    // Set offline on unload
-    const handleUnload = () => {
-      supabase.rpc('chat_upsert_presence', {
-        p_user_id: profile.id,
-        p_company_id: profile.company_id,
-        p_is_online: false,
-      });
-    };
-    window.addEventListener('beforeunload', handleUnload);
+    channelRef.current = presenceChannel;
 
     return () => {
-      clearInterval(heartbeat);
-      window.removeEventListener('beforeunload', handleUnload);
-      handleUnload();
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
       }
     };
-  }, [profile?.id, profile?.company_id]);
+  }, [profile?.id, profile?.company_id, setOnlineUsers, addOnlineUser, removeOnlineUser]);
 }
 
 // ============================================================

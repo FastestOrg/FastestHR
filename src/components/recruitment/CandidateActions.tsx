@@ -59,6 +59,7 @@ export function CandidateActions({
   const [existingOffer, setExistingOffer] = useState<{ joining_date: string, payout: number, custom_variable_values?: Record<string, string> } | null>(null);
   const [templateCustomVariables, setTemplateCustomVariables] = useState<any[]>([]);
   const [jobEmploymentType, setJobEmploymentType] = useState<string | undefined>();
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   
   const { data: latestOffer } = useQuery({
     queryKey: ['candidate-offer', candidateId],
@@ -73,7 +74,9 @@ export function CandidateActions({
       if (error) throw error;
       return data;
     },
-    enabled: currentStage === 'offer' || currentStage === 'hired',
+    enabled: (currentStage === 'offer' || currentStage === 'hired') && isDropdownOpen,
+    staleTime: 10 * 60 * 1000, // 10 minutes cache
+    gcTime: 15 * 60 * 1000,
   });
 
   const executeAutomations = async (newStage: string, offerData?: { joiningDate: string; payout: number; customVariableValues?: Record<string, string>; totalDuration?: number }) => {
@@ -102,7 +105,7 @@ export function CandidateActions({
           // 2. Fetch the latest offer details
           const { data: offer } = await supabase
             .from('candidate_offers')
-            .select('*')
+            .select('payout, joining_date')
             .eq('candidate_id', candidateId)
             .order('created_at', { ascending: false })
             .limit(1)
@@ -266,7 +269,7 @@ export function CandidateActions({
           { data: jobInfo },
           { data: companyInfo }
         ] = await Promise.all([
-          supabase.from('offer_templates').select('*').eq('id', templateId).single(),
+          supabase.from('offer_templates').select('id, html_content, letterhead_url, is_predefined_html, email_subject, email_body').eq('id', templateId).single(),
           supabase.from('candidates').select('full_name, email').eq('id', candidateId).single(),
           supabase.from('jobs').select('title').eq('id', jobId).single(),
           supabase.from('companies').select('offer_sequence_prefix, timezone, currency, compensation_structure').eq('id', (job as any).company_id).single()
@@ -333,6 +336,11 @@ export function CandidateActions({
           ? 'https://fastesthr.com'
           : window.location.origin;
 
+        // Sanitize html_content to prevent bloating candidate_offers with 200 KB base64 strings
+        const sanitizedHtml = finalHtml
+          .replace(/data:image\/png;base64,[A-Za-z0-9+/=]{195000,}/g, '/templates/offer-letterhead-fulltime.png')
+          .replace(/data:image\/png;base64,[A-Za-z0-9+/=]{190000,}/g, '/templates/offer-letterhead-parttime.png');
+
         const { data, error: fnError } = await supabase.functions.invoke('send-offer-letter', {
           body: { 
             candidate_id: candidateId, 
@@ -342,7 +350,7 @@ export function CandidateActions({
               ...offerData,
               custom_variable_values: finalCustomValues
             },
-            html_content: finalHtml,
+            html_content: sanitizedHtml,
             pdf_path: pdfPath,
             offer_number: offerNumberStr,
             template_id: templateId,
@@ -548,7 +556,7 @@ export function CandidateActions({
   return (
     <>
     <div className="flex items-center gap-1">
-      <DropdownMenu>
+      <DropdownMenu onOpenChange={setIsDropdownOpen}>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" aria-label="Candidate actions" className="h-6 w-6 -mr-2 -mt-2 text-muted-foreground">
             <MoreHorizontal className="w-4 h-4" />

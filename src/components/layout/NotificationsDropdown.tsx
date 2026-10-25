@@ -30,6 +30,7 @@ export function NotificationsDropdown() {
       return data || [];
     },
     enabled: !!profile?.id,
+    staleTime: 60_000,
   });
 
   // Subscribe to real-time notification changes
@@ -37,7 +38,7 @@ export function NotificationsDropdown() {
     if (!profile?.id) return;
 
     const channel = supabase
-      .channel('public:notifications')
+      .channel(`notifications-user-${profile.id}`)
       .on(
         'postgres_changes',
         {

@@ -34,10 +34,10 @@ interface Document {
   document_number: string;
   category: string;
   sub_category: string | null;
-  html_content: string;
+  html_content?: string;
   is_predefined_html: boolean;
   letterhead_url: string | null;
-  variable_values: Record<string, string>;
+  variable_values?: Record<string, string>;
   status: string;
   pdf_url: string | null;
   employee_id: string | null;
@@ -73,11 +73,38 @@ export function SendDeskSendShare() {
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
   const [resendDoc, setResendDoc] = useState<Document | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [docToDelete, setDocToDelete] = useState<Document | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleOpenPreview = async (doc: Document) => {
+    if (!doc.html_content) {
+      setLoadingPreview(true);
+      setPreviewDoc(doc);
+      setIsPreviewOpen(true);
+      try {
+        const { data } = await supabase
+          .from('senddesk_documents')
+          .select('html_content')
+          .eq('id', doc.id)
+          .single();
+        if (data?.html_content) {
+          doc.html_content = data.html_content;
+          setPreviewDoc({ ...doc, html_content: data.html_content });
+        }
+      } catch (e) {
+        console.error('Failed to load document content:', e);
+      } finally {
+        setLoadingPreview(false);
+      }
+    } else {
+      setPreviewDoc(doc);
+      setIsPreviewOpen(true);
+    }
+  };
 
   const handleDeleteDoc = async (docId: string, pdfUrl: string | null) => {
     setIsDeleting(true);
@@ -122,7 +149,7 @@ export function SendDeskSendShare() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('senddesk_documents')
-        .select('*, employees(first_name, last_name, work_email, personal_email)')
+        .select('id, name, document_number, category, sub_category, status, pdf_url, is_predefined_html, letterhead_url, employee_id, created_at, employees(first_name, last_name, work_email, personal_email)')
         .eq('company_id', profile!.company_id!)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -136,7 +163,7 @@ export function SendDeskSendShare() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('senddesk_emails')
-        .select('*, employees(first_name, last_name)')
+        .select('id, recipient_email, recipient_name, subject, status, scheduled_at, sent_at, error_message, created_at, employees(first_name, last_name)')
         .eq('company_id', profile!.company_id!)
         .order('created_at', { ascending: false })
         .limit(200);
@@ -272,7 +299,7 @@ export function SendDeskSendShare() {
                         </Button>
                       )}
                       <Button variant="ghost" size="icon" aria-label="Preview document" className="h-8 w-8"
-                        onClick={() => { setPreviewDoc(doc); setIsPreviewOpen(true); }}
+                        onClick={() => handleOpenPreview(doc)}
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
@@ -395,18 +422,22 @@ export function SendDeskSendShare() {
             <DialogTitle>Document Preview</DialogTitle>
             <DialogDescription>{previewDoc?.name}</DialogDescription>
           </DialogHeader>
-          {previewDoc && (
+          {loadingPreview ? (
+            <div className="flex items-center justify-center p-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : previewDoc ? (
             <div className="bg-muted/10 rounded-xl p-6 border border-border/50 max-h-[65vh] overflow-auto flex justify-center">
               <div className="scale-[0.65] origin-top">
                 <DocumentRenderer
-                  htmlContent={previewDoc.html_content}
+                  htmlContent={previewDoc.html_content || ''}
                   letterheadUrl={previewDoc.letterhead_url}
                   variables={{}}
                   isPredefinedHtml={previewDoc.is_predefined_html}
                 />
               </div>
             </div>
-          )}
+          ) : null}
         </DialogContent>
       </Dialog>
 

@@ -81,7 +81,7 @@ export function OfferTemplateList() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('offer_templates')
-        .select('*')
+        .select('id, company_id, name, html_content, letterhead_url, email_subject, email_body, is_predefined_html, custom_variables, created_at')
         .eq('company_id', profile!.company_id!)
         .order('created_at', { ascending: false });
       
@@ -299,10 +299,15 @@ function OfferTemplateEditor({ isOpen, onClose, template }: { isOpen: boolean, o
 
     setIsSaving(true);
     try {
+      // Sanitize htmlContent to prevent saving massive base64 images into database
+      const sanitizedHtml = htmlContent
+        .replace(/data:image\/png;base64,[A-Za-z0-9+/=]{195000,}/g, '/templates/offer-letterhead-fulltime.png')
+        .replace(/data:image\/png;base64,[A-Za-z0-9+/=]{190000,}/g, '/templates/offer-letterhead-parttime.png');
+
       const payload = {
         company_id: profile!.company_id!,
         name,
-        html_content: htmlContent,
+        html_content: sanitizedHtml,
         letterhead_url: letterheadUrl || null,
         email_subject: emailSubject || null,
         email_body: emailBody || null,

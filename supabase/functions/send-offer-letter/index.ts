@@ -139,7 +139,13 @@ Deno.serve(async (req) => {
       throw new Error('Job not found or does not belong to this company');
     }
 
-    // 3. Save to candidate_offers
+    // 3. Save to candidate_offers (sanitized to prevent base64 bloat)
+    const cleanedHtml = html_content
+      ? html_content
+          .replace(/data:image\/png;base64,[A-Za-z0-9+/=]{195000,}/g, '/templates/offer-letterhead-fulltime.png')
+          .replace(/data:image\/png;base64,[A-Za-z0-9+/=]{190000,}/g, '/templates/offer-letterhead-parttime.png')
+      : html_content;
+
     const { data: savedOffer, error: saveError } = await supabaseClient
       .from('candidate_offers')
       .insert({
@@ -151,7 +157,7 @@ Deno.serve(async (req) => {
         joining_date: offer_data?.joiningDate,
         payout: offer_data?.payout,
         custom_variable_values: offer_data?.custom_variable_values || {},
-        html_content: html_content,
+        html_content: cleanedHtml,
         pdf_url: pdf_path,
         is_predefined_html: is_predefined_html || false
       })
