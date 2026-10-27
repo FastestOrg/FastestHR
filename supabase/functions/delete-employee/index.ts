@@ -76,9 +76,24 @@ Deno.serve(async (req) => {
       throw new Error('Forbidden: You cannot delete an employee belonging to another company');
     }
 
-    // 6. Prevent self-deletion
+    // 6. Prevent self-deletion and peer admin deletion
     if (targetEmployee.user_id && targetEmployee.user_id === adminUser.id) {
       throw new Error('Action Blocked: You cannot delete your own Administrator account.');
+    }
+
+    if (targetEmployee.user_id) {
+      const { data: targetProfile } = await adminSupabase
+        .from('profiles')
+        .select('platform_role')
+        .eq('id', targetEmployee.user_id)
+        .single();
+
+      if (targetProfile?.platform_role === 'super_admin') {
+        throw new Error('Action Blocked: Cannot delete a Super Administrator.');
+      }
+      if (targetProfile?.platform_role === 'company_admin' && adminProfile.platform_role !== 'super_admin') {
+        throw new Error('Action Blocked: Company Administrators cannot delete peer Company Administrators.');
+      }
     }
 
     const targetUserId = targetEmployee.user_id;

@@ -147,11 +147,16 @@ Deno.serve(async (req) => {
       );
     }
 
+    const targetEmail = (offer.candidates?.email || candidate_email).trim().toLowerCase();
+    if (offer.candidates?.email && candidate_email.trim().toLowerCase() !== offer.candidates.email.trim().toLowerCase()) {
+      throw new Error('Forbidden: Candidate email mismatch with offer record');
+    }
+
     const company = offer.companies;
 
     // 2. Ensure user exists in auth.users
     const { data: newUser, error: createError } = await supabaseClient.auth.admin.createUser({
-      email: candidate_email,
+      email: targetEmail,
       email_confirm: true,
       user_metadata: { 
         full_name: offer.candidates?.full_name,
@@ -169,7 +174,7 @@ Deno.serve(async (req) => {
     
     const { data: linkData, error: linkError } = await supabaseClient.auth.admin.generateLink({
       type: 'magiclink',
-      email: candidate_email,
+      email: targetEmail,
       options: { redirectTo }
     });
 
@@ -209,7 +214,7 @@ Deno.serve(async (req) => {
 
     await transporter.sendMail({
       from: `"${company.smtp_from_name || 'HR'}" <${company.smtp_from_email || company.smtp_user}>`,
-      to: candidate_email,
+      to: targetEmail,
       subject: `Confirm Offer Acceptance: ${offer.jobs?.title} - ${company.name}`,
       html: emailHtml,
     });

@@ -3,7 +3,7 @@ import { useAuthStore } from '@/store/auth-store';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { getErrorMessage } from '@/lib/utils';
+import { getErrorMessage, formatCurrency } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,7 +22,7 @@ export default function GeneralSettings() {
     queryFn: async () => {
       if (!profile?.company_id) return null;
       const { data, error } = await supabase.from('companies')
-        .select('id, name, timezone, currency, country, about_company, company_culture, website, linkedin_url, logo_url, geofence_latitude, geofence_longitude, geofence_radius, ip_whitelist, employee_id_prefix, employee_id_next_number')
+        .select('id, name, timezone, currency, country, about_company, company_culture, website, linkedin_url, logo_url, geofence_latitude, geofence_longitude, geofence_radius, ip_whitelist, employee_id_prefix, employee_id_next_number, wallet_balance')
         .eq('id', profile.company_id)
         .maybeSingle();
       if (error) throw error;
@@ -56,9 +56,16 @@ export default function GeneralSettings() {
     }
   }, [company]);
 
+  const walletBalance = Number((company as any)?.wallet_balance) || 0;
+  const isSuperAdmin = profile?.platform_role === 'super_admin';
+  const isCurrencyLocked = walletBalance > 0 && !isSuperAdmin;
+
   const updateMutation = useMutation({
     mutationFn: async () => {
       if (!profile?.company_id) throw new Error("Company ID is missing.");
+      if (isCurrencyLocked && form.currency !== (company as any)?.currency) {
+        throw new Error('Base currency is locked while your company holds an active wallet balance.');
+      }
       const { error } = await supabase.from('companies').update({
         name: form.name, timezone: form.timezone, currency: form.currency, country: form.country,
         about_company: form.about_company || null, company_culture: form.company_culture || null,
@@ -186,8 +193,20 @@ export default function GeneralSettings() {
               </select>
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-medium text-muted-foreground uppercase">Primary Currency</label>
-              <select value={form.currency} onChange={(e) => setForm(f => ({ ...f, currency: e.target.value }))} className="flex h-10 w-full rounded-md border border-border/50 bg-background/50 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-muted-foreground uppercase">Primary Currency</label>
+                {isCurrencyLocked && (
+                  <span className="text-[10px] text-amber-500 font-medium">
+                    Locked ({formatCurrency(walletBalance, (company as any)?.currency)} in wallet)
+                  </span>
+                )}
+              </div>
+              <select
+                value={form.currency}
+                disabled={isCurrencyLocked}
+                onChange={(e) => setForm(f => ({ ...f, currency: e.target.value }))}
+                className={`flex h-10 w-full rounded-md border border-border/50 bg-background/50 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary ${isCurrencyLocked ? 'opacity-60 cursor-not-allowed bg-muted/40' : ''}`}
+              >
                 <option value="USD">USD ($)</option>
                 <option value="EUR">EUR (€)</option>
                 <option value="GBP">GBP (£)</option>
@@ -197,6 +216,11 @@ export default function GeneralSettings() {
                 <option value="AUD">AUD (A$)</option>
                 <option value="JPY">JPY (¥)</option>
               </select>
+              {isCurrencyLocked && (
+                <p className="text-[11px] text-muted-foreground">
+                  Base currency cannot be altered while your wallet has active funds. Please contact support or SuperAdmin for currency migration.
+                </p>
+              )}
             </div>
           </div>
 

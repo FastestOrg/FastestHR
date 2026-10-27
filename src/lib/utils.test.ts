@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { isSafeUrl, getCurrencySymbol, escapeHtml } from './utils';
+import {
+  isSafeUrl,
+  getCurrencySymbol,
+  escapeHtml,
+  convertFromUSD,
+  formatCurrency,
+  getLicensePrice,
+  BASE_LICENSE_FEE_USD,
+} from './utils';
 
 describe('escapeHtml', () => {
   it('should escape & to &amp;', () => {
@@ -112,3 +120,53 @@ describe('getCurrencySymbol', () => {
     expect(getCurrencySymbol('')).toBe('$');
   });
 });
+
+describe('convertFromUSD', () => {
+  it('converts base 5 USD to standard local currencies correctly', () => {
+    expect(convertFromUSD(5, 'USD')).toBe(5);
+    expect(convertFromUSD(5, 'INR')).toBe(425);
+    expect(convertFromUSD(5, 'EUR')).toBe(4.6);
+    expect(convertFromUSD(5, 'GBP')).toBe(3.9);
+    expect(convertFromUSD(5, 'AED')).toBe(18.35);
+    expect(convertFromUSD(5, 'CAD')).toBe(6.8);
+    expect(convertFromUSD(5, 'AUD')).toBe(7.6);
+    expect(convertFromUSD(5, 'JPY')).toBe(775);
+  });
+
+  it('handles lowercase and missing currency gracefully by defaulting to 1:1 USD', () => {
+    expect(convertFromUSD(5, 'inr')).toBe(425);
+    expect(convertFromUSD(5, null)).toBe(5);
+    expect(convertFromUSD(5, undefined)).toBe(5);
+    expect(convertFromUSD(5, 'UNKNOWN')).toBe(5);
+  });
+});
+
+describe('getLicensePrice', () => {
+  it('calculates license price in local currency from 5 USD base when no override is set', () => {
+    expect(getLicensePrice(null, 'INR')).toBe(425);
+    expect(getLicensePrice(undefined, 'INR')).toBe(425);
+    expect(getLicensePrice(null, 'USD')).toBe(5);
+    expect(getLicensePrice(null, 'EUR')).toBe(4.6);
+  });
+
+  it('treats legacy placeholder 500 and 5 USD base column values as default and converts correctly', () => {
+    expect(getLicensePrice(500, 'INR')).toBe(425);
+    expect(getLicensePrice(5, 'INR')).toBe(425);
+    expect(getLicensePrice(5, 'USD')).toBe(5);
+  });
+
+  it('respects a custom negotiated rate override if set', () => {
+    expect(getLicensePrice(350, 'INR')).toBe(350);
+    expect(getLicensePrice(4, 'USD')).toBe(4);
+  });
+});
+
+describe('formatCurrency', () => {
+  it('formats amount with currency symbol according to currency code', () => {
+    expect(formatCurrency(425, 'INR')).toBe('₹425');
+    expect(formatCurrency(5, 'USD')).toBe('$5');
+    expect(formatCurrency(1234.56, 'USD')).toBe('$1,234.56');
+    expect(formatCurrency(100000, 'INR')).toBe('₹1,00,000');
+  });
+});
+

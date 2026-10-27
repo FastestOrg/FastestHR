@@ -169,11 +169,17 @@ Deno.serve(async (req) => {
     }
 
     // 4. Download PDF from Storage to attach
-    console.log(`Downloading PDF from offer_letters bucket: ${pdf_path}`);
+    // Security Guard: Enforce strict tenant path boundary to prevent cross-tenant exfiltration
+    const cleanPdfPath = String(pdf_path || '').trim();
+    if (!cleanPdfPath.startsWith(`${company_id}/`) || cleanPdfPath.includes('..')) {
+      throw new Error('Forbidden: Storage file path does not belong to this company');
+    }
+
+    console.log(`Downloading PDF from offer_letters bucket: ${cleanPdfPath}`);
     const { data: pdfBlob, error: downloadError } = await supabaseClient
       .storage
       .from('offer_letters')
-      .download(pdf_path);
+      .download(cleanPdfPath);
 
     if (downloadError || !pdfBlob) {
       throw new Error(`Failed to download PDF attachment: ${downloadError?.message}`);

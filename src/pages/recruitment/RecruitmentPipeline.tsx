@@ -503,7 +503,7 @@ export function RecruitmentPipeline() {
     queryFn: async () => {
       const { data } = await supabase
         .from('candidates')
-        .select('*,assigned_profile:profiles!candidates_assigned_to_fkey(id,full_name)')
+        .select('id,company_id,job_id,full_name,email,phone,source,stage,score,created_at,updated_at,candidate_user_id,assigned_to,parsed_data,ai_analysis,ai_interview_result,assigned_profile:profiles!candidates_assigned_to_fkey(id,full_name)')
         .eq('job_id', activeJob!)
         .order('created_at', { ascending: false });
       return data || [];

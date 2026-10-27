@@ -94,9 +94,15 @@ export default function HelpDesk() {
 
   const createMutation = useMutation({
     mutationFn: async (f: TicketForm) => {
+      const { data: emp } = await supabase
+        .from('employees')
+        .select('id')
+        .eq('user_id', profile!.id)
+        .maybeSingle();
+
       const { error } = await supabase.from('tickets').insert([{
         company_id: profile!.company_id!,
-        raised_by: profile!.id,
+        raised_by: emp?.id || null,
         subject: f.subject,
         description: f.description,
         category: f.category,

@@ -193,8 +193,9 @@ function DetailsStep({ form, setForm, onNext, onPrev }: {
   );
 }
 
-function ResumeStep({ form, setForm, onNext, onPrev }: {
+function ResumeStep({ form, setForm, companyId, onNext, onPrev }: {
   form: AppForm; setForm: React.Dispatch<React.SetStateAction<AppForm>>;
+  companyId?: string | null;
   onNext: () => void; onPrev: () => void;
 }) {
   const [uploading, setUploading] = useState(false);
@@ -208,7 +209,9 @@ function ResumeStep({ form, setForm, onNext, onPrev }: {
     }
     setUploading(true);
     try {
-      const path = `resumes/${Date.now()}_${file.name}`;
+      const cleanFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const targetCompany = companyId || 'common';
+      const path = `resumes/${targetCompany}/${Date.now()}_${cleanFileName}`;
       const { error } = await supabase.storage.from('documents').upload(path, file, { upsert: true });
       if (error) throw error;
       const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(path);
@@ -608,7 +611,7 @@ export default function JobApply() {
           {step === 0 && <WelcomeStep job={job} company={company} onNext={() => setStep(1)} />}
           {step === 1 && <AboutStep job={job} company={company} onNext={() => setStep(2)} onPrev={() => setStep(0)} />}
           {step === 2 && <DetailsStep form={form} setForm={setForm} onNext={() => setStep(3)} onPrev={() => setStep(1)} />}
-          {step === 3 && <ResumeStep form={form} setForm={setForm} onNext={() => setStep(4)} onPrev={() => setStep(2)} />}
+          {step === 3 && <ResumeStep form={form} setForm={setForm} companyId={company?.id || job?.company_id} onNext={() => setStep(4)} onPrev={() => setStep(2)} />}
           {step === 4 && <ReviewStep form={form} job={job} company={company} onPrev={() => setStep(3)} onSubmit={handleSubmit} submitting={submitting} />}
           {step === 5 && <SuccessStep company={company} companySlug={companySlug!} />}
         </div>

@@ -24,6 +24,7 @@ interface AuthState {
   setProfile: (profile: Profile | null) => void;
   setLoading: (loading: boolean) => void;
   initialize: () => Promise<void>;
+  fetchProfile: (userId: string) => Promise<Profile | null>;
   signOut: () => Promise<void>;
 }
 
@@ -40,6 +41,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setSession: (session) => set({ session }),
   setProfile: (profile) => set({ profile }),
   setLoading: (loading) => set({ loading }),
+
+  fetchProfile: async (userId: string) => {
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+      if (data) {
+        const profile = data as unknown as Profile;
+        set({ profile });
+        return profile;
+      }
+      return null;
+    } catch (err) {
+      console.warn('Error fetching profile:', err);
+      return null;
+    }
+  },
 
   initialize: async () => {
     try {
@@ -71,16 +91,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         if (session?.user) {
           // Use setTimeout to avoid Supabase deadlock
           setTimeout(async () => {
-            try {
-              const { data } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', session.user.id)
-                .maybeSingle();
-              if (data) set({ profile: data as unknown as Profile });
-            } catch (err) {
-              console.warn('Error fetching profile in auth change:', err);
-            }
+            get().fetchProfile(session.user.id).catch(() => {});
           }, 0);
 
           if (event === 'SIGNED_IN') {
@@ -117,16 +128,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           set({ session, user: session?.user ?? null });
 
           if (session?.user) {
-            try {
-              const { data: profileData } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', session.user.id)
-                .maybeSingle();
-              if (profileData) set({ profile: profileData as unknown as Profile });
-            } catch (err) {
-              console.warn('Failed to load profile:', err);
-            }
+            await get().fetchProfile(session.user.id);
           }
         }
       } catch (err) {
@@ -145,10 +147,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   signOut: async () => {
     try {
-      if (authSubscription) {
-        authSubscription.unsubscribe();
-        authSubscription = null;
-      }
+      // Do not unsubscribe authSubscription on sign out so that future auth changes
+      // (such as logging back in) continue to update the reactive Zustand store.
       await supabase.auth.signOut();
     } catch (err) {
       console.warn('Sign out error:', err);

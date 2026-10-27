@@ -5,6 +5,19 @@ import { requireCompanyStaff, getCorsHeaders } from "../_shared/auth.ts";
 // Polyfill Buffer for nodemailer running in Deno
 (globalThis as any).Buffer = Buffer;
 
+function getCurrencySymbol(code?: string): string {
+  switch (code?.toUpperCase()) {
+    case 'INR': return '₹';
+    case 'EUR': return '€';
+    case 'GBP': return '£';
+    case 'AED': return 'AED ';
+    case 'CAD': return 'C$';
+    case 'AUD': return 'A$';
+    case 'JPY': return '¥';
+    default: return '$';
+  }
+}
+
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
 
@@ -75,11 +88,17 @@ Deno.serve(async (req) => {
     const periodEnd = payslip.payroll_runs?.period_end || '';
 
     // 4. Download PDF from Storage to attach
-    console.log(`Downloading PDF from payslips bucket: ${pdf_path}`);
+    // Security Guard: Enforce strict tenant path boundary to prevent cross-tenant exfiltration
+    const cleanPdfPath = String(pdf_path || '').trim();
+    if (!cleanPdfPath.startsWith(`${company_id}/`) || cleanPdfPath.includes('..')) {
+      throw new Error('Forbidden: Storage file path does not belong to this company');
+    }
+
+    console.log(`Downloading PDF from payslips bucket: ${cleanPdfPath}`);
     const { data: pdfBlob, error: downloadError } = await supabaseClient
       .storage
       .from('payslips')
-      .download(pdf_path);
+      .download(cleanPdfPath);
 
     if (downloadError || !pdfBlob) {
       throw new Error(`Failed to download PDF attachment: ${downloadError?.message}`);
@@ -126,15 +145,15 @@ Deno.serve(async (req) => {
               </tr>
               <tr>
                 <td style="padding: 4px 0; color: #64748b;">Gross Salary:</td>
-                <td style="padding: 4px 0; text-align: right; font-weight: 600; color: #0f172a;">${(company.currency || 'USD') === 'INR' ? '₹' : '$'}${payslip.gross_salary}</td>
+                <td style="padding: 4px 0; text-align: right; font-weight: 600; color: #0f172a;">${getCurrencySymbol(company.currency)}${payslip.gross_salary}</td>
               </tr>
               <tr>
                 <td style="padding: 4px 0; color: #64748b;">Total Deductions:</td>
-                <td style="padding: 4px 0; text-align: right; font-weight: 600; color: #ef4444;">${(company.currency || 'USD') === 'INR' ? '₹' : '$'}${payslip.total_deductions}</td>
+                <td style="padding: 4px 0; text-align: right; font-weight: 600; color: #ef4444;">${getCurrencySymbol(company.currency)}${payslip.total_deductions}</td>
               </tr>
               <tr style="border-top: 1px solid #e2e8f0;">
                 <td style="padding: 8px 0 0 0; color: #0f172a; font-weight: 700; font-size: 14px;">Net Salary Payout:</td>
-                <td style="padding: 8px 0 0 0; text-align: right; font-weight: 700; color: #10b981; font-size: 14px;">${(company.currency || 'USD') === 'INR' ? '₹' : '$'}${payslip.net_salary}</td>
+                <td style="padding: 8px 0 0 0; text-align: right; font-weight: 700; color: #10b981; font-size: 14px;">${getCurrencySymbol(company.currency)}${payslip.net_salary}</td>
               </tr>
             </table>
           </div>

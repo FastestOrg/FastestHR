@@ -411,7 +411,7 @@ export default function Payroll() {
             const employeeName = `${emp.first_name} ${emp.last_name}`.trim();
             const slipPeriodStart = slip.payroll_runs?.period_start || periodStart;
             const slipPeriodEnd = slip.payroll_runs?.period_end || periodEnd;
-            const currencySymbolLocal = (companyProfile?.currency === 'INR') ? '₹' : '$';
+            const currencySymbolLocal = getCurrencySymbol(companyProfile?.currency);
 
             // Get download URL for the PDF (Google Drive or Supabase)
             let emailPdfUrl = '';

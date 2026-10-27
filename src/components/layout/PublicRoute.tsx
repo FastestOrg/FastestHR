@@ -11,10 +11,10 @@ interface PublicRouteProps {
  * like login, register, etc. and redirects them to the dashboard.
  */
 export function PublicRoute({ children }: PublicRouteProps) {
-  const { user, loading, initialized } = useAuthStore();
+  const { user, profile, loading, initialized } = useAuthStore();
 
   // Show loading state while checking authentication
-  if (!initialized || loading) {
+  if (!initialized || loading || (user && !profile)) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -26,9 +26,12 @@ export function PublicRoute({ children }: PublicRouteProps) {
     );
   }
 
-  // If user is logged in, redirect to dashboard (unless they are in password recovery flow)
+  // If user is logged in, redirect to dashboard or admin (unless they are in password recovery flow)
   const isRecovery = window.location.hash.includes('type=recovery') || window.location.href.includes('type=recovery');
   if (user && !isRecovery) {
+    if (profile?.platform_role === 'super_admin') {
+      return <Navigate to="/admin" replace />;
+    }
     return <Navigate to="/dashboard" replace />;
   }
 

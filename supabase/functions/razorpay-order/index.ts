@@ -17,6 +17,19 @@ function jsonResponse(body: Record<string, unknown>, headers: Record<string, str
   });
 }
 
+function getCurrencySymbol(code?: string): string {
+  switch (code?.toUpperCase()) {
+    case 'INR': return '₹';
+    case 'EUR': return '€';
+    case 'GBP': return '£';
+    case 'AED': return 'AED ';
+    case 'CAD': return 'C$';
+    case 'AUD': return 'A$';
+    case 'JPY': return '¥';
+    default: return '$';
+  }
+}
+
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
 
@@ -48,10 +61,61 @@ Deno.serve(async (req) => {
 
     // ─── CREATE ORDER ──────────────────────────────────────────
     if (action === "create_order") {
-      const { amount, currency = "INR", company_id, discount_code } = body;
+      const { amount, currency: reqCurrency, company_id, discount_code } = body;
 
-      if (!amount || amount <= 0) {
-        return jsonResponse({ error: "Invalid amount" }, corsHeaders, 400);
+      if (!amount || typeof amount !== 'number' || amount <= 0 || !Number.isFinite(amount)) {
+        return jsonResponse({ error: "Invalid amount. Must be a positive finite number." }, corsHeaders, 400);
+      }
+
+      if (!company_id) {
+        return jsonResponse({ error: "Missing company_id" }, corsHeaders, 400);
+      }
+
+      // Verify caller belongs to company or is super_admin
+      const { data: callerProfile, error: profileErr } = await supabase
+        .from("profiles")
+        .select("company_id, platform_role")
+        .eq("id", userId)
+        .single();
+
+      if (profileErr || !callerProfile) {
+        return jsonResponse({ error: "Caller profile not found" }, corsHeaders, 403);
+      }
+
+      if (callerProfile.platform_role !== "super_admin" && callerProfile.company_id !== company_id) {
+        return jsonResponse({ error: "Forbidden: You cannot create orders for another company" }, corsHeaders, 403);
+      }
+
+      // Fetch company record from DB to strictly enforce authentic base currency (prevents arbitrage)
+      const { data: companyRecord, error: compErr } = await supabase
+        .from("companies")
+        .select("id, currency")
+        .eq("id", company_id)
+        .single();
+
+      if (compErr || !companyRecord) {
+        return jsonResponse({ error: "Company not found" }, corsHeaders, 404);
+      }
+
+      const currency = (companyRecord.currency || "USD").toUpperCase();
+      if (reqCurrency && reqCurrency.toUpperCase() !== currency) {
+        return jsonResponse({
+          error: `Currency mismatch: your account operates in ${currency}. Transactions cannot be processed in ${reqCurrency}.`
+        }, corsHeaders, 400);
+      }
+
+      // Validate amount is a positive finite number within reasonable operational bounds
+      if (typeof amount !== "number" || isNaN(amount) || !isFinite(amount) || amount <= 0) {
+        return jsonResponse({ error: "Invalid top-up amount. Amount must be a positive number." }, corsHeaders, 400);
+      }
+
+      const currSym = getCurrencySymbol(currency);
+      const minAllowed = currency === "INR" ? 100 : 5;
+      const maxAllowed = currency === "INR" ? 500000 : 10000;
+      if (amount < minAllowed || amount > maxAllowed) {
+        return jsonResponse({
+          error: `Top-up amount must be between ${currSym}${minAllowed} and ${currSym}${maxAllowed.toLocaleString()}.`
+        }, corsHeaders, 400);
       }
 
       let finalAmount = amount;
@@ -78,11 +142,19 @@ Deno.serve(async (req) => {
 
       // If finalAmount is 0 after discount, credit directly
       if (finalAmount <= 0) {
+        // Enforce safety cap on 100% discount codes to prevent arbitrary wallet minting
+        const maxFreeAllowed = currency === "INR" ? 5000 : 100;
+        if (amount > maxFreeAllowed) {
+          return jsonResponse({
+            error: `100% discount codes can only be applied to wallet top-ups up to ${currSym}${maxFreeAllowed}.`
+          }, corsHeaders, 400);
+        }
+
         // Full discount — credit wallet directly
         await supabase.rpc("wallet_credit", {
           p_company_id: company_id,
           p_amount: amount,
-          p_description: `Wallet top-up ₹${amount} (100% discount: ${discount_code})`,
+          p_description: `Wallet top-up ${currSym}${amount} (100% discount: ${discount_code})`,
           p_razorpay_order_id: null,
           p_razorpay_payment_id: null,
           p_created_by: userId,
@@ -131,12 +203,13 @@ Deno.serve(async (req) => {
         );
       }
 
+      const currSym = getCurrencySymbol(currency);
       // Store pending transaction
       await supabase.from("wallet_transactions").insert({
         company_id,
         amount,
         type: "credit",
-        description: `Wallet top-up ₹${amount}${discountAmount > 0 ? ` (discount: ₹${discountAmount})` : ""}`,
+        description: `Wallet top-up ${currSym}${amount}${discountAmount > 0 ? ` (discount: ${currSym}${discountAmount})` : ""}`,
         razorpay_order_id: rzpData.id,
         status: "pending",
         created_by: userId,
@@ -199,6 +272,18 @@ Deno.serve(async (req) => {
         return jsonResponse({ success: true, credited: pendingTx.amount, message: "Payment already verified" }, corsHeaders);
       }
 
+      // Global idempotency check: verify this razorpay_payment_id has not already been credited
+      const { data: existingPayment } = await supabase
+        .from("wallet_transactions")
+        .select("id, status, amount")
+        .eq("razorpay_payment_id", razorpay_payment_id)
+        .eq("status", "completed")
+        .maybeSingle();
+
+      if (existingPayment) {
+        return jsonResponse({ success: true, credited: existingPayment.amount, message: "Payment already processed and credited" }, corsHeaders);
+      }
+
       // 2. Verify signature using HMAC-SHA256
       const keySecret = Deno.env.get("RAZORPAY_KEY_SECRET");
       if (!keySecret) {
@@ -232,6 +317,14 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: "Invalid payment signature" }, corsHeaders, 400);
       }
 
+      const { data: compData } = await supabase
+        .from("companies")
+        .select("currency")
+        .eq("id", company_id)
+        .single();
+      const compCurr = (compData?.currency || "USD").toUpperCase();
+      const compCurrSym = getCurrencySymbol(compCurr);
+
       // 3. Reconcile with Razorpay API if keyId and keySecret are present
       const keyId = Deno.env.get("RAZORPAY_KEY_ID");
       if (keyId && keySecret) {
@@ -246,6 +339,11 @@ Deno.serve(async (req) => {
             if (paymentData.order_id && paymentData.order_id !== razorpay_order_id) {
               return jsonResponse({ error: "Payment does not match order ID" }, corsHeaders, 400);
             }
+            if (paymentData.currency && paymentData.currency.toUpperCase() !== compCurr) {
+              return jsonResponse({
+                error: `Currency discrepancy detected: payment processed in ${paymentData.currency} but company account is in ${compCurr}.`
+              }, corsHeaders, 400);
+            }
           }
         } catch (apiErr) {
           console.warn("Razorpay API payment fetch notice:", apiErr);
@@ -255,11 +353,12 @@ Deno.serve(async (req) => {
       // 4. Securely credit wallet with authorized amount from DB (NEVER client body original_amount)
       const creditAmount = Number(pendingTx.amount);
       if (creditAmount > 0) {
+
         // Use RPC for atomic wallet credit
         const { error: creditErr } = await supabase.rpc("wallet_credit", {
           p_company_id: company_id,
           p_amount: creditAmount,
-          p_description: `Razorpay payment verified: ₹${creditAmount}`,
+          p_description: `Razorpay payment verified: ${compCurrSym}${creditAmount}`,
           p_razorpay_order_id: razorpay_order_id,
           p_razorpay_payment_id: razorpay_payment_id,
           p_created_by: userId,

@@ -2,7 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CreditCard, TrendingUp, CheckCircle2, AlertTriangle, Building2, Loader2, DollarSign, Wallet } from 'lucide-react';
+import { CreditCard, CheckCircle2, AlertTriangle, Building2, Loader2, Wallet } from 'lucide-react';
+import { formatCurrency, getLicensePrice } from '@/lib/utils';
 
 export default function Subscriptions() {
   const { data: companies = [], isLoading: loadingCompanies } = useQuery({
@@ -10,7 +11,7 @@ export default function Subscriptions() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('companies')
-        .select('id, name, plan, wallet_balance, price_per_license, license_limit, is_active, created_at');
+        .select('id, name, plan, wallet_balance, price_per_license, license_limit, is_active, created_at, currency');
 
       if (error) throw error;
       return data || [];
@@ -22,9 +23,9 @@ export default function Subscriptions() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('wallet_transactions')
-        .select('*, companies(name, plan)')
+        .select('*, companies(name, plan, currency)')
         .order('created_at', { ascending: false })
-        .limit(20);
+        .limit(50);
 
       if (error) {
         console.warn('Could not fetch wallet transactions:', error);
@@ -36,8 +37,19 @@ export default function Subscriptions() {
 
   // Calculate live revenue metrics
   const activeCompaniesCount = companies.filter((c: any) => c.is_active).length;
-  const totalWalletReserve = companies.reduce((sum: number, c: any) => sum + (Number(c.wallet_balance) || 0), 0);
   const paidPlansCount = companies.filter((c: any) => c.plan && c.plan.toLowerCase() !== 'trial').length;
+
+  // Group wallet reserves by currency to avoid falsely summing multiple currencies together
+  const reservesByCurrency = companies.reduce((acc: Record<string, number>, c: any) => {
+    const curr = (c.currency || 'USD').toUpperCase();
+    const bal = Number(c.wallet_balance) || 0;
+    if (bal > 0) {
+      acc[curr] = (acc[curr] || 0) + bal;
+    }
+    return acc;
+  }, {} as Record<string, number>);
+
+  const nonZeroCurrencies = Object.entries(reservesByCurrency);
 
   const planBreakdown = companies.reduce((acc: Record<string, number>, c: any) => {
     const p = c.plan || 'Free Trial';
@@ -46,6 +58,9 @@ export default function Subscriptions() {
   }, {});
 
   const isLoading = loadingCompanies || loadingTx;
+
+  // Sort companies so tenants with active wallet balances appear first
+  const sortedCompanies = [...companies].sort((a: any, b: any) => (Number(b.wallet_balance) || 0) - (Number(a.wallet_balance) || 0));
 
   return (
     <div className="space-y-6">
@@ -61,9 +76,21 @@ export default function Subscriptions() {
           <CardContent className="p-6">
             <h3 className="text-xs text-muted-foreground mb-2 uppercase font-medium">Total Wallet Reserves</h3>
             <div className="flex items-end justify-between">
-              <span className="text-3xl font-bold text-foreground font-mono">
-                ${totalWalletReserve.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
+              <div>
+                {nonZeroCurrencies.length === 0 ? (
+                  <span className="text-3xl font-bold text-foreground font-mono">
+                    $0.00
+                  </span>
+                ) : (
+                  <div className="space-y-1">
+                    {nonZeroCurrencies.map(([curr, amount]) => (
+                      <div key={curr} className="text-3xl font-bold text-foreground font-mono">
+                        {formatCurrency(amount, curr)}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               <span className="text-xs font-medium text-emerald-600 flex items-center bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
                 <Wallet className="w-3 h-3 mr-1" /> Live
               </span>
@@ -124,6 +151,7 @@ export default function Subscriptions() {
               <div className="divide-y divide-border/30 text-sm">
                 {transactions.map((tx: any) => {
                   const isSuccess = tx.status === 'success' || tx.status === 'completed';
+                  const txCurrency = tx.companies?.currency || 'INR';
                   return (
                     <div key={tx.id} className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors">
                       <div className="flex items-center gap-4">
@@ -143,7 +171,7 @@ export default function Subscriptions() {
                       </div>
                       <div className="text-right">
                         <div className="font-bold text-foreground font-mono">
-                          ${Number(tx.amount || 0).toFixed(2)}
+                          {formatCurrency(Number(tx.amount || 0), txCurrency)}
                         </div>
                         <Badge 
                           variant="outline" 
@@ -171,11 +199,18 @@ export default function Subscriptions() {
             <CardDescription className="text-xs">Live tier status by company</CardDescription>
           </CardHeader>
           <CardContent className="p-4 space-y-3">
-            {companies.slice(0, 8).map((c: any) => (
+            {sortedCompanies.slice(0, 10).map((c: any) => (
               <div key={c.id} className="flex items-center justify-between p-2 rounded-lg border border-border/40 bg-muted/20">
                 <div className="min-w-0 pr-2">
-                  <div className="font-medium text-xs truncate">{c.name}</div>
-                  <div className="text-[10px] text-muted-foreground font-mono">${Number(c.wallet_balance || 0).toFixed(2)} balance</div>
+                  <div className="font-medium text-xs truncate flex items-center gap-1.5">
+                    {c.name}
+                    <span className="text-[9px] text-muted-foreground font-mono uppercase bg-muted px-1 rounded">
+                      {c.currency || 'USD'}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-muted-foreground font-mono">
+                    {formatCurrency(Number(c.wallet_balance || 0), c.currency || 'USD')} balance &bull; {formatCurrency(getLicensePrice(c.price_per_license, c.currency), c.currency)}/seat
+                  </div>
                 </div>
                 <Badge variant="outline" className="text-[10px] capitalize shrink-0">
                   {c.plan || 'Trial'}

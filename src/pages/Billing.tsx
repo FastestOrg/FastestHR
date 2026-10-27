@@ -35,7 +35,7 @@ import {
   CreditCard,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { getCurrencySymbol, formatAmount } from '@/lib/utils';
+import { getCurrencySymbol, formatAmount, getLicensePrice, BASE_LICENSE_FEE_USD } from '@/lib/utils';
 
 declare global {
   interface Window {
@@ -193,7 +193,7 @@ export default function Billing() {
   const currencySymbol = getCurrencySymbol(company?.currency);
   const walletBalance = Number(company?.wallet_balance) || 0;
   const licenseLimit = Number(company?.license_limit) || 1;
-  const pricePerLicense = Number(company?.price_per_license) || 500;
+  const pricePerLicense = getLicensePrice(company?.price_per_license, company?.currency);
   const monthlySubscriptionCost = licenseLimit * pricePerLicense;
   const threeMonthCost = monthlySubscriptionCost * 3;
   const isLowBalance = walletBalance < threeMonthCost && walletBalance >= 0;
@@ -534,8 +534,15 @@ export default function Billing() {
               <Badge variant="outline" className={`text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 ${company?.plan === 'trial' ? 'text-amber-500 border-amber-500/30 bg-amber-500/10' : 'text-emerald-500 border-emerald-500/30 bg-emerald-500/10'}`}>
                 {company?.plan || 'TRIAL'}
               </Badge>
-              <div className="text-sm text-muted-foreground font-medium">
-                {currencySymbol}{pricePerLicense}/seat/mo
+              <div className="text-right">
+                <div className="text-sm font-semibold text-foreground">
+                  {currencySymbol}{formatAmount(pricePerLicense, company?.currency)}<span className="text-xs text-muted-foreground font-normal">/seat/mo</span>
+                </div>
+                {company?.currency && company.currency.toUpperCase() !== 'USD' && (
+                  <div className="text-[10px] text-muted-foreground font-medium">
+                    (${BASE_LICENSE_FEE_USD} USD converted)
+                  </div>
+                )}
               </div>
             </div>
 
@@ -555,7 +562,7 @@ export default function Billing() {
                 <span className="font-medium text-foreground">{currencySymbol}{formatAmount(monthlySubscriptionCost, company?.currency)}</span>
               </div>
               <div className="flex justify-between text-xs text-muted-foreground">
-                <span>{licenseLimit} seat{licenseLimit > 1 ? 's' : ''} × {currencySymbol}{pricePerLicense}</span>
+                <span>{licenseLimit} seat{licenseLimit > 1 ? 's' : ''} × {currencySymbol}{formatAmount(pricePerLicense, company?.currency)}</span>
                 <span className="font-medium text-foreground">per month</span>
               </div>
             </div>
@@ -713,7 +720,10 @@ export default function Billing() {
             </div>
             {/* Quick amount buttons */}
             <div className="flex gap-2 flex-wrap">
-              {[500, 1000, 2000, 5000, 10000].map((amt) => (
+              {(company?.currency?.toUpperCase() === 'INR'
+                ? [500, 1000, 2500, 5000, 10000]
+                : [25, 50, 100, 250, 500]
+              ).map((amt) => (
                 <Button
                   key={amt}
                   type="button"
@@ -830,7 +840,12 @@ export default function Billing() {
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Rate</span>
-                <span className="font-medium">{currencySymbol}{pricePerLicense}/seat/mo</span>
+                <span className="font-medium">
+                  {currencySymbol}{formatAmount(pricePerLicense, company?.currency)}/seat/mo
+                  {company?.currency && company.currency.toUpperCase() !== 'USD' && (
+                    <span className="text-xs text-muted-foreground ml-1 font-normal">(${BASE_LICENSE_FEE_USD} USD)</span>
+                  )}
+                </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Duration</span>
@@ -927,7 +942,12 @@ export default function Billing() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Rate</span>
-                  <span className="font-medium">{currencySymbol}{pricePerLicense}/seat/mo (pro-rata)</span>
+                  <span className="font-medium">
+                    {currencySymbol}{formatAmount(pricePerLicense, company?.currency)}/seat/mo (pro-rata)
+                    {company?.currency && company.currency.toUpperCase() !== 'USD' && (
+                      <span className="text-xs text-muted-foreground ml-1 font-normal">(${BASE_LICENSE_FEE_USD} USD)</span>
+                    )}
+                  </span>
                 </div>
                 <p className="text-xs text-muted-foreground pt-1">
                   Exact pro-rata cost will be calculated server-side based on remaining days.

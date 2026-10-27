@@ -23,6 +23,7 @@ export default function AIInterview() {
 
   const [step, setStep] = useState<InterviewStep>('loading');
   const [job, setJob] = useState<any>(null);
+  const [activeCandidateId, setActiveCandidateId] = useState<string | null>(candidateId || null);
   const [errorMsg, setErrorMsg] = useState('');
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [isAISpeaking, setIsAISpeaking] = useState(false);
@@ -44,13 +45,22 @@ export default function AIInterview() {
     (async () => {
       try {
         if (hash) {
-          const { data: interview, error: intError } = await supabase
-            .from('ai_interviews')
-            .select('*, jobs(id, title, requirements, ai_interview_enabled, company_id)')
-            .eq('link_hash', hash)
-            .single();
+          let interview: any = null;
+          const { data: rpcData, error: rpcError } = await (supabase.rpc as any)('get_ai_interview_by_hash', { p_link_hash: hash });
+          if (!rpcError && rpcData) {
+            interview = rpcData;
+          } else {
+            const { data: directData, error: intError } = await supabase
+              .from('ai_interviews')
+              .select('*, jobs(id, title, requirements, ai_interview_enabled, company_id)')
+              .eq('link_hash', hash)
+              .maybeSingle();
+            if (intError || !directData) throw new Error('Interview link invalid or not found.');
+            interview = directData;
+          }
 
-          if (intError || !interview) throw new Error('Interview link invalid or not found.');
+          if (!interview) throw new Error('Interview link invalid or not found.');
+          setActiveCandidateId(interview.candidate_id);
           
           const now = new Date();
           const expiry = new Date(interview.expires_at);
@@ -159,7 +169,8 @@ export default function AIInterview() {
 
     // Send transcript to edge function for analysis
     const finalTranscript = transcriptRef.current;
-    if (!finalTranscript.length || !candidateId || !job?.id) {
+    const effectiveCandidateId = activeCandidateId || candidateId;
+    if (!finalTranscript.length || !effectiveCandidateId || !job?.id) {
       setStep('done');
       return;
     }
@@ -168,7 +179,7 @@ export default function AIInterview() {
       const { data, error } = await supabase.functions.invoke('ai-interviewer', {
         body: { 
           action: 'analyze', 
-          candidateId: candidateId || (await supabase.from('ai_interviews').select('candidate_id').eq('link_hash', hash!).single()).data?.candidate_id, 
+          candidateId: effectiveCandidateId, 
           jobId: job.id, 
           transcript: finalTranscript,
           hash: hash || null

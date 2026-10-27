@@ -13,7 +13,7 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children, requiredRole, allowedRoles }: ProtectedRouteProps) {
   const { user, profile, loading, initialized } = useAuthStore();
 
-  if (!initialized || loading) {
+  if (!initialized || loading || (user && !profile)) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="flex flex-col items-center gap-4">

@@ -136,7 +136,7 @@ export function RecruitmentLeadsBoard() {
     queryFn: async () => {
       let query = (supabase as any)
         .from('candidates')
-        .select('*,jobs(title,id),assigned_profile:profiles!candidates_assigned_to_fkey(id,full_name,platform_role)')
+        .select('id,company_id,job_id,full_name,email,phone,source,stage,score,created_at,updated_at,assigned_to,assigned_at,candidate_user_id,parsed_data,jobs(title,id),assigned_profile:profiles!candidates_assigned_to_fkey(id,full_name,platform_role)')
         .eq('company_id', profile!.company_id!)
         .order('assigned_at', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false });

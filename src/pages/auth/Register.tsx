@@ -59,8 +59,9 @@ export default function Register() {
   const onSubmit = async (data: RegisterForm) => {
     setLoading(true);
     try {
-      const { error: authError } = await supabase.auth.signUp({
-        email: data.email,
+      const cleanEmail = data.email.trim();
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: cleanEmail,
         password: data.password,
         options: {
           data: {
@@ -71,14 +72,23 @@ export default function Register() {
             company_industry: data.industry || null,
             company_country: data.country || null,
           },
-          emailRedirectTo: window.location.origin,
+          emailRedirectTo: `${window.location.origin}/dashboard`,
         },
       });
 
       if (authError) throw authError;
 
-      toast.success('Account created! Please check your email to verify.');
-      navigate('/login');
+      try {
+        localStorage.setItem('pending_verification_email', cleanEmail);
+      } catch {}
+
+      if (authData?.session) {
+        toast.success('Account created! Welcome to FastestHR.');
+        navigate('/dashboard');
+      } else {
+        toast.success('Account created! Please check your email to verify.');
+        navigate(`/verify-email?email=${encodeURIComponent(cleanEmail)}&registered=true`);
+      }
     } catch (err: unknown) {
       toast.error((err instanceof Error ? err.message : String(err)) || 'Registration failed');
     } finally {
@@ -221,10 +231,18 @@ export default function Register() {
         </TooltipProvider>
       </form>
 
-      <p className="mt-6 text-center text-sm text-muted-foreground">
-        Already have an account?{' '}
-        <Link to="/login" className="font-medium text-primary hover:underline">Sign in</Link>
-      </p>
+      <div className="mt-6 space-y-2 text-center text-sm text-muted-foreground">
+        <p>
+          Already have an account?{' '}
+          <Link to="/login" className="font-medium text-primary hover:underline">Sign in</Link>
+        </p>
+        <p className="text-xs">
+          Already registered but didn't receive your verification email?{' '}
+          <Link to="/verify-email" className="font-medium text-primary hover:underline">
+            Resend email
+          </Link>
+        </p>
+      </div>
     </AuthLayout>
   );
 }
