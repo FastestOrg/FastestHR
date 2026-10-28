@@ -87,19 +87,106 @@ export async function authenticateCaller(req: Request): Promise<CallerAuthContex
     throw new Error(`Unauthorized: ${userError?.message || 'Invalid or expired session'}`);
   }
 
-  const { data: profile, error: profileError } = await adminClient
+  // 1. Fetch user profile from public.profiles (omitting 'email' as email is stored on auth.users)
+  let { data: profile, error: profileError } = await adminClient
     .from('profiles')
-    .select('id, platform_role, company_id, full_name, email')
+    .select('id, platform_role, company_id, full_name')
     .eq('id', user.id)
-    .single();
+    .maybeSingle();
 
-  if (profileError || !profile) {
+  if (profileError) {
+    console.error('authenticateCaller: Error querying public.profiles for user', user.id, profileError);
+  }
+
+  // 2. Fallback: If profile row is missing in public.profiles, attempt recovery via employees and user_metadata
+  if (!profile) {
+    console.warn(`authenticateCaller: Profile missing in public.profiles for user ${user.id}. Attempting fallback lookup.`);
+
+    const { data: emp, error: empError } = await adminClient
+      .from('employees')
+      .select('id, company_id, first_name, last_name, status')
+      .or(`user_id.eq.${user.id},work_email.ilike.${user.email || ''}`)
+      .is('deleted_at', null)
+      .limit(1)
+      .maybeSingle();
+
+    if (empError) {
+      console.warn('authenticateCaller: Fallback employee lookup failed:', empError);
+    }
+
+    const metaRole = (user.user_metadata?.platform_role as string) || (emp ? 'hr_manager' : 'user');
+    const metaCompanyId = (emp?.company_id as string) || (user.user_metadata?.company_id as string) || null;
+    const metaFullName = emp
+      ? `${emp.first_name || ''} ${emp.last_name || ''}`.trim()
+      : (user.user_metadata?.full_name as string) || (user.email ? user.email.split('@')[0] : 'User');
+
+    if (metaCompanyId) {
+      // Auto-heal missing profile row so future lookups are fast and persistent
+      const { data: healedProfile, error: upsertError } = await adminClient
+        .from('profiles')
+        .upsert({
+          id: user.id,
+          company_id: metaCompanyId,
+          full_name: metaFullName,
+          platform_role: metaRole,
+          is_active: true,
+        }, { onConflict: 'id' })
+        .select('id, platform_role, company_id, full_name')
+        .maybeSingle();
+
+      if (upsertError) {
+        console.warn('authenticateCaller: Auto-heal profile upsert failed:', upsertError);
+      }
+
+      profile = healedProfile || {
+        id: user.id,
+        platform_role: metaRole,
+        company_id: metaCompanyId,
+        full_name: metaFullName,
+      };
+    }
+  }
+
+  // 3. Ensure company_id is populated if previously null
+  if (profile && !profile.company_id) {
+    const fallbackCompanyId = (user.user_metadata?.company_id as string) || null;
+    if (fallbackCompanyId) {
+      profile.company_id = fallbackCompanyId;
+      await adminClient.from('profiles').update({ company_id: fallbackCompanyId }).eq('id', user.id);
+    } else {
+      const { data: emp } = await adminClient
+        .from('employees')
+        .select('company_id')
+        .or(`user_id.eq.${user.id},work_email.ilike.${user.email || ''}`)
+        .is('deleted_at', null)
+        .limit(1)
+        .maybeSingle();
+      if (emp?.company_id) {
+        profile.company_id = emp.company_id;
+        await adminClient.from('profiles').update({ company_id: emp.company_id }).eq('id', user.id);
+      }
+    }
+  }
+
+  // 4. Ensure platform_role matches elevated role if user was invited/assigned as HR manager or admin
+  if (profile && profile.platform_role === 'user') {
+    const metaRole = user.user_metadata?.platform_role as string;
+    if (metaRole && ['company_admin', 'hr_manager', 'recruiter'].includes(metaRole)) {
+      profile.platform_role = metaRole;
+      await adminClient.from('profiles').update({ platform_role: metaRole }).eq('id', user.id);
+    }
+  }
+
+  if (!profile) {
     throw new Error('Unauthorized: User profile not found');
   }
 
   return {
     user: { id: user.id, email: user.email },
-    profile,
+    profile: {
+      ...profile,
+      email: user.email || null,
+    },
     adminClient,
   };
 }
