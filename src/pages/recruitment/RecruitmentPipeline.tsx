@@ -454,6 +454,7 @@ export function RecruitmentPipeline() {
 
   const isAdmin = ['company_admin', 'super_admin'].includes(profile?.platform_role || '');
   const isManager = profile?.platform_role === 'hr_manager';
+  const isRecruiter = profile?.platform_role === 'recruiter';
   const canManageJobs = isAdmin || isManager;
 
   const { data: jobs = [], isLoading: loadingJobs } = useQuery({
@@ -499,13 +500,19 @@ export function RecruitmentPipeline() {
   }));
 
   const { data: candidates = [], isLoading: loadingCandidates } = useQuery({
-    queryKey: ['candidates', activeJob],
+    queryKey: ['candidates', activeJob, isRecruiter ? profile?.id : 'all'],
     queryFn: async () => {
-      const { data } = await supabase
+      let query = supabase
         .from('candidates')
         .select('id,company_id,job_id,full_name,email,phone,source,stage,score,created_at,updated_at,candidate_user_id,assigned_to,parsed_data,ai_analysis,ai_interview_result,assigned_profile:profiles!candidates_assigned_to_fkey(id,full_name)')
         .eq('job_id', activeJob!)
         .order('created_at', { ascending: false });
+
+      if (isRecruiter && profile?.id) {
+        query = query.eq('assigned_to', profile.id);
+      }
+
+      const { data } = await query;
       return data || [];
     },
     enabled: !!activeJob,
@@ -582,6 +589,13 @@ export function RecruitmentPipeline() {
             <Layers className="w-4 h-4" />
             Switch Job
           </Button>
+
+          {isRecruiter && (
+            <Badge variant="secondary" className="text-xs bg-primary/10 text-primary border-primary/20 gap-1.5 py-1 px-2.5 rounded-full font-medium">
+              <UserCheck className="w-3.5 h-3.5" />
+              My Assigned Leads
+            </Badge>
+          )}
 
           {canManageJobs && candidates.length > 0 && (
             <Button

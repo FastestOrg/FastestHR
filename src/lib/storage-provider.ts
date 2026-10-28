@@ -201,8 +201,8 @@ export async function uploadDocumentToStorage(options: UploadStorageOptions): Pr
         size: fileSize,
       };
     } catch (driveErr) {
-      console.error('[StorageProvider] Google Drive upload failed, falling back to Supabase Storage:', driveErr);
-      // Seamless fallback to Supabase if Drive temporary network error occurs
+      console.warn('[StorageProvider] Google Drive upload failed, falling back to Supabase Storage:', driveErr);
+      // Seamless fallback to Supabase if Drive temporary network error or token expiration occurs
     }
   }
 

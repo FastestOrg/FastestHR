@@ -23,14 +23,9 @@ export default function Recruitment() {
     ? pathSegment 
     : '';
 
-  // Recruiter role: redirect to leads if they hit /recruitment or /recruitment/pipeline
-  if (isRecruiter && (activeTab === '' || activeTab === 'pipeline')) {
-    return <Navigate to="/recruitment/leads" replace />;
-  }
-
   // Define visible tabs based on role
   const tabs = [
-    ...(!isRecruiter ? [{ id: 'pipeline', label: 'Pipeline', icon: Briefcase, path: '/recruitment/pipeline' }] : []),
+    { id: 'pipeline', label: 'Pipeline', icon: Briefcase, path: '/recruitment/pipeline' },
     { id: 'leads', label: isRecruiter ? 'My Leads' : 'Leads Board', icon: UserCheck, path: '/recruitment/leads' },
     ...((isAdmin || isManager) ? [{ id: 'analytics', label: 'Analytics', icon: BarChart3, path: '/recruitment/analytics' }] : []),
     ...((isAdmin || isManager) ? [{ id: 'team', label: 'Team', icon: Crown, path: '/recruitment/team' }] : []),
