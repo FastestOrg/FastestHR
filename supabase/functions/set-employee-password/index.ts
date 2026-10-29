@@ -27,19 +27,21 @@ Deno.serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    // Check if the caller is a company_admin or super_admin
+    // Check if the caller is a company_admin, hr_manager, or super_admin
     const { data: adminProfile, error: profileError } = await supabaseClient
       .from('profiles')
       .select('platform_role, company_id')
       .eq('id', adminUser.id)
       .single();
 
-    if (
-      profileError ||
-      !adminProfile ||
-      (adminProfile.platform_role !== 'company_admin' && adminProfile.platform_role !== 'super_admin')
-    ) {
-      throw new Error('Forbidden: Only company admins or super admins can perform this action');
+    const isAuthorized = adminProfile && (
+      adminProfile.platform_role === 'company_admin' ||
+      adminProfile.platform_role === 'hr_manager' ||
+      adminProfile.platform_role === 'super_admin'
+    );
+
+    if (profileError || !isAuthorized) {
+      throw new Error('Forbidden: Only company admins, HR managers, or super admins can perform this action');
     }
 
     const { target_user_id, new_password } = await req.json();
@@ -48,8 +50,8 @@ Deno.serve(async (req) => {
       throw new Error('Missing target_user_id or new_password');
     }
 
-    if (typeof new_password !== 'string' || new_password.length < 8) {
-      throw new Error('Password must be at least 8 characters long');
+    if (typeof new_password !== 'string' || new_password.length < 6) {
+      throw new Error('Password must be at least 6 characters long');
     }
 
     // Verify target user
@@ -67,9 +69,12 @@ Deno.serve(async (req) => {
       if (targetProfile.company_id !== adminProfile.company_id) {
         throw new Error('Forbidden: Target user belongs to a different company');
       }
-      // Security Guard: Company admins cannot reset passwords of peer company admins or super admins!
+      // Security Guard: Cannot modify passwords of higher administrative accounts
       if (targetProfile.platform_role === 'super_admin' || (targetProfile.platform_role === 'company_admin' && target_user_id !== adminUser.id)) {
         throw new Error('Forbidden: You cannot modify passwords of administrative accounts');
+      }
+      if (adminProfile.platform_role === 'hr_manager' && targetProfile.platform_role === 'hr_manager' && target_user_id !== adminUser.id) {
+        throw new Error('Forbidden: HR managers cannot modify passwords of peer HR managers');
       }
     }
 
@@ -79,9 +84,12 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { data, error: updateError } = await adminSupabase.auth.admin.updateUserById(
+    const { error: updateError } = await adminSupabase.auth.admin.updateUserById(
       target_user_id,
-      { password: new_password }
+      { 
+        password: new_password,
+        email_confirm: true,
+      }
     );
 
     if (updateError) {

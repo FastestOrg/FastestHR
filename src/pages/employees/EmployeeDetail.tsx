@@ -399,7 +399,7 @@ export default function EmployeeDetail() {
         });
 
         const result = await response.json();
-        if (!response.ok) {
+        if (!response.ok || result.error) {
           throw new Error(result.error || 'Failed to create portal account');
         }
         return { isNew: true, result };
@@ -427,8 +427,13 @@ export default function EmployeeDetail() {
     },
     onSuccess: (data) => {
       if (data.isNew) {
-        toast.success('Portal account created and credentials sent to employee');
+        if (data.result?.emailSent) {
+          toast.success('Portal account created and credentials dispatched to work email');
+        } else {
+          toast.success('Portal account created successfully! (Credentials email not sent: configure SMTP in Settings)');
+        }
         queryClient.invalidateQueries({ queryKey: ['employee', id] });
+        queryClient.invalidateQueries({ queryKey: ['employees'] });
       } else {
         toast.success('Password updated successfully');
       }

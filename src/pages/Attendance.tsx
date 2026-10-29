@@ -278,7 +278,7 @@ export default function Attendance() {
     queryKey: ['attendance-today', employee?.id, today],
     queryFn: async () => {
       if (!employee?.id) return null;
-      
+
       // 0. Auto-process timeout logouts and absconding rules for company staff/admins
       const isAdminOrHr = profile?.platform_role && ['super_admin', 'company_admin', 'hr_manager'].includes(profile.platform_role);
       if (isAdminOrHr && employee.company_id) {
@@ -337,7 +337,7 @@ export default function Attendance() {
         .lte('effective_from', today)
         .or(`effective_to.gte.${today},effective_to.is.null`)
         .maybeSingle();
-      
+
       if (error) {
         console.error('Error fetching shift assignment:', error);
         return null;
@@ -359,7 +359,7 @@ export default function Attendance() {
         .eq('company_id', profile.company_id)
         .like('regularization_reason', '%"status":"pending"%')
         .order('date', { ascending: false });
-      
+
       if (error) throw error;
       return data || [];
     },
@@ -497,7 +497,7 @@ export default function Attendance() {
         .select('*')
         .eq('id', recordId)
         .single();
-      
+
       if (fetchErr) throw fetchErr;
       if (!record.regularization_reason) throw new Error("No request details found on record");
 
@@ -649,24 +649,25 @@ export default function Attendance() {
   });
 
   const { data: attendanceData = [], isLoading } = useQuery({
-    queryKey: ['attendance', employee?.company_id],
+    queryKey: ['attendance', employee?.id],
     queryFn: async () => {
+      if (!employee?.id) return [];
       const { data } = await supabase
         .from('attendance')
         .select('id, employee_id, company_id, date, status, clock_in, clock_out, break_minutes, total_hours, is_regularized, regularization_reason, clock_in_location, employees(first_name, last_name)')
-        .eq('company_id', employee!.company_id)
+        .eq('employee_id', employee!.id)
         .order('date', { ascending: false })
         .limit(20);
       return data || [];
     },
-    enabled: !!employee?.company_id,
+    enabled: !!employee?.id,
   });
 
   const clockInMutation = useMutation({
     mutationFn: async () => {
       if (!employee) throw new Error('Employee record not found');
       if (todayRecord?.clock_in) throw new Error('Already clocked in today');
-      
+
       const clockInTime = new Date();
 
       if (!navigator.onLine) {
@@ -684,14 +685,14 @@ export default function Attendance() {
 
       const shiftStartStr = activeShift?.start_time || '09:00:00';
       const shiftEndStr = activeShift?.end_time || '18:00:00';
-      
+
       // Fetch company settings
       const { data: company, error: companyErr } = await supabase
         .from('companies')
         .select('geofence_latitude, geofence_longitude, geofence_radius, ip_whitelist, payroll_settings, attendance_settings')
         .eq('id', employee.company_id)
         .single();
-        
+
       if (companyErr) {
         console.error('Failed to load company settings:', companyErr);
       }
@@ -704,7 +705,7 @@ export default function Attendance() {
 
       // Resolve shift times & date bounds (handles crossover night shifts)
       const { shiftStart, shiftDateStr } = resolveShiftTimes(clockInTime, shiftStartStr, shiftEndStr);
-      
+
       // Calculate isLate
       const graceTime = new Date(shiftStart.getTime() + lateGrace * 60 * 1000);
       const isLate = clockInTime.getTime() > graceTime.getTime();
@@ -715,10 +716,10 @@ export default function Attendance() {
 
       let gpsCoords: { latitude: number; longitude: number; accuracy: number; verified: boolean } | null = null;
       let clientIP: string | null = null;
-      
+
       // Fetch public IP address
       clientIP = await fetchPublicIP();
-      
+
       // Location & Geofencing Check
       if (workType === 'office') {
         // 1. Check IP whitelist / geofence bypass
@@ -735,7 +736,7 @@ export default function Attendance() {
           const position = await getResilientPosition();
 
           const { latitude, longitude, accuracy } = position.coords;
-          
+
           // Fetch active company locations
           const { data: locations } = await supabase
             .from('company_locations')
@@ -826,7 +827,7 @@ export default function Attendance() {
       try {
         const { data: rpcRes, error: rpcErr } = await (supabase.rpc as any)('record_clock_in', {
           p_employee_id: employee.id,
-          p_location: { 
+          p_location: {
             work_type: workType,
             ip_address: clientIP || 'unknown',
             ...(gpsCoords ? { gps: gpsCoords } : {})
@@ -864,7 +865,7 @@ export default function Attendance() {
             clock_in: clockInTime.toISOString(),
             status: statusToSet as any,
             clock_in_ip: clientIP,
-            clock_in_location: { 
+            clock_in_location: {
               work_type: workType,
               ip_address: clientIP || 'unknown',
               ...(gpsCoords ? { gps: gpsCoords } : {})
@@ -898,13 +899,13 @@ export default function Attendance() {
     mutationFn: async () => {
       if (!todayRecord?.id) throw new Error('No active clock-in record found');
       if (todayRecord.clock_out) throw new Error('Already clocked out');
-      
+
       const clockOutTime = new Date();
       const clockInTime = new Date(todayRecord.clock_in);
-      
+
       // Check if user was currently on break; if so, finalize it automatically
-      const clockInLoc = (todayRecord.clock_in_location && typeof todayRecord.clock_in_location === 'object') 
-        ? { ...todayRecord.clock_in_location } 
+      const clockInLoc = (todayRecord.clock_in_location && typeof todayRecord.clock_in_location === 'object')
+        ? { ...todayRecord.clock_in_location }
         : {};
       const wasOnBreak = !!(clockInLoc as any).active_break_start;
       let finalBreakMinutes = todayRecord.break_minutes || 0;
@@ -934,7 +935,7 @@ export default function Attendance() {
 
       const shiftStartStr = activeShift?.start_time || '09:00:00';
       const shiftEndStr = activeShift?.end_time || '18:00:00';
-      
+
       // Resolve crossover shift end time using clock in time for stability
       const { shiftEnd } = resolveShiftTimes(clockInTime, shiftStartStr, shiftEndStr);
       const isEarlyLeave = clockOutTime.getTime() < shiftEnd.getTime();
@@ -952,7 +953,7 @@ export default function Attendance() {
         .select('geofence_latitude, geofence_longitude, geofence_radius, ip_whitelist, attendance_settings')
         .eq('id', employee!.company_id)
         .single();
-        
+
       if (companyErr) {
         console.error('Failed to load company settings:', companyErr);
       }
@@ -1052,7 +1053,7 @@ export default function Attendance() {
           }
         }
       }
-      
+
       // Calculate final status based on working hours brackets
       const absentThreshold = settings?.brackets?.absent_limit_hours ?? 4.0;
       const halfDayThreshold = settings?.brackets?.half_day_limit_hours ?? 7.0;
@@ -1179,13 +1180,13 @@ export default function Attendance() {
       }
 
       // 2. Resilient fallback to direct update
-      const clockInLoc = (todayRecord.clock_in_location && typeof todayRecord.clock_in_location === 'object') 
-        ? { ...todayRecord.clock_in_location } 
+      const clockInLoc = (todayRecord.clock_in_location && typeof todayRecord.clock_in_location === 'object')
+        ? { ...todayRecord.clock_in_location }
         : {};
-      
+
       const currentlyOnBreak = !!((todayRecord as any)?.active_break_start || (clockInLoc as any).active_break_start);
       const now = new Date();
-      
+
       let updatedBreakMinutes = todayRecord.break_minutes || 0;
       if (currentlyOnBreak) {
         const startRaw = (todayRecord as any)?.active_break_start || (clockInLoc as any).active_break_start;
@@ -1196,7 +1197,7 @@ export default function Attendance() {
       } else {
         (clockInLoc as any).active_break_start = now.toISOString();
       }
-      
+
       const { data, error } = await supabase
         .from('attendance')
         .update({
@@ -1226,7 +1227,7 @@ export default function Attendance() {
 
   const isClockedIn = !!todayRecord?.clock_in && !todayRecord?.clock_out;
   const isClockedOut = !!todayRecord?.clock_out;
-  const rawActiveBreak = (todayRecord as any)?.active_break_start || 
+  const rawActiveBreak = (todayRecord as any)?.active_break_start ||
     (todayRecord?.clock_in_location && typeof todayRecord.clock_in_location === 'object' && (todayRecord.clock_in_location as any).active_break_start);
   const isOnBreak = !!rawActiveBreak;
 
@@ -1238,7 +1239,7 @@ export default function Attendance() {
   }
   const activeBreakMins = Math.floor(activeBreakElapsedSeconds / 60);
   const activeBreakSecs = activeBreakElapsedSeconds % 60;
-  const activeBreakDurationStr = activeBreakMins > 0 
+  const activeBreakDurationStr = activeBreakMins > 0
     ? `${activeBreakMins}m ${activeBreakSecs.toString().padStart(2, '0')}s`
     : `${activeBreakSecs}s`;
 
@@ -1246,15 +1247,15 @@ export default function Attendance() {
   if (todayRecord?.clock_in) {
     const start = new Date(todayRecord.clock_in);
     const end = todayRecord.clock_out ? new Date(todayRecord.clock_out) : currentTime;
-    
+
     // Deduct recorded breaks
     let breakMs = (todayRecord.break_minutes || 0) * 60 * 1000;
-    
+
     // If currently on break, deduct active break elapsed time
     if (isOnBreak) {
       breakMs += activeBreakElapsedSeconds * 1000;
     }
-    
+
     const diff = Math.max(0, end.getTime() - start.getTime() - breakMs);
     const h = Math.floor(diff / 3600000).toString().padStart(2, '0');
     const m = Math.floor((diff % 3600000) / 60000).toString().padStart(2, '0');
@@ -1375,7 +1376,7 @@ export default function Attendance() {
               <div className="flex flex-col items-center justify-center gap-1">
                 <Badge variant="outline" className="border-warning text-warning bg-warning/10 gap-1.5 text-xs font-semibold px-3 py-1">
                   <span className="w-2 h-2 rounded-full bg-warning animate-ping"></span>
-                  On Break: {activeBreakDurationStr} (Started {rawActiveBreak ? new Date(rawActiveBreak).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '—'})
+                  On Break: {activeBreakDurationStr} (Started {rawActiveBreak ? new Date(rawActiveBreak).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'})
                 </Badge>
                 <span className="text-[11px] text-warning/80 font-medium">Work timer paused &bull; Clock Out will automatically conclude your break</span>
               </div>
@@ -1442,30 +1443,30 @@ export default function Attendance() {
             </CardHeader>
             <CardContent className="text-xs space-y-3">
               <p className="text-muted-foreground">
-                Unable to verify your location? To prevent you from being locked out of your shift, you can immediately file a manual **Attendance Correction / Regularization** request. 
+                Unable to verify your location? To prevent you from being locked out of your shift, you can immediately file a manual **Attendance Correction / Regularization** request.
               </p>
               <div className="flex gap-2 justify-end">
-                <Button 
-                  size="sm" 
-                  variant="outline" 
-                  onClick={() => setShowRegularizePromptToday(false)} 
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowRegularizePromptToday(false)}
                   className="h-8 px-3 text-xs"
                 >
                   Ignore
                 </Button>
-                <Button 
-                  size="sm" 
+                <Button
+                  size="sm"
                   onClick={() => {
                     const todayDate = new Date().toLocaleDateString('en-CA');
                     setRequestDialogRecord({
                       date: todayDate,
                       id: todayRecord?.id || null // Pass existing todayRecord id if any, else null (triggers insert!)
                     });
-                    
+
                     // Pre-fill form based on default shift times or actuals
                     const defaultIn = activeShift?.start_time?.substring(0, 5) || '09:00';
                     const defaultOut = activeShift?.end_time?.substring(0, 5) || '18:00';
-                    
+
                     setRequestForm({
                       clock_in_time: defaultIn,
                       clock_out_time: defaultOut,
@@ -1568,7 +1569,7 @@ export default function Attendance() {
             {pendingRequests.map((req: any) => {
               const details = parseRegularization(req.regularization_reason);
               if (!details) return null;
-              
+
               const formatTime = (isoStr: string) => {
                 return new Date(isoStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
               };
@@ -1580,7 +1581,7 @@ export default function Attendance() {
                       {req.employees?.first_name} {req.employees?.last_name}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Date: <span className="font-medium text-foreground">{req.date}</span> &bull; 
+                      Date: <span className="font-medium text-foreground">{req.date}</span> &bull;
                       Original: <span className="font-medium text-foreground">{req.clock_in ? formatTime(req.clock_in) : '—'} - {req.clock_out ? formatTime(req.clock_out) : '—'}</span>
                     </p>
                     <p className="text-xs text-muted-foreground">
@@ -1625,99 +1626,99 @@ export default function Attendance() {
           <CardTitle>Recent Logs</CardTitle>
         </CardHeader>
         <CardContent className="pt-4">
-            {isLoading ? <p className="text-muted-foreground py-4 text-center">Loading Data...</p> : attendanceData.length === 0 ? (
-                <p className="text-muted-foreground py-4 text-center">No recent records found.</p>
-            ) : (
-                <div className="divide-y divide-border/50">
-                  {attendanceData.map((record: any) => {
-                    const wt = getWorkTypeFromRecord(record);
-                    const regDetails = parseRegularization(record.regularization_reason);
-                    return (
-                    <div key={record.id} className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm hover:bg-muted/30 p-2.5 rounded-lg transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div>
-                          <div className="font-semibold text-foreground">
-                            {(record.employees as any)?.first_name} {(record.employees as any)?.last_name}
-                          </div>
-                          <div className="text-muted-foreground text-xs flex items-center gap-2 mt-0.5">
-                            {record.date}
-                            {wt && (
-                              <Badge variant="outline" className="text-[9px] capitalize gap-1">
-                                {wt === 'remote' && <Home className="w-2.5 h-2.5" />}
-                                {wt === 'office' && <Building className="w-2.5 h-2.5" />}
-                                {wt === 'hybrid' && <Globe className="w-2.5 h-2.5" />}
-                                {wt}
-                              </Badge>
-                            )}
-                            {record.status === 'late' && (
-                              <Badge variant="outline" className="text-[9px] border-warning text-warning bg-warning/10">Late</Badge>
-                            )}
-                            {record.is_regularized && (
-                              <Badge variant="outline" className="text-[9px] border-success text-success bg-success/5 font-semibold">✓ Regularized</Badge>
-                            )}
-                            {regDetails && regDetails.status === 'pending' && (
-                              <Badge variant="outline" className="text-[9px] border-warning text-warning bg-warning/5 animate-pulse">Pending Correction</Badge>
-                            )}
-                            {regDetails && regDetails.status === 'rejected' && (
-                              <Badge variant="outline" className="text-[9px] border-destructive text-destructive bg-destructive/5" title={regDetails.rejection_reason}>Correction Rejected</Badge>
-                            )}
-                          </div>
+          {isLoading ? <p className="text-muted-foreground py-4 text-center">Loading Data...</p> : attendanceData.length === 0 ? (
+            <p className="text-muted-foreground py-4 text-center">No recent records found.</p>
+          ) : (
+            <div className="divide-y divide-border/50">
+              {attendanceData.map((record: any) => {
+                const wt = getWorkTypeFromRecord(record);
+                const regDetails = parseRegularization(record.regularization_reason);
+                return (
+                  <div key={record.id} className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm hover:bg-muted/30 p-2.5 rounded-lg transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <div className="font-semibold text-foreground">
+                          {(record.employees as any)?.first_name ? `${(record.employees as any)?.first_name} ${(record.employees as any)?.last_name || ''}`.trim() : (profile?.full_name || 'My Record')}
                         </div>
-                      </div>
-                      <div className="flex gap-4 items-center text-left sm:text-right justify-between sm:justify-end border-t border-border/10 pt-2 sm:pt-0 sm:border-none w-full sm:w-auto">
-                        <div>
-                          <span className="text-muted-foreground text-[10px] uppercase block">In</span>
-                          <span className="font-medium text-foreground">{record.clock_in ? new Date(record.clock_in).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}</span>
+                        <div className="text-muted-foreground text-xs flex items-center gap-2 mt-0.5">
+                          {record.date}
+                          {wt && (
+                            <Badge variant="outline" className="text-[9px] capitalize gap-1">
+                              {wt === 'remote' && <Home className="w-2.5 h-2.5" />}
+                              {wt === 'office' && <Building className="w-2.5 h-2.5" />}
+                              {wt === 'hybrid' && <Globe className="w-2.5 h-2.5" />}
+                              {wt}
+                            </Badge>
+                          )}
+                          {record.status === 'late' && (
+                            <Badge variant="outline" className="text-[9px] border-warning text-warning bg-warning/10">Late</Badge>
+                          )}
+                          {record.is_regularized && (
+                            <Badge variant="outline" className="text-[9px] border-success text-success bg-success/5 font-semibold">✓ Regularized</Badge>
+                          )}
+                          {regDetails && regDetails.status === 'pending' && (
+                            <Badge variant="outline" className="text-[9px] border-warning text-warning bg-warning/5 animate-pulse">Pending Correction</Badge>
+                          )}
+                          {regDetails && regDetails.status === 'rejected' && (
+                            <Badge variant="outline" className="text-[9px] border-destructive text-destructive bg-destructive/5" title={regDetails.rejection_reason}>Correction Rejected</Badge>
+                          )}
                         </div>
-                        <div>
-                          <span className="text-muted-foreground text-[10px] uppercase block">Break</span>
-                          <span className="font-medium text-muted-foreground">
-                            {isOnBreak && record.id === todayRecord?.id ? (
-                              <span className="text-warning font-medium flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-warning animate-ping" />
-                                {activeBreakMins > 0 
-                                  ? `${(record.break_minutes || 0) + activeBreakMins}m` 
-                                  : activeBreakDurationStr}
-                              </span>
-                            ) : (
-                              record.break_minutes ? `${record.break_minutes}m` : '0m'
-                            )}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground text-[10px] uppercase block">Out</span>
-                          <span className="font-medium text-foreground">{record.clock_out ? new Date(record.clock_out).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}</span>
-                        </div>
-                        <div className="w-16">
-                          <span className="text-muted-foreground text-[10px] uppercase block">Total</span>
-                          <span className="font-semibold text-primary">{record.total_hours?.toFixed(2) || '0.00'}h</span>
-                        </div>
-                        {!record.is_regularized && (!regDetails || regDetails.status !== 'pending') && record.employee_id === employee?.id && (
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="h-7 text-xs border border-primary/20 text-primary hover:bg-primary/10 px-2 rounded-md"
-                            onClick={() => {
-                              setRequestDialogRecord(record);
-                              if (record.clock_in) {
-                                const inTime = new Date(record.clock_in);
-                                setRequestForm(f => ({ ...f, clock_in_time: inTime.toTimeString().substring(0, 5) }));
-                              }
-                              if (record.clock_out) {
-                                const outTime = new Date(record.clock_out);
-                                setRequestForm(f => ({ ...f, clock_out_time: outTime.toTimeString().substring(0, 5) }));
-                              }
-                            }}
-                          >
-                            Correct
-                          </Button>
-                        )}
                       </div>
                     </div>
-                    );
-                  })}
-                </div>
-            )}
+                    <div className="flex gap-4 items-center text-left sm:text-right justify-between sm:justify-end border-t border-border/10 pt-2 sm:pt-0 sm:border-none w-full sm:w-auto">
+                      <div>
+                        <span className="text-muted-foreground text-[10px] uppercase block">In</span>
+                        <span className="font-medium text-foreground">{record.clock_in ? new Date(record.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground text-[10px] uppercase block">Break</span>
+                        <span className="font-medium text-muted-foreground">
+                          {isOnBreak && record.id === todayRecord?.id ? (
+                            <span className="text-warning font-medium flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-warning animate-ping" />
+                              {activeBreakMins > 0
+                                ? `${(record.break_minutes || 0) + activeBreakMins}m`
+                                : activeBreakDurationStr}
+                            </span>
+                          ) : (
+                            record.break_minutes ? `${record.break_minutes}m` : '0m'
+                          )}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground text-[10px] uppercase block">Out</span>
+                        <span className="font-medium text-foreground">{record.clock_out ? new Date(record.clock_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}</span>
+                      </div>
+                      <div className="w-16">
+                        <span className="text-muted-foreground text-[10px] uppercase block">Total</span>
+                        <span className="font-semibold text-primary">{record.total_hours?.toFixed(2) || '0.00'}h</span>
+                      </div>
+                      {!record.is_regularized && (!regDetails || regDetails.status !== 'pending') && record.employee_id === employee?.id && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs border border-primary/20 text-primary hover:bg-primary/10 px-2 rounded-md"
+                          onClick={() => {
+                            setRequestDialogRecord(record);
+                            if (record.clock_in) {
+                              const inTime = new Date(record.clock_in);
+                              setRequestForm(f => ({ ...f, clock_in_time: inTime.toTimeString().substring(0, 5) }));
+                            }
+                            if (record.clock_out) {
+                              const outTime = new Date(record.clock_out);
+                              setRequestForm(f => ({ ...f, clock_out_time: outTime.toTimeString().substring(0, 5) }));
+                            }
+                          }}
+                        >
+                          Correct
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -1793,15 +1794,15 @@ export default function Attendance() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRejectDialogRecord(null)}>Cancel</Button>
-            <Button 
+            <Button
               variant="destructive"
               disabled={resolveRegularizationMutation.isPending || !rejectionReason.trim()}
               onClick={() => {
                 if (rejectDialogRecord) {
-                  resolveRegularizationMutation.mutate({ 
-                    recordId: rejectDialogRecord.id, 
-                    status: 'rejected', 
-                    rejectionReason: rejectionReason.trim() 
+                  resolveRegularizationMutation.mutate({
+                    recordId: rejectDialogRecord.id,
+                    status: 'rejected',
+                    rejectionReason: rejectionReason.trim()
                   }, {
                     onSuccess: () => {
                       setRejectDialogRecord(null);

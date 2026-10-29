@@ -44,16 +44,73 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   fetchProfile: async (userId: string) => {
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .maybeSingle();
-      if (data) {
+
+      if (data && !error) {
         const profile = data as unknown as Profile;
         set({ profile });
         return profile;
       }
+
+      // Fallback: If profile row is missing or blocked by RLS policies,
+      // recover tenant & identity context via user_metadata and matching employee record
+      const currentUser = get().user;
+      if (currentUser && currentUser.id === userId) {
+        const { data: emp } = await supabase
+          .from('employees')
+          .select('company_id, first_name, last_name')
+          .or(`user_id.eq.${userId},work_email.ilike.${currentUser.email || ''}`)
+          .is('deleted_at', null)
+          .limit(1)
+          .maybeSingle();
+
+        const metaRole = (currentUser.user_metadata?.platform_role as Profile['platform_role']) || 'user';
+        const metaCompanyId = emp?.company_id || (currentUser.user_metadata?.company_id as string) || null;
+        const metaFullName = emp 
+          ? `${emp.first_name || ''} ${emp.last_name || ''}`.trim()
+          : (currentUser.user_metadata?.full_name as string) || currentUser.email?.split('@')[0] || 'User';
+
+        const fallbackProfile: Profile = {
+          id: userId,
+          company_id: metaCompanyId,
+          full_name: metaFullName,
+          avatar_url: null,
+          phone: null,
+          platform_role: metaRole,
+          is_active: true,
+          last_login_at: new Date().toISOString(),
+        };
+
+        set({ profile: fallbackProfile });
+
+        // Auto-heal: Persist the profile row in Supabase so future lookups succeed directly
+        if (metaCompanyId) {
+          supabase
+            .from('profiles')
+            .upsert(fallbackProfile, { onConflict: 'id' })
+            .then(({ error: upsertErr }) => {
+              if (upsertErr) console.warn('Could not auto-heal profile in DB:', upsertErr.message);
+            });
+        }
+
+        // Auto-link: If an employee record exists with unlinked user_id, link it now
+        if (emp && emp.company_id && currentUser.email) {
+          supabase
+            .from('employees')
+            .update({ user_id: userId })
+            .eq('company_id', emp.company_id)
+            .ilike('work_email', currentUser.email)
+            .is('user_id', null)
+            .then(() => {});
+        }
+
+        return fallbackProfile;
+      }
+
       return null;
     } catch (err) {
       console.warn('Error fetching profile:', err);
