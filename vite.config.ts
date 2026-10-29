@@ -51,11 +51,13 @@ export default defineConfig(({ mode }) => ({
             if (normalized.includes('/framer-motion/')) {
               return 'vendor-motion';
             }
-            if (normalized.includes('/recharts/') || normalized.includes('/d3-')) {
+            if (
+              normalized.includes('/recharts/') ||
+              normalized.includes('/@xyflow/') ||
+              normalized.includes('/dagre/') ||
+              normalized.includes('/d3-')
+            ) {
               return 'vendor-charts';
-            }
-            if (normalized.includes('/@xyflow/') || normalized.includes('/dagre/')) {
-              return 'vendor-flow';
             }
           }
         },

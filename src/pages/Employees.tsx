@@ -12,9 +12,14 @@ import { useAuthStore } from '@/store/auth-store';
 import { useOrgClient } from '@/hooks/useOrgClient';
 import { makeBYOSQueryKey } from '@/utils/byosUtils';
 import { useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { useDebounce } from '@/hooks/use-debounce';
-import { FullScaleOrgChart } from '@/components/org-chart/FullScaleOrgChart';
+
+const FullScaleOrgChart = lazy(() =>
+  import('@/components/org-chart/FullScaleOrgChart').then((m) => ({
+    default: m.FullScaleOrgChart,
+  }))
+);
 import { DeleteEmployeeDialog } from '@/components/employees/DeleteEmployeeDialog';
 import { DirectRestorationDialog } from '@/components/exit/DirectRestorationDialog';
 
@@ -276,8 +281,14 @@ export default function Employees() {
       ) : (
         <div className="space-y-2">
           <p className="text-[10px] text-muted-foreground md:hidden text-center italic">✦ Swipe / drag to explore the organization chart</p>
-          <div className="w-full">
-            <FullScaleOrgChart employees={employees} canManage={isAdmin} />
+          <div className="w-full min-h-[500px]">
+            <Suspense fallback={
+              <div className="flex h-96 items-center justify-center rounded-lg border border-border/50 bg-card p-8">
+                <Skeleton className="h-full w-full rounded-md" />
+              </div>
+            }>
+              <FullScaleOrgChart employees={employees} canManage={isAdmin} />
+            </Suspense>
           </div>
         </div>
       )}
