@@ -7,13 +7,13 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
 import { Label } from '@/components/ui/label';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogFooter, 
-  DialogHeader, 
-  DialogTitle 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
 } from '@/components/ui/dialog';
 import {
   HardDrive,
@@ -45,24 +45,26 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth-store';
 import { supabase } from '@/integrations/supabase/client';
-import { 
-  getCompanyStorageConfig, 
+import {
+  getCompanyStorageConfig,
   invalidateStorageConfigCache,
-  CompanyStorageConfig 
+  ensureValidGoogleDriveAccessToken,
+  CompanyStorageConfig
 } from '@/lib/storage-provider';
-import { 
-  requestGoogleDriveAuthorization, 
+import {
+  requestGoogleDriveCodeAuth,
+  requestGoogleDriveAuthorization,
   ensureFastestHRFolderStructure,
   testGoogleDriveConnection,
   DEFAULT_GOOGLE_CLIENT_ID,
   GoogleDriveSubfolders
 } from '@/lib/google-drive';
-import { 
-  scanSupabaseDocumentsForMigration, 
-  migrateDocumentsToGoogleDrive, 
-  MigrationItem, 
-  MigrationProgress, 
-  MigrationResult 
+import {
+  scanSupabaseDocumentsForMigration,
+  migrateDocumentsToGoogleDrive,
+  MigrationItem,
+  MigrationProgress,
+  MigrationResult
 } from '@/lib/storage-migration';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -133,19 +135,45 @@ export default function StorageSettings() {
     try {
       toast.loading('Opening Google Authorization popup...', { id: 'gdrive-auth' });
 
-      // 1. Authorize via Google Identity Services
-      const auth = await requestGoogleDriveAuthorization(customClientId);
+      // 1. Authorize via Google Identity Services (Code Flow for permanent offline refresh token)
+      const code = await requestGoogleDriveCodeAuth(customClientId);
+      toast.loading('Google approved! Exchanging code for permanent 24/7 background sync...', { id: 'gdrive-auth' });
+
+      // 2. Exchange code via backend Edge Function to obtain & persist permanent refresh_token
+      const { data: { session } } = await supabase.auth.getSession();
+      const authToken = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+      const edgeRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-storage-auth`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({
+          action: 'exchange_code',
+          code,
+          company_id: companyId,
+          client_id: customClientId.trim() || undefined,
+        }),
+      });
+
+      const auth = await edgeRes.json();
+      if (!auth.success || !auth.accessToken) {
+        throw new Error(auth.error || 'Failed to exchange authorization code with Google');
+      }
+
       setActiveAccessToken(auth.accessToken);
       toast.loading('Google account authorized! Provisioning FastestHR folders in your Drive...', { id: 'gdrive-auth' });
 
-      // 2. Ensure "FastestHR" Folder & Subfolders
+      // 3. Ensure "FastestHR" Folder & Subfolders
       const folderSetup = await ensureFastestHRFolderStructure(auth.accessToken);
 
-      // 3. Save connection into database
-      const tokenExpiresAt = new Date(Date.now() + auth.expiresIn * 1000).toISOString();
+      // 4. Save connection into database
+      const tokenExpiresAt = auth.tokenExpiresAt || new Date(Date.now() + auth.expiresIn * 1000).toISOString();
       const rootFolderUrl = folderSetup.rootFolder.webViewLink || `https://drive.google.com/drive/folders/${folderSetup.rootFolder.id}`;
 
-      const { data, error } = await supabase.rpc('save_company_storage_integration', {
+      const { error } = await supabase.rpc('save_company_storage_integration', {
         p_company_id: companyId,
         p_provider: 'google_drive',
         p_connected_email: auth.user.email,
@@ -166,7 +194,7 @@ export default function StorageSettings() {
       await refetch();
       queryClient.invalidateQueries({ queryKey: ['company-storage-config'] });
 
-      // 4. SCAN FOR EXISTING COMPANY DATA TO MIGRATE
+      // 5. SCAN FOR EXISTING COMPANY DATA TO MIGRATE
       toast.loading('Checking for existing company files to migrate...', { id: 'gdrive-auth' });
       try {
         const filesToMigrate = await scanSupabaseDocumentsForMigration(companyId);
@@ -194,12 +222,37 @@ export default function StorageSettings() {
 
   // Test Connection Handler
   const handleTestConnection = async () => {
-    let token = activeAccessToken || storageConfig?.access_token;
+    let token = activeAccessToken;
+    if (!token && companyId) {
+      token = await ensureValidGoogleDriveAccessToken(companyId);
+    }
+    if (!token && storageConfig?.access_token) {
+      token = storageConfig.access_token;
+    }
+
     if (!token || !storageConfig?.root_folder_id) {
       // Prompt quick re-auth
       try {
         toast.loading('Authorizing Google Drive...', { id: 'gdrive-test-auth' });
-        const auth = await requestGoogleDriveAuthorization(customClientId);
+        const code = await requestGoogleDriveCodeAuth(customClientId);
+        const { data: { session } } = await supabase.auth.getSession();
+        const authToken = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+        const edgeRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-storage-auth`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({
+            action: 'exchange_code',
+            code,
+            company_id: companyId,
+            client_id: customClientId.trim() || undefined,
+          }),
+        });
+        const auth = await edgeRes.json();
+        if (!auth.success) throw new Error(auth.error);
         token = auth.accessToken;
         setActiveAccessToken(token);
         toast.dismiss('gdrive-test-auth');
@@ -228,10 +281,35 @@ export default function StorageSettings() {
 
   // Re-sync & Provision Folders
   const handleResyncFolders = async () => {
-    let token = activeAccessToken || storageConfig?.access_token;
+    let token = activeAccessToken;
+    if (!token && companyId) {
+      token = await ensureValidGoogleDriveAccessToken(companyId);
+    }
+    if (!token && storageConfig?.access_token) {
+      token = storageConfig.access_token;
+    }
+
     if (!companyId || !token) {
       try {
-        const auth = await requestGoogleDriveAuthorization(customClientId);
+        const code = await requestGoogleDriveCodeAuth(customClientId);
+        const { data: { session } } = await supabase.auth.getSession();
+        const authToken = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+        const edgeRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-storage-auth`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({
+            action: 'exchange_code',
+            code,
+            company_id: companyId,
+            client_id: customClientId.trim() || undefined,
+          }),
+        });
+        const auth = await edgeRes.json();
+        if (!auth.success) throw new Error(auth.error);
         token = auth.accessToken;
         setActiveAccessToken(token);
       } catch (e) {
@@ -319,27 +397,38 @@ export default function StorageSettings() {
     setMigrationProgress(null);
     setMigrationResult(null);
 
-    let token = activeAccessToken || storageConfig?.access_token;
-    const isTokenExpired = storageConfig?.token_expires_at 
-      ? new Date(storageConfig.token_expires_at).getTime() < Date.now() 
-      : false;
+    let token = activeAccessToken;
+    if (!token && companyId) {
+      token = await ensureValidGoogleDriveAccessToken(companyId);
+    }
+    if (!token && storageConfig?.access_token) {
+      token = storageConfig.access_token;
+    }
 
-    if (!token || isTokenExpired) {
+    if (!token) {
       try {
-        toast.loading('Refreshing Google authorization for transfer...', { id: 'gdrive-migrate-auth' });
-        const auth = await requestGoogleDriveAuthorization(customClientId);
+        toast.loading('Authorizing Google Drive for transfer...', { id: 'gdrive-migrate-auth' });
+        const code = await requestGoogleDriveCodeAuth(customClientId);
+        const { data: { session } } = await supabase.auth.getSession();
+        const authToken = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+        const edgeRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-storage-auth`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({
+            action: 'exchange_code',
+            code,
+            company_id: companyId,
+            client_id: customClientId.trim() || undefined,
+          }),
+        });
+        const auth = await edgeRes.json();
+        if (!auth.success) throw new Error(auth.error);
         token = auth.accessToken;
         setActiveAccessToken(token);
-
-        const tokenExpiresAt = new Date(Date.now() + auth.expiresIn * 1000).toISOString();
-        await supabase
-          .from('company_storage_integrations')
-          .update({
-            access_token: token,
-            token_expires_at: tokenExpiresAt,
-          })
-          .eq('company_id', companyId);
-
         toast.success('Google authorization active! Starting transfer...', { id: 'gdrive-migrate-auth' });
       } catch (authErr: any) {
         toast.error('Google authorization required to transfer files.', { id: 'gdrive-migrate-auth' });
@@ -354,9 +443,34 @@ export default function StorageSettings() {
         deleteFromSupabaseAfterMigration: deleteFromSupabase,
         onProgress: (prog) => setMigrationProgress(prog),
         onAuthRequired: async () => {
-          const auth = await requestGoogleDriveAuthorization(customClientId);
-          setActiveAccessToken(auth.accessToken);
-          return auth.accessToken;
+          const fresh = await ensureValidGoogleDriveAccessToken(companyId, true);
+          if (fresh) {
+            setActiveAccessToken(fresh);
+            return fresh;
+          }
+          const code = await requestGoogleDriveCodeAuth(customClientId);
+          const { data: { session } } = await supabase.auth.getSession();
+          const authToken = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+          const edgeRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-storage-auth`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+              Authorization: `Bearer ${authToken}`,
+            },
+            body: JSON.stringify({
+              action: 'exchange_code',
+              code,
+              company_id: companyId,
+              client_id: customClientId.trim() || undefined,
+            }),
+          });
+          const auth = await edgeRes.json();
+          if (auth.success && auth.accessToken) {
+            setActiveAccessToken(auth.accessToken);
+            return auth.accessToken;
+          }
+          return null;
         },
       });
 
@@ -632,9 +746,8 @@ export default function StorageSettings() {
               </div>
 
               {testResult && (
-                <div className={`mt-3 p-3 rounded-lg text-xs flex items-center justify-between ${
-                  testResult.success ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-destructive/10 text-destructive border border-destructive/20'
-                }`}>
+                <div className={`mt-3 p-3 rounded-lg text-xs flex items-center justify-between ${testResult.success ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-destructive/10 text-destructive border border-destructive/20'
+                  }`}>
                   <span className="flex items-center gap-1.5">
                     {testResult.success ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
                     {testResult.message}
@@ -837,13 +950,12 @@ export default function StorageSettings() {
               )}
 
               {migrationResult && (
-                <div className={`p-4 rounded-xl border text-xs space-y-3 ${
-                  migrationResult.succeeded > 0 && migrationResult.failed === 0
+                <div className={`p-4 rounded-xl border text-xs space-y-3 ${migrationResult.succeeded > 0 && migrationResult.failed === 0
                     ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
                     : migrationResult.succeeded > 0
-                    ? 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400'
-                    : 'bg-destructive/10 border-destructive/20 text-destructive'
-                }`}>
+                      ? 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400'
+                      : 'bg-destructive/10 border-destructive/20 text-destructive'
+                  }`}>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 font-bold text-sm">
                       {migrationResult.succeeded > 0 && migrationResult.failed === 0 ? (
@@ -1119,13 +1231,12 @@ export default function StorageSettings() {
 
             {/* Migration Result Box */}
             {migrationResult && (
-              <div className={`p-4 rounded-xl border text-xs space-y-3 ${
-                migrationResult.succeeded > 0 && migrationResult.failed === 0
+              <div className={`p-4 rounded-xl border text-xs space-y-3 ${migrationResult.succeeded > 0 && migrationResult.failed === 0
                   ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
                   : migrationResult.succeeded > 0
-                  ? 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400'
-                  : 'bg-destructive/10 border-destructive/20 text-destructive'
-              }`}>
+                    ? 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400'
+                    : 'bg-destructive/10 border-destructive/20 text-destructive'
+                }`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 font-bold text-sm">
                     {migrationResult.succeeded > 0 && migrationResult.failed === 0 ? (

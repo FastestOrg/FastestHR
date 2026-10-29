@@ -63,6 +63,22 @@ declare global {
           }) => {
             requestAccessToken: (overrideConfig?: { prompt?: string }) => void;
           };
+          initCodeClient: (config: {
+            client_id: string;
+            scope: string;
+            ux_mode?: 'popup' | 'redirect';
+            select_account?: boolean;
+            prompt?: string;
+            access_type?: 'offline' | 'online';
+            callback: (response: {
+              code?: string;
+              error?: string;
+              error_description?: string;
+            }) => void;
+            error_callback?: (error: any) => void;
+          }) => {
+            requestCode: () => void;
+          };
         };
       };
     };
@@ -92,6 +108,50 @@ export async function loadGoogleIdentityServices(): Promise<void> {
     script.onload = () => resolve();
     script.onerror = (err) => reject(new Error('Failed to load Google Identity Services SDK: ' + String(err)));
     document.head.appendChild(script);
+  });
+}
+
+/**
+ * Initiates Google OAuth 2.0 Authorization Code flow for permanent offline access and refresh token.
+ */
+export async function requestGoogleDriveCodeAuth(clientId?: string): Promise<string> {
+  await loadGoogleIdentityServices();
+
+  const activeClientId = (clientId && clientId.trim().length > 0)
+    ? clientId.trim()
+    : (import.meta.env.VITE_GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID);
+
+  if (!activeClientId) {
+    throw new Error('Google OAuth Client ID is not configured. Please configure it in Storage Settings.');
+  }
+
+  return new Promise((resolve, reject) => {
+    try {
+      const codeClient = window.google!.accounts.oauth2.initCodeClient({
+        client_id: activeClientId,
+        scope: GOOGLE_DRIVE_SCOPES,
+        ux_mode: 'popup',
+        select_account: true,
+        callback: (response) => {
+          if (response.error) {
+            reject(new Error(response.error_description || response.error || 'Google authorization failed'));
+            return;
+          }
+          if (!response.code) {
+            reject(new Error('No authorization code received from Google'));
+            return;
+          }
+          resolve(response.code);
+        },
+        error_callback: (err) => {
+          reject(new Error(err?.message || 'Google authorization popup was closed.'));
+        },
+      });
+
+      codeClient.requestCode();
+    } catch (err: any) {
+      reject(new Error('Failed to initialize Google authorization: ' + (err?.message || String(err))));
+    }
   });
 }
 

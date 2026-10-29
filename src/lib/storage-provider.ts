@@ -1,9 +1,9 @@
 import { supabase } from '@/integrations/supabase/client';
-import { 
-  uploadFileToGoogleDrive, 
-  downloadFileFromGoogleDrive, 
+import {
+  uploadFileToGoogleDrive,
+  downloadFileFromGoogleDrive,
   deleteFileFromGoogleDrive,
-  GoogleDriveSubfolders 
+  GoogleDriveSubfolders
 } from '@/lib/google-drive';
 
 export interface CompanyStorageConfig {
@@ -95,6 +95,67 @@ export function invalidateStorageConfigCache(companyId?: string) {
 }
 
 /**
+ * Ensures a valid Google Drive access token is available for the company.
+ * If the token is expired or expiring within 5 minutes, silently refreshes it via the google-storage-auth edge function.
+ */
+export async function ensureValidGoogleDriveAccessToken(
+  companyId: string,
+  forceRefresh = false
+): Promise<string | null> {
+  const config = await getCompanyStorageConfig(companyId, forceRefresh);
+  if (!config || config.provider !== 'google_drive' || !config.is_active) {
+    return null;
+  }
+
+  const now = Date.now();
+  const expiry = config.token_expires_at ? new Date(config.token_expires_at).getTime() : 0;
+  const isExpiringSoon = !config.access_token || expiry <= (now + 5 * 60 * 1000);
+
+  if (!forceRefresh && !isExpiringSoon && config.access_token) {
+    return config.access_token;
+  }
+
+  // Token is expired or expiring within 5 minutes; invoke edge function to refresh
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-storage-auth`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        action: 'refresh_token',
+        company_id: companyId,
+        force_refresh: forceRefresh,
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.accessToken) {
+        config.access_token = data.accessToken;
+        if (data.tokenExpiresAt) {
+          config.token_expires_at = data.tokenExpiresAt;
+        }
+        storageConfigCache.set(companyId, { config, cachedAt: Date.now() });
+        return data.accessToken;
+      }
+    } else {
+      const err = await res.json().catch(() => ({}));
+      console.warn('[StorageProvider] Token auto-refresh failed:', err?.error || res.statusText);
+    }
+  } catch (refreshErr) {
+    console.warn('[StorageProvider] Exception during token refresh:', refreshErr);
+  }
+
+  return config.access_token || null;
+}
+
+/**
  * Checks if Google Drive is connected and actively enabled for the company.
  */
 export async function isGoogleDriveActive(companyId: string): Promise<boolean> {
@@ -103,8 +164,7 @@ export async function isGoogleDriveActive(companyId: string): Promise<boolean> {
     config &&
     config.provider === 'google_drive' &&
     config.is_active &&
-    config.root_folder_id &&
-    config.access_token
+    config.root_folder_id
   );
 }
 
@@ -156,13 +216,18 @@ export async function uploadDocumentToStorage(options: UploadStorageOptions): Pr
     config &&
     config.provider === 'google_drive' &&
     config.is_active &&
-    config.access_token &&
     config.root_folder_id
   );
 
   // ─── 1. ROUTE TO GOOGLE DRIVE ─────────────────────────────────────────────
-  if (isDrive && config && config.access_token) {
+  if (isDrive && config) {
     try {
+      // Auto-refresh token if expired or expiring within 5 minutes
+      const validAccessToken = await ensureValidGoogleDriveAccessToken(companyId);
+      if (!validAccessToken) {
+        throw new Error('Google Drive access token could not be obtained or refreshed');
+      }
+
       // Determine destination folder inside FastestHR
       let targetFolderId = config.root_folder_id;
       const subfolders = config.subfolders as Record<string, any>;
@@ -170,13 +235,40 @@ export async function uploadDocumentToStorage(options: UploadStorageOptions): Pr
         targetFolderId = subfolders[category].id;
       }
 
-      const driveResult = await uploadFileToGoogleDrive(
-        config.access_token,
-        file,
-        fileName,
-        contentType,
-        targetFolderId
-      );
+      let driveResult;
+      try {
+        driveResult = await uploadFileToGoogleDrive(
+          validAccessToken,
+          file,
+          fileName,
+          contentType,
+          targetFolderId
+        );
+      } catch (firstTryErr: any) {
+        // If 401 unauthorized or expired token, attempt immediate forced refresh and retry once
+        if (
+          firstTryErr?.message?.includes('401') ||
+          firstTryErr?.message?.includes('Invalid Credentials') ||
+          firstTryErr?.message?.includes('auth') ||
+          firstTryErr?.message?.includes('token')
+        ) {
+          console.warn('[StorageProvider] Drive returned 401/token error, performing forced refresh and retrying upload...');
+          const freshToken = await ensureValidGoogleDriveAccessToken(companyId, true);
+          if (freshToken) {
+            driveResult = await uploadFileToGoogleDrive(
+              freshToken,
+              file,
+              fileName,
+              contentType,
+              targetFolderId
+            );
+          } else {
+            throw firstTryErr;
+          }
+        } else {
+          throw firstTryErr;
+        }
+      }
 
       const fileSize = driveResult.size || (file instanceof Blob ? file.size : 0);
 
@@ -189,7 +281,7 @@ export async function uploadDocumentToStorage(options: UploadStorageOptions): Pr
           last_synced_at: new Date().toISOString(),
         })
         .eq('company_id', companyId)
-        .then(() => {})
+        .then(() => { })
         .catch((e) => console.warn('Failed to update storage metrics:', e));
 
       return {
@@ -273,11 +365,17 @@ export async function downloadDocument(
 
   if (isDrivePath(path)) {
     const fileId = extractDriveFileId(path);
-    const config = companyId ? await getCompanyStorageConfig(companyId) : null;
+    let accessToken: string | null = null;
+    if (companyId) {
+      accessToken = await ensureValidGoogleDriveAccessToken(companyId);
+    } else {
+      const config = await getCompanyStorageConfig(companyId || '');
+      accessToken = config?.access_token || null;
+    }
 
-    if (config?.access_token) {
+    if (accessToken) {
       try {
-        const blob = await downloadFileFromGoogleDrive(config.access_token, fileId);
+        const blob = await downloadFileFromGoogleDrive(accessToken, fileId);
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -287,7 +385,26 @@ export async function downloadDocument(
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         return;
-      } catch (err) {
+      } catch (err: any) {
+        if (companyId && (err?.message?.includes('401') || err?.message?.includes('auth') || err?.message?.includes('token'))) {
+          const freshToken = await ensureValidGoogleDriveAccessToken(companyId, true);
+          if (freshToken) {
+            try {
+              const blob = await downloadFileFromGoogleDrive(freshToken, fileId);
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = fileName;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+              return;
+            } catch (retryErr) {
+              console.warn('Retry download failed after refresh:', retryErr);
+            }
+          }
+        }
         console.warn('Failed to download blob directly from Drive, falling back to direct download link:', err);
       }
     }

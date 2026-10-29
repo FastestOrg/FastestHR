@@ -57,8 +57,8 @@ function getPublicAppUrl(
   }
 
   const envUrl = (globalThis as any).Deno?.env?.get('APP_URL') ||
-                 (globalThis as any).Deno?.env?.get('PUBLIC_APP_URL') ||
-                 (globalThis as any).Deno?.env?.get('SITE_URL');
+    (globalThis as any).Deno?.env?.get('PUBLIC_APP_URL') ||
+    (globalThis as any).Deno?.env?.get('SITE_URL');
   if (envUrl && !isLocalOrInternal(envUrl)) {
     return sanitizeUrl(envUrl);
   }
@@ -78,10 +78,10 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { 
-      candidate_id, 
-      job_id, 
-      company_id, 
+    const {
+      candidate_id,
+      job_id,
+      company_id,
       offer_data,
       html_content,
       pdf_path,
@@ -134,7 +134,7 @@ Deno.serve(async (req) => {
       .select('title, company_id')
       .eq('id', job_id)
       .single();
-    
+
     if (jobError || !job || (job.company_id && job.company_id !== company_id)) {
       throw new Error('Job not found or does not belong to this company');
     }
@@ -142,8 +142,8 @@ Deno.serve(async (req) => {
     // 3. Save to candidate_offers (sanitized to prevent base64 bloat)
     const cleanedHtml = html_content
       ? html_content
-          .replace(/data:image\/png;base64,[A-Za-z0-9+/=]{195000,}/g, '/templates/offer-letterhead-fulltime.png')
-          .replace(/data:image\/png;base64,[A-Za-z0-9+/=]{190000,}/g, '/templates/offer-letterhead-parttime.png')
+        .replace(/data:image\/png;base64,[A-Za-z0-9+/=]{195000,}/g, '/templates/offer-letterhead-fulltime.png')
+        .replace(/data:image\/png;base64,[A-Za-z0-9+/=]{190000,}/g, '/templates/offer-letterhead-parttime.png')
       : html_content;
 
     const { data: savedOffer, error: saveError } = await supabaseClient
@@ -169,22 +169,78 @@ Deno.serve(async (req) => {
     }
 
     // 4. Download PDF from Storage to attach
-    // Security Guard: Enforce strict tenant path boundary to prevent cross-tenant exfiltration
+    let pdfBuffer: ArrayBuffer;
     const cleanPdfPath = String(pdf_path || '').trim();
-    if (!cleanPdfPath.startsWith(`${company_id}/`) || cleanPdfPath.includes('..')) {
-      throw new Error('Forbidden: Storage file path does not belong to this company');
-    }
 
-    console.log(`Downloading PDF from offer_letters bucket: ${cleanPdfPath}`);
-    const { data: pdfBlob, error: downloadError } = await supabaseClient
-      .storage
-      .from('offer_letters')
-      .download(cleanPdfPath);
+    if (cleanPdfPath.startsWith('gdrive:') || cleanPdfPath.includes('drive.google.com')) {
+      // Extract Google Drive File ID
+      const driveMatch = cleanPdfPath.startsWith('gdrive:')
+        ? cleanPdfPath.replace('gdrive:', '').trim()
+        : (cleanPdfPath.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)?.[1] || cleanPdfPath);
 
-    if (downloadError || !pdfBlob) {
-      throw new Error(`Failed to download PDF attachment: ${downloadError?.message}`);
+      console.log(`Downloading PDF from Google Drive: ${driveMatch}`);
+      // Fetch company storage integration to get access token (and refresh if expired)
+      const { data: storageConfig } = await supabaseClient
+        .from('company_storage_integrations')
+        .select('*')
+        .eq('company_id', company_id)
+        .maybeSingle();
+
+      let token = storageConfig?.access_token;
+      const expiry = storageConfig?.token_expires_at ? new Date(storageConfig.token_expires_at).getTime() : 0;
+      const isExpired = !token || expiry <= (Date.now() + 60 * 1000);
+
+      if (isExpired && storageConfig?.refresh_token) {
+        console.log('Refreshing Google Drive token in send-offer-letter...');
+        const refreshRes = await fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            client_id: storageConfig.client_id || Deno.env.get("GOOGLE_CLIENT_ID") || "1033874890501-66h08rultd6tho444rdmj1l71kccfp8k.apps.googleusercontent.com",
+            client_secret: Deno.env.get("GOOGLE_CLIENT_SECRET") || "",
+            refresh_token: storageConfig.refresh_token,
+            grant_type: 'refresh_token',
+          }),
+        });
+
+        if (refreshRes.ok) {
+          const rData = await refreshRes.json();
+          token = rData.access_token;
+          await supabaseClient
+            .from('company_storage_integrations')
+            .update({
+              access_token: token,
+              token_expires_at: new Date(Date.now() + (rData.expires_in || 3599) * 1000).toISOString(),
+            })
+            .eq('company_id', company_id);
+        }
+      }
+
+      const driveRes = await fetch(`https://www.googleapis.com/drive/v3/files/${driveMatch}?alt=media`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!driveRes.ok) {
+        throw new Error(`Failed to download offer letter PDF from Google Drive: ${driveRes.statusText}`);
+      }
+      pdfBuffer = await driveRes.arrayBuffer();
+    } else {
+      // Security Guard: Enforce strict tenant path boundary to prevent cross-tenant exfiltration
+      if (!cleanPdfPath.startsWith(`${company_id}/`) || cleanPdfPath.includes('..')) {
+        throw new Error('Forbidden: Storage file path does not belong to this company');
+      }
+
+      console.log(`Downloading PDF from offer_letters bucket: ${cleanPdfPath}`);
+      const { data: pdfBlob, error: downloadError } = await supabaseClient
+        .storage
+        .from('offer_letters')
+        .download(cleanPdfPath);
+
+      if (downloadError || !pdfBlob) {
+        throw new Error(`Failed to download PDF attachment: ${downloadError?.message}`);
+      }
+      pdfBuffer = await pdfBlob.arrayBuffer();
     }
-    const pdfBuffer = await pdfBlob.arrayBuffer();
 
     // 4.5 Fetch template for email subject/body
     let templateEmailSubject: string | null = null;
@@ -202,15 +258,15 @@ Deno.serve(async (req) => {
     }
 
     const formattedDate = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    const payoutNum = typeof offer_data?.payout === 'string' 
-      ? parseFloat(offer_data.payout.replace(/[^0-9.-]+/g, "")) 
+    const payoutNum = typeof offer_data?.payout === 'string'
+      ? parseFloat(offer_data.payout.replace(/[^0-9.-]+/g, ""))
       : offer_data?.payout;
-    
-    const formattedPayout = (payoutNum || 0).toLocaleString('en-US', { 
-      style: 'currency', 
-      currency: company.currency || 'USD' 
+
+    const formattedPayout = (payoutNum || 0).toLocaleString('en-US', {
+      style: 'currency',
+      currency: company.currency || 'USD'
     });
-    
+
     const appUrl = getPublicAppUrl(req, company, app_url);
     const publicUrl = `${appUrl}/offer/${savedOffer.token}`;
 
@@ -223,7 +279,7 @@ Deno.serve(async (req) => {
       }
       return dateStr;
     };
-    
+
     const formattedJoiningDate = formatDateString(offer_data?.joiningDate);
 
     // Replace variables in template subject/body
@@ -256,7 +312,7 @@ Deno.serve(async (req) => {
       return result;
     };
 
-    const emailSubject = templateEmailSubject 
+    const emailSubject = templateEmailSubject
       ? replaceVars(templateEmailSubject)
       : `Offer of Employment - ${job.title}`;
 
