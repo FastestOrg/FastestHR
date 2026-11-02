@@ -17,7 +17,7 @@ export function getCompanySlugFromHost(): string | null {
 
   // Custom domain — we'll query the DB for this later
   // For now, if it's not fastesthr.com, return the full hostname as a potential custom domain
-  if (!host.includes('fastesthr.com') && !host.includes('localhost') && !host.includes('lovable.app') && !host.includes('lovableproject.com')) {
+  if (!host.includes('fastesthr.com') && !host.includes('localhost') && !host.includes('127.0.0.1') && !host.includes('pages.dev') && !host.includes('vercel.app') && !host.includes('lovable.app') && !host.includes('lovableproject.com')) {
     return host; // will be resolved as custom_domain in the career page
   }
 
