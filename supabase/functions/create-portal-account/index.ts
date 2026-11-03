@@ -130,8 +130,13 @@ Deno.serve(async (req) => {
     });
 
     if (createError) {
-      if (createError.message.includes('already registered') || createError.message.includes('already exists')) {
-        // Find existing user to update password & confirmed status
+      const errMsg = createError.message || '';
+      const isAlreadyExists = errMsg.includes('already registered') || errMsg.includes('already exists');
+      const isDatabaseError = errMsg.includes('Database error');
+
+      if (isAlreadyExists || isDatabaseError) {
+        // Either the user already exists, or the handle_new_user trigger failed.
+        // In both cases, look for an existing user with this email.
         const { data: listData } = await supabaseClient.auth.admin.listUsers();
         const existingUser = listData?.users?.find(u => u.email?.toLowerCase() === cleanEmail);
         if (existingUser) {
@@ -146,6 +151,13 @@ Deno.serve(async (req) => {
             }
           });
           if (updateAuthErr) throw updateAuthErr;
+        } else if (isDatabaseError) {
+          // The user was NOT created (trigger failure rolled back the transaction).
+          // Throw a more descriptive error.
+          throw new Error(
+            'Failed to create auth account. This is usually caused by a database trigger error. ' +
+            'Please check the Supabase Postgres logs for the exact cause. Original: ' + errMsg
+          );
         } else {
           throw new Error('An account with this email address is already registered in the system.');
         }

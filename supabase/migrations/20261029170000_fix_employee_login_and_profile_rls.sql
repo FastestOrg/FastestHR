@@ -172,7 +172,7 @@ BEGIN
 
   -- Ensure all users with an employee record have an active profile with company_id set
   INSERT INTO public.profiles (id, company_id, full_name, platform_role, is_active)
-  SELECT 
+  SELECT DISTINCT ON (e.user_id)
     e.user_id,
     e.company_id,
     TRIM(CONCAT(e.first_name, ' ', e.last_name)),
@@ -180,8 +180,7 @@ BEGIN
     true
   FROM public.employees e
   WHERE e.user_id IS NOT NULL
-  ON CONFLICT (id) DO UPDATE SET
-    company_id = COALESCE(public.profiles.company_id, EXCLUDED.company_id),
-    is_active = true;
+  ORDER BY e.user_id, e.updated_at DESC NULLS LAST
+  ON CONFLICT (id) DO NOTHING;
 END $$;
 

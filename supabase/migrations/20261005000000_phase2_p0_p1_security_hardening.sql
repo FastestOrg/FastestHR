@@ -184,7 +184,10 @@ ALTER POLICY "Company members can manage survey responses" ON public.survey_resp
 -- ─────────────────────────────────────────────────────────────────────────────
 
 GRANT EXECUTE ON FUNCTION public.get_public_booking_page(TEXT, TEXT) TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.create_public_booking(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT, TEXT, TEXT, TEXT) TO anon, authenticated, service_role;
+DO $$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_public_booking(TEXT, TEXT, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT, TEXT) TO anon, authenticated, service_role;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
 GRANT EXECUTE ON FUNCTION public.get_employee_by_public_id(TEXT) TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.get_offer_details_by_token(TEXT) TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.verify_and_sign_offer_by_token(TEXT, TEXT, JSONB, TEXT, TEXT) TO anon, authenticated, service_role;

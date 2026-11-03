@@ -1,50 +1,14 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-
-export const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { requireCompanyStaff, getCorsHeaders } from "../_shared/auth.ts";
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
-    );
-
-    // Get the admin user who is making the request
-    const {
-      data: { user: adminUser },
-      error: userError,
-    } = await supabaseClient.auth.getUser();
-
-    if (userError || !adminUser) {
-      throw new Error('Unauthorized');
-    }
-
-    // Check if the caller is a company_admin, hr_manager, or super_admin
-    const { data: adminProfile, error: profileError } = await supabaseClient
-      .from('profiles')
-      .select('platform_role, company_id')
-      .eq('id', adminUser.id)
-      .single();
-
-    const isAuthorized = adminProfile && (
-      adminProfile.platform_role === 'company_admin' ||
-      adminProfile.platform_role === 'hr_manager' ||
-      adminProfile.platform_role === 'super_admin'
-    );
-
-    if (profileError || !isAuthorized) {
-      throw new Error('Forbidden: Only company admins, HR managers, or super admins can perform this action');
-    }
-
-    const { target_user_id, new_password } = await req.json();
+    const { target_user_id, new_password, company_id } = await req.json();
 
     if (!target_user_id || !new_password) {
       throw new Error('Missing target_user_id or new_password');
@@ -54,37 +18,72 @@ Deno.serve(async (req) => {
       throw new Error('Password must be at least 6 characters long');
     }
 
-    // Verify target user
-    const { data: targetProfile, error: targetProfileError } = await supabaseClient
-      .from('profiles')
-      .select('company_id, platform_role')
-      .eq('id', target_user_id)
-      .single();
+    // Authenticate caller as company staff (super_admin, company_admin, hr_manager)
+    // adminClient uses service_role key to safely query and modify users without RLS restrictions
+    const { profile: adminProfile, adminClient } = await requireCompanyStaff(req, company_id || null, [
+      'super_admin',
+      'company_admin',
+      'hr_manager',
+    ]);
 
-    if (targetProfileError || !targetProfile) {
+    // Verify target user profile using adminClient (service role bypasses RLS)
+    let { data: targetProfile, error: targetProfileError } = await adminClient
+      .from('profiles')
+      .select('id, company_id, platform_role')
+      .eq('id', target_user_id)
+      .maybeSingle();
+
+    if (targetProfileError) {
+      console.warn('set-employee-password: error querying profile:', targetProfileError);
+    }
+
+    // Fallback: If profile row is missing, check employee record by user_id
+    if (!targetProfile) {
+      const { data: empRecord } = await adminClient
+        .from('employees')
+        .select('id, company_id, first_name, last_name')
+        .eq('user_id', target_user_id)
+        .is('deleted_at', null)
+        .maybeSingle();
+
+      if (empRecord) {
+        targetProfile = {
+          id: target_user_id,
+          company_id: empRecord.company_id,
+          platform_role: 'user',
+        };
+
+        // Auto-heal missing profile row
+        await adminClient.from('profiles').upsert({
+          id: target_user_id,
+          company_id: empRecord.company_id,
+          full_name: `${empRecord.first_name || ''} ${empRecord.last_name || ''}`.trim() || 'User',
+          platform_role: 'user',
+          is_active: true,
+        }, { onConflict: 'id' });
+      }
+    }
+
+    if (!targetProfile) {
       throw new Error('Target user not found');
     }
 
+    // Multi-tenant authorization checks
     if (adminProfile.platform_role !== 'super_admin') {
-      if (targetProfile.company_id !== adminProfile.company_id) {
+      if (targetProfile.company_id && adminProfile.company_id && targetProfile.company_id !== adminProfile.company_id) {
         throw new Error('Forbidden: Target user belongs to a different company');
       }
-      // Security Guard: Cannot modify passwords of higher administrative accounts
-      if (targetProfile.platform_role === 'super_admin' || (targetProfile.platform_role === 'company_admin' && target_user_id !== adminUser.id)) {
+      // Security Guard: Cannot modify passwords of super admins or peer company admins
+      if (targetProfile.platform_role === 'super_admin' || (targetProfile.platform_role === 'company_admin' && target_user_id !== adminProfile.id)) {
         throw new Error('Forbidden: You cannot modify passwords of administrative accounts');
       }
-      if (adminProfile.platform_role === 'hr_manager' && targetProfile.platform_role === 'hr_manager' && target_user_id !== adminUser.id) {
+      if (adminProfile.platform_role === 'hr_manager' && targetProfile.platform_role === 'hr_manager' && target_user_id !== adminProfile.id) {
         throw new Error('Forbidden: HR managers cannot modify passwords of peer HR managers');
       }
     }
 
-    // Initialize admin client to update password
-    const adminSupabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
-
-    const { error: updateError } = await adminSupabase.auth.admin.updateUserById(
+    // Update password in Supabase Auth
+    const { error: updateError } = await adminClient.auth.admin.updateUserById(
       target_user_id,
       { 
         password: new_password,
